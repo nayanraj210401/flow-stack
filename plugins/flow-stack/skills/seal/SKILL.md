@@ -25,3 +25,4 @@ scripts/seal.sh list
 It happens: the check itself has a bug, or the requirement changed. Then:
 1. Say so in one GATE message: what is wrong with the check, the proposed change, and why the code shouldn't change instead.
 2. After approval, edit it (the hook asks and the human confirms), run `seal.sh reseal`, and log it: `../flow/scripts/task.sh decide human no "check C2 changed" "<why>"`.
+3. If the check came from a ticket criterion, update that line in INTENT.md `## Source` (`resolved: amended`) so the ticket's author can be told.

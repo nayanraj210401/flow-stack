@@ -10,6 +10,11 @@
 <!-- What this task will NOT do. The first bullet is injected by the anchor hook. -->
 - 
 
+## Source
+<!-- Tickets only: each acceptance criterion verbatim, mapped to its checks. Delete this section for requests the human typed.
+     - AC1 · "<criterion, verbatim>" → C1, C2
+     - AC2 · "<criterion, verbatim>" → C3 · discrepancy: <kind> · resolved: <amended | kept | asked author> -->
+
 ## Acceptance checks
 <!-- Each check is runnable or observable. Format:
      - [ ] C1 · <what it proves> · `<command>`            (runnable)

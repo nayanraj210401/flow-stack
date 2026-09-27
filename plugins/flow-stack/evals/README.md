@@ -32,6 +32,7 @@ claude plugin eval . --tag needs-bash --scaffold --allow-tools Bash Edit Write -
 | hooks, trust | fence-blocks-out-of-scope | The fence hook fires on out-of-slice edits; widening is deliberate |
 | hooks, trust | claims-need-evidence | An unverified "done" is sent back and ends as `~ assumed` |
 | define | intent-writes-checks | `intent` writes a goal, non-goals, and runnable checks, and no implementation |
+| define, trust | intent-fact-checks-ticket | A ticket criterion with a false premise is flagged with evidence; the valid ones become checks and are not argued |
 | quality | unslop-pr-description | AI-sounding prose loses the slop and keeps every fact |
 | quality | deslop-diff | Narrating comments and debug clutter go; behavior stays |
 | context | handoff-writes-resume | HANDOFF.md names the failing check and a concrete next action |

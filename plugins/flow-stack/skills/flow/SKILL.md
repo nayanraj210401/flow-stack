@@ -16,6 +16,7 @@ Three currencies: tokens (cheap, capped), dollars (moderate), the human's attent
 | Any code change | Name the data shape first (principle-model-the-domain). Run the subtract scan before adding (principle-subtract-before-add). |
 | Change touches existing behavior | `../feature-map/scripts/features.sh impact` → the features it touches. Their scenarios are part of "done". |
 | Code you haven't read | `how`. For a history question, or "is this odd on purpose?", use `why` before changing it. |
+| Acceptance criteria come from a ticket | `intent` §1a: one evidence-only fact-check by the advocate. Confirmed discrepancies go to the intent gate; nothing else is argued. |
 | Choosing an approach | `challenge` (the advocate designs blind, and the null option is weighed). No approach is locked in without it, except when rigor is `lean` or the task is one slice. |
 | A check passes | `probe`. TOOTHLESS means strengthen the check. |
 | Marking a slice done | `task.sh slice <id> done`, the proof gate. Never edit SLICES.md for it. |
@@ -44,6 +45,8 @@ Three currencies: tokens (cheap, capped), dollars (moderate), the human's attent
 | Rename, migration, sweep | `playbooks/refactor.md` | task folder |
 | Make a metric better | `playbooks/optimize.md` | task folder |
 | Spans days or sessions | `playbooks/multi-session.md` | task folder + handoffs |
+| No playbook fits: ambitious, mixed kinds, or reviewed after stepping away | `playbooks/compose.md` | task folder, rigor +1 |
+| Source is a ticket someone else wrote | the matching playbook; `intent` fact-checks the ticket (§1a) | as that playbook |
 | Matches `.flow/playbooks/*.md` | that repo playbook | as it says |
 
 **Resolve before routing.**
