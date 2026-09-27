@@ -1,6 +1,5 @@
 plugins/flow-stack/evals/results/
 .DS_Store
 .serena
-.flow/ACTIVE
-.flow/tasks/
 .claude/
+.flow/
