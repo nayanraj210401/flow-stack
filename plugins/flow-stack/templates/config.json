@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "commands": {
+    "test": "",
+    "lint": "",
+    "typecheck": "",
+    "run": ""
+  },
+  "hooks": {}
+}

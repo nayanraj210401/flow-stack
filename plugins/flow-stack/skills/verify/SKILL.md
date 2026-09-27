@@ -1,0 +1,44 @@
+---
+name: verify
+description: Prove behavior on the real artifact and record evidence (evidence.sh, the repo driver, blind checks). Use before claiming done, fixed, or works, and for /verify or "prove it".
+---
+
+# verify: evidence over claims
+
+Principle: `principle-evidence-over-claims`. "It compiles", "the tests I wrote pass", and "it should work" are not evidence. Output from running the real thing is.
+
+## Resolve the driver (slot)
+
+0. A `verify-driver` line in the profile's `# Toolchain` (for example gstack `/qa` for UI): use that tool to drive the app, then record its result through `scripts/evidence.sh` so it counts as evidence.
+1. A repo driver at `.claude/skills/verify-<repo>/` (made by `make-verifier`) or `.claude/skills/verify/` (for example from pstack's create-verification-skill): use it for any user-visible behavior. It knows how to launch the app and exercise features.
+2. A user driver in `~/.claude/skills/`: use it when present.
+3. Neither: fall back to the repo's test, lint, and typecheck commands (`.flow/config.json` → `commands`). For UI or API changes, say in one line that no driver exists and suggest `/flow-stack:make-verifier`.
+
+## Record every check
+
+```bash
+scripts/evidence.sh <label> "<command>" [artifact paths…]
+```
+
+- `<label>` is the slice or check id (`S2`, `C1`, `final`).
+- It appends a block to EVIDENCE.md, prints the tail of the output, and ends with a `flow-evidence:` line that the circuit breaker reads.
+- Artifacts (screenshots, response dumps) go in `.flow/tasks/<slug>/artifacts/`. Pass their paths so the block links them.
+- Never write an EVIDENCE block by hand.
+
+For UI changes, an artifact (a screenshot, or a Playwright trace or log) is required. For API changes, capture the actual response. For CLI changes, capture the actual output.
+
+## Blind checks (Prove phase)
+
+```bash
+scripts/blind-run.sh
+```
+
+This installs the held-out checks temporarily, runs them, removes them, and reports only the verdict and failing test names. When it fails, the name tells you which behavior broke. Fix the behavior. Do not go looking for the check. Tell the human a blind check failed; it is a sign the visible checks were too narrow.
+
+## Seals
+
+Before presenting, run `../seal/scripts/seal.sh verify`. A changed seal that the human did not approve is a stop-everything finding. Report it.
+
+## Reporting
+
+Cite evidence by timestamp and label: `✓ C1 passes (EVIDENCE 10:42 · C1)`. Anything you did not run is `~ assumed`. See `claims`.
