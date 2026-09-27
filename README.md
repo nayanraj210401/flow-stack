@@ -5,6 +5,7 @@
 It is built from skills, bash + jq hooks, and existing tools. There is no new runtime. It was inspired by [gstack](https://github.com/garrytan/gstack), [pstack](https://github.com/cursor/plugins/tree/main/pstack), and [mattpocock/skills](https://github.com/mattpocock/skills).
 
 - [Quick start](#quick-start)
+- [Architecture](#architecture)
 - [How you use it day to day](#how-you-use-it-day-to-day)
 - [When to use what](#when-to-use-what)
 - [Skill catalog](#skill-catalog)
@@ -28,6 +29,60 @@ It is built from skills, bash + jq hooks, and existing tools. There is no new ru
 For local development: `claude --plugin-dir ./plugins/flow-stack`.
 
 Requirements: `jq`, `git`, `perl`, `curl`, and `shasum` (standard on macOS and most Linux). Optional tools `setup` can install: rtk, serena, headroom, graphify, ccusage, Playwright MCP, and ntfy.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    YOU(["👤 You<br/>request<br/>+ 3 gates:<br/>intent · merge<br/>profile changes"])
+
+    subgraph L1["① Context · ~2k tokens"]
+        PROF["profile.md<br/>who · rules · taste<br/>toolchain · rigor"]
+        REPO["repo/.flow/<br/>taste · map · lessons<br/>gates · playbooks"]
+        YOURS["your tools<br/>pstack · gstack · rtk<br/>serena · Playwright"]
+        FORGE["🔨 forge (you run)<br/>setup · make-verifier<br/>make-gates · tend"]
+    end
+
+    subgraph L2["② Hooks · 0 tokens"]
+        H1["SessionStart<br/>anchor"]
+        H2["guard<br/>read-guard"]
+        H3["seal · fence<br/>slice gate"]
+        H4["trail<br/>circuit breaker"]
+        H5["claims check<br/>pre-compact"]
+    end
+
+    subgraph L3["③ Skills"]
+        FLOW["🧭 flow<br/>classify → playbook<br/>feature · bug · refactor<br/>optimize · spike"]
+        OUTER["outer loop<br/>understand → intent<br/>→ challenge → slice<br/>→ prove → present<br/>→ close"]
+        LOOP["🔁 loop per slice<br/>red → subtract → build<br/>→ verify → probe<br/>→ proof gate"]
+        SUPPORT["on demand<br/>brief · gate · budget<br/>handoff · debt · tdd<br/>diagnose · principles"]
+    end
+
+    subgraph L4["④ Workers"]
+        AG["subagents · Sonnet<br/>advocate · checker<br/>reviewer · worker"]
+        SC["⚙ scripts · 0 tokens<br/>task.sh · evidence.sh<br/>seal · probe · diffstat<br/>blind-run · trace-stats"]
+    end
+
+    subgraph L5["⑤ Task memory<br/>.flow/tasks/slug/"]
+        T1["INTENT · SLICES"]
+        T2["SEALS · blind/"]
+        T3["EVIDENCE<br/>DECISIONS"]
+        T4["trail.jsonl"]
+        T5["HANDOFF · TRACE"]
+    end
+
+    YOU ==> L1 ==> L2 ==> L3 ==> L4 ==> L5
+```
+
+Read it left to right. A request passes through five layers:
+
+1. **Context.** At session start, a hook injects about 2k tokens: your profile (rules, taste, which of your tools to use, how much ceremony you want), the repo's `.flow/` files, and your Toolchain delegations. The forge skills, which you run yourself, generate the repo-specific parts.
+2. **Hooks.** These wrap every tool call and cost no model tokens. They block destructive commands and secret reads, protect sealed checks, keep edits inside the slice's fence, gate "done" on proofs, log the trail, break fix-loops, and refuse an unverified "done".
+3. **Skills.** `flow` classifies the request and runs a playbook. Its outer loop goes understand → intent → challenge → slice → prove → present → close, and each slice runs the inner `loop`. The other skills load only when a step needs them.
+4. **Workers.** Judgment goes to subagents (advocate, checker, reviewer, worker), on Sonnet by default. Bookkeeping goes to shell scripts, which cost 0 tokens.
+5. **Task memory.** Everything lands in `.flow/tasks/<slug>/`: intent, sealed checks, evidence, decisions, the tool-call trail, and the handoff and trace. A fresh session resumes from these files, not from chat history.
+
+The diagrams are Mermaid. GitHub renders them. VS Code's built-in preview doesn't, unless you install a Mermaid extension such as "Markdown Preview Mermaid Support".
 
 ## How you use it day to day
 
@@ -238,41 +293,7 @@ Hooks fail open: if `jq` is missing or a script errors, the action is allowed an
 
 ## How it works
 
-```mermaid
-flowchart TB
-    subgraph L0["YOU"]
-        P["~/.flow-stack/profile.md<br/>who · repos · rules · taste · toolchain · rigor"]
-        R["repo/.flow/<br/>taste · lessons · map · debt · gates · playbooks"]
-    end
-    subgraph L2["OUTER LOOP"]
-        FLOW["flow"] --> PB["playbooks: feature · bug · investigate · refactor<br/>optimize · spike · multi-session · repo playbooks"]
-    end
-    subgraph L3["INNER LOOP"]
-        LOOP["loop: red → subtract → build → verify → probe → gate"]
-    end
-    subgraph L4["SKILLS"]
-        direction LR
-        D["define<br/>intent · challenge · slice"]
-        U["understand<br/>how · why · what · teach · map"]
-        V["verify<br/>verify · seal · probe · tdd · diagnose · review"]
-        A["attention<br/>brief · tour · gate · claims"]
-        Q["quality<br/>deslop · unslop · debt · principles"]
-        C["context · scale · audit<br/>budget · handoff · delegate · trace · reflect · dojo"]
-    end
-    subgraph FORGE["FORGE (you)"]
-        F["setup · profile · wrap · make-verifier · make-runner<br/>make-playbook · make-gates · make-skill · tend"]
-    end
-    subgraph L5["HOOKS (enforced, no model tokens)"]
-        H["guard · seal · fence · blind · slice gate · circuit · trail · claims · anchor"]
-    end
-    L0 --> L2
-    L2 -->|per slice| L3
-    L2 --> L4
-    L3 --> L4
-    FORGE -.->|fills repo slots| L4
-    C -.->|reflect evolves| L0
-    L5 -.->|wraps every tool call| L2
-```
+The full picture is in [Architecture](#architecture). Here are the two loops in detail.
 
 ### Outer loop (`flow`, feature playbook)
 
