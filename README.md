@@ -12,7 +12,7 @@ It is built from skills, bash + jq hooks, and existing tools. There is no new ru
 - [What it costs, and how it keeps cost down](#what-it-costs-and-how-it-keeps-cost-down)
 - [Guardrails (hooks)](#guardrails-hooks)
 - [How it works](#how-it-works)
-- [Your profile](#your-profile) · [Adapting to your setup](#adapting-to-your-setup) · [Forge](#forge-skills-specific-to-your-repo)
+- [Feature map](#feature-map) · [Your profile](#your-profile) · [Adapting to your setup](#adapting-to-your-setup) · [Forge](#forge-skills-specific-to-your-repo)
 - [Files](#files) · [Limits](#limits) · [Development](#development)
 
 ## Quick start
@@ -39,6 +39,7 @@ flowchart LR
     subgraph L1["① Context · ~2k tokens"]
         PROF["profile.md<br/>who · rules · taste<br/>toolchain · rigor"]
         REPO["repo/.flow/<br/>taste · map · lessons<br/>gates · playbooks"]
+        FEAT["feature map<br/>.flow/features/<br/>features · entries · owns"]
         YOURS["your tools<br/>pstack · gstack · rtk<br/>serena · Playwright"]
         FORGE["🔨 forge (you run)<br/>setup · make-verifier<br/>make-gates · tend"]
     end
@@ -76,7 +77,7 @@ flowchart LR
 
 Read it left to right. A request passes through five layers:
 
-1. **Context.** At session start, a hook injects about 2k tokens: your profile (rules, taste, which of your tools to use, how much ceremony you want), the repo's `.flow/` files, and your Toolchain delegations. The forge skills, which you run yourself, generate the repo-specific parts.
+1. **Context.** At session start, a hook injects about 2k tokens: your profile (rules, taste, which of your tools to use, how much ceremony you want), the repo's `.flow/` files (including the feature map), and your Toolchain delegations. The forge skills, which you run yourself, generate the repo-specific parts.
 2. **Hooks.** These wrap every tool call and cost no model tokens. They block destructive commands and secret reads, protect sealed checks, keep edits inside the slice's fence, gate "done" on proofs, log the trail, break fix-loops, and refuse an unverified "done".
 3. **Skills.** `flow` classifies the request and runs a playbook. Its outer loop goes understand → intent → challenge → slice → prove → present → close, and each slice runs the inner `loop`. The other skills load only when a step needs them.
 4. **Workers.** Judgment goes to subagents (advocate, checker, reviewer, worker), on Sonnet by default. Bookkeeping goes to shell scripts, which cost 0 tokens.
@@ -104,6 +105,8 @@ Type a skill yourself when you want a specific thing: `/flow-stack:challenge`, `
 | Situation | Use | You'll get |
 |---|---|---|
 | New feature, multi-file change | just ask, or `/flow-stack:flow` | intent → approach → slices → proof → a short review tour |
+| "What does this app do, and how do we prove it?" | `/flow-stack:feature-map` | one file per user-facing feature: sub-feature IDs, every entry point, the code it owns, a scenario |
+| "What does my change affect?" | `features.sh impact` (flow runs it for you) | the features your diff touches, plus changed code no feature owns |
 | Bug with an unknown cause | just describe it, or `/flow-stack:diagnose` | a reproduction first, then the root cause, then a fix with a regression check |
 | Refactor, rename, migration | `/flow-stack:flow` (refactor playbook) | behavior pinned first; kept only if the code gets easier to read |
 | Make something faster, smaller, cheaper | `/flow-stack:flow` (optimize playbook) | one change, one measurement, keep or revert |
@@ -122,7 +125,7 @@ Type a skill yourself when you want a specific thing: `/flow-stack:challenge`, `
 | Audit what the agent did | `/flow-stack:trace` | TRACE.md: timeline, who decided what, evidence, cost |
 | End of day | `/flow-stack:wrap` | shipped, waiting on you, and your first step tomorrow |
 | After a frustrating session | `/flow-stack:reflect` | proposed taste and lesson updates you approve |
-| New repo | `/flow-stack:setup` then `/flow-stack:make-verifier` | a driver that proves this app works the way a user uses it |
+| New repo | `/flow-stack:setup` → `/flow-stack:feature-map` → `/flow-stack:make-verifier` | a driver that proves this app works the way a user uses it |
 | Installed a new plugin or hook | `/flow-stack:setup adapt` | flow-stack re-fits itself around your toolchain |
 
 ## Skill catalog
@@ -138,7 +141,7 @@ Type a skill yourself when you want a specific thing: `/flow-stack:challenge`, `
 
 | Skill | Invoked | What it does |
 |---|---|---|
-| `flow` | auto · you | The outer loop. It classifies the request and runs a playbook (feature, bug, investigate, refactor, optimize, spike, multi-session, or your repo's own) with human gates. Scales its ceremony by `rigor`. |
+| `flow` | auto · you | **The operating mode and orchestrator** (like pstack's poteto-mode). It holds a routing table from situation to skill, classifies the request, and runs a playbook (feature, bug, investigate, refactor, optimize, spike, multi-session, or your repo's own) with human gates. It scales ceremony by `rigor`, sets autonomy (interactive / autonomous / quick), and holds the subagent rules. |
 | `loop` | flow | The inner loop for one slice: red → subtract scan → build → verify → probe → proof-gated done, with a circuit breaker. |
 
 ### Define
@@ -163,7 +166,8 @@ Type a skill yourself when you want a specific thing: `/flow-stack:challenge`, `
 
 | Skill | Invoked | What it does |
 |---|---|---|
-| `verify` | auto · flow | Runs checks on the real artifact through `evidence.sh` (the only way to write EVIDENCE.md), uses your repo's driver, and runs the blind checks. |
+| `verify` | auto · flow | Runs checks on the real artifact through `evidence.sh` (the only way to write EVIDENCE.md), runs the scenarios of **the features your diff touches**, uses your repo's driver, and runs the blind checks. |
+| `feature-map` | auto · you | Builds and maintains `.flow/features/`: one file per user-facing feature, with sub-feature IDs, every entry point, the code it `owns`, a scenario, and a proof. `features.sh` does impact, run, stale, coverage, and check in bash. |
 | `seal` | flow | Hashes the approved checks. Editing one then needs your confirmation. |
 | `probe` | flow | Reverts the change and re-runs the check. If it still passes, the check proves nothing (TOOTHLESS). |
 | `tdd` | auto | Red → green → refactor for fast checks. The slice-done gate enforces the cadence. |
@@ -221,6 +225,7 @@ Type a skill yourself when you want a specific thing: `/flow-stack:challenge`, `
 | `checker` | intent | INTENT; writes held-out blind checks and returns only a count |
 | `reviewer` | review | INTENT, the diff, EVIDENCE, taste; read-only |
 | `worker` | delegate | one slice, in its own worktree; never the blind checks |
+| `flow-agent` | any other delegated step | loads `flow` first, so fences, evidence, and gates hold in delegated work |
 
 ## What it costs, and how it keeps cost down
 
@@ -230,7 +235,7 @@ flow-stack writes files and makes decisions, and that costs something. These are
 
 | | Tokens | When |
 |---|---|---|
-| Skill list the model sees | ≈ 1.6k | every session (cached after the first turn) |
+| Skill list the model sees | ≈ 1.75k | every session (cached after the first turn) |
 | SessionStart context (profile, rules, taste, active task) | ≈ 0.3–0.5k | every session |
 | Intent anchor | ≈ 40 | every prompt, only while a task is active |
 | `flow` + a playbook + conventions | ≈ 3.6k | only when a non-trivial task starts |
@@ -349,6 +354,38 @@ Agents saturate visible tests while real correctness varies. flow-stack has thre
 
 In testing, a special-cased `mul() { echo 6; }` passed the visible check and failed the blind one.
 
+## Feature map
+
+The feature map is the repo's user-level answer to *what can a user do here, and how do we prove each part still works?* It lives in `.flow/features/`, one file per feature:
+
+```markdown
+---
+id: auth.login
+title: Log in
+owns: src/auth/** src/routes/login.ts                        # the code behind it
+entries: web /login | api POST /api/session | cli acme login  # every way in
+scenario: bash .claude/skills/verify-acme/scripts/login.sh    # the proof command
+status: verified                                              # verified | stale | broken | unverified
+verified: 2026-09-27 a1b2c3d
+---
+## Sub-features       - auth.login.lockout · 6th failure in 15 min returns 423, no cookie
+## How to get to it   ## Driving it   ## Proof   ## Gotchas
+```
+
+The `owns:` link turns the map from documentation into something the workflow uses:
+
+| Step | Uses the map to |
+|---|---|
+| flow, Understand | name the features in play (`features.sh impact`) |
+| intent | cite sub-feature IDs in acceptance checks (`C1 · auth.login.lockout`) |
+| slice | seed fences from `owns:` |
+| verify | run exactly the impacted features' scenarios, through every entry point (`run --impacted`) |
+| review | flag an impacted feature with no check and no scenario run |
+| tour | group the diff by feature |
+| tend | mark features stale when their code changed since verification; list unowned code (`coverage`) |
+
+`features.sh` does all of this in bash, so it costs no model tokens: `list`, `impact`, `run`, `stale`, `coverage`, `check`, `index`, `new`. Build the map with `/flow-stack:feature-map`; `/flow-stack:make-verifier` writes one scenario per feature.
+
 ## Your profile
 
 `~/.flow-stack/profile.md` is created by `setup` from a preset: senior-backend, frontend-product, data-ml, learning-mode, or solo-hacker.
@@ -403,6 +440,7 @@ Every generated skill has a `## Self-test` and a `source-commit`. `tend` re-runs
 ~/.flow-stack/profile.md, config.json, toolchain.fp      you
 <repo>/.flow/config.json                                  commands + hook toggles   (commit)
 <repo>/.flow/{taste,gates,lessons,map,debt}.md, playbooks/                          (commit)
+<repo>/.flow/features/<id>.md, README.md, .ignore         feature map               (commit)
 <repo>/.flow/tasks/<slug>/   INTENT · SLICES · SEALS · blind/ · EVIDENCE · DECISIONS.tsv
                              trail.jsonl · HANDOFF · TRACE                          (gitignored)
 ```
@@ -426,6 +464,6 @@ claude plugin eval . --tag routing hooks define quality context forge design \
   --scaffold --allow-tools Edit Write Agent --no-publish
 ```
 
-23 eval cases cover routing, hooks, intent, challenge, least-code, quality, handoff, forge, and setup adaptation. Cases tagged `needs-bash` require a machine where Bash-granting evals are allowed.
+26 eval cases cover routing, hooks, intent, challenge, least-code, the feature map, quality, handoff, forge, and setup adaptation. Cases tagged `needs-bash` require a machine where Bash-granting evals are allowed.
 
 License: MIT.

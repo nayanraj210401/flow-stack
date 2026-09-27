@@ -31,6 +31,8 @@ if [ -n "$root" ]; then
   for f in config.json map.md taste.md gates.md; do
     [ -f "$root/.flow/$f" ] && row ".flow/$f" ok "" || row ".flow/$f" missing ""
   done
+  nf="$(ls "$root"/.flow/features/*.md 2>/dev/null | grep -vc '/README\.md$' || true)"
+  if [ "${nf:-0}" -gt 0 ]; then row features ok "$nf feature(s) in .flow/features/"; else row features missing "feature-map"; fi
   drv="$(ls -d "$root"/.claude/skills/verify-* "$root"/.claude/skills/verify 2>/dev/null | head -n1)"
   if [ -n "$drv" ]; then row verify-drv ok "$(basename "$drv")"; else row verify-drv missing "make-verifier"; fi
   ls -d "$root"/.claude/skills/run-* >/dev/null 2>&1 && row run-drv ok "" || row run-drv missing "make-runner"

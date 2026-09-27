@@ -53,3 +53,43 @@ fence: $5
 budget: 40
 SLICES
 }
+
+# toy_features: a feature map with calc.add (owns src/calc.sh) and export.csv (owns src/export/**)
+toy_features() {
+  mkdir -p src/export .flow/features
+  printf 'export_csv() { printf "id,title\\n"; }\n' > src/export/csv.sh
+  printf '. src/export/csv.sh\n[ "$(export_csv | head -n1)" = "id,title" ] || { echo "FAIL export header"; exit 1; }\necho "ok export"\n' > tests/test_export.sh
+  cat > .flow/features/calc.add.md <<'MD'
+---
+id: calc.add
+title: Add numbers
+owns: src/calc.sh tests/test_add.sh
+entries: cli bash -c '. src/calc.sh; add 2 3'
+scenario: bash tests/test_add.sh
+status: unverified
+verified:
+---
+# Add numbers
+
+The user adds two integers from the shell.
+
+## Sub-features
+- calc.add.sum · add 2 3 prints 5
+
+## How to get to it
+- CLI: source src/calc.sh and call add.
+
+## Driving it
+bash tests/test_add.sh
+
+## Proof
+Prints the sum and exits 0.
+
+## Gotchas
+None.
+MD
+  sed -e 's/calc\.add/export.csv/g' -e 's/Add numbers/Export CSV/' -e 's#owns: .*#owns: src/export/** tests/test_export.sh#' \
+      -e 's#scenario: .*#scenario: bash tests/test_export.sh#' -e 's#entries: .*#entries: cli bash -c ". src/export/csv.sh; export_csv"#' \
+      -e 's/export.csv.sum · add 2 3 prints 5/export.csv.header · first line is id,title/' .flow/features/calc.add.md > .flow/features/export.csv.md
+  git add -A && git commit -qm "feature map"
+}

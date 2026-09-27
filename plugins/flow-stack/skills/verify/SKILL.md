@@ -27,6 +27,15 @@ scripts/evidence.sh <label> "<command>" [artifact paths…]
 
 For UI changes, an artifact (a screenshot, or a Playwright trace or log) is required. For API changes, capture the actual response. For CLI changes, capture the actual output.
 
+## Impacted features (every change that touches behavior)
+
+```bash
+../feature-map/scripts/features.sh impact          # which features this change touches, plus unowned files
+../feature-map/scripts/features.sh run --impacted  # run their scenarios through evidence.sh (labels feat:<id>)
+```
+
+A feature's scenario drives every entry point it lists, and a PASS marks the feature verified at this commit. Acceptance checks prove the new behavior; impacted scenarios prove nothing else broke. Report both. If a changed file is `unowned`, say so. It means the map has a gap, and the fix is to add it to a feature's `owns:`. If the map doesn't exist, say so in one line and suggest `/flow-stack:feature-map`.
+
 ## Blind checks (Prove phase)
 
 ```bash

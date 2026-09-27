@@ -29,6 +29,8 @@ Each check proves one observable behavior:
 - `C1 · 101st request in 60s returns 429 · \`npm test -- rate-limit.spec\``: runnable, preferred.
 - `C3 · error message reads well · human-judged: read the 429 body`: only when no command can decide it.
 
+**Bind checks to features.** When `.flow/features/` exists, run `../feature-map/scripts/features.sh impact <paths the change will touch>` and cite sub-feature IDs in the checks (`C1 · auth.login.lockout · 6th failure returns 423 · \`…\``). New behavior gets a new sub-feature ID. A new user-facing capability gets a new feature (`features.sh new`), and that file is written after the intent gate.
+
 Write the check files now, before any code (test files, curl scripts, driver-skill scenarios), so they exist and fail. Then seal them: `../seal/scripts/seal.sh add <paths>`.
 
 ## 4. Blind checks

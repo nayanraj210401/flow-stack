@@ -29,6 +29,7 @@ source-commit: <sha> · generated: <date>
 ## Flows                   (3–5 key request/job paths, one line each with file refs)
 ## Conventions             (patterns to copy, with an example file for each)
 ## Hazards                 (generated code, vendored dirs, slow tests, prod-touching scripts)
+## Features                (pointer: .flow/features/README.md, the user-level map; build it with feature-map)
 ```
 
 4. Offer to commit it. It is useful to teammates, and to their agents.

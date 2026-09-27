@@ -15,6 +15,9 @@ The single source of truth for file locations and formats. Skills and hooks both
 | `<repo>/.flow/map.md` | cached repo map (from `map`) | yes |
 | `<repo>/.flow/debt.md` | debt ledger | yes |
 | `<repo>/.flow/playbooks/*.md` | repo playbooks (from `make-playbook`) | yes |
+| `<repo>/.flow/features/<id>.md` | feature map: one file per user-facing feature (from `feature-map`) | yes |
+| `<repo>/.flow/features/README.md` | generated index (`features.sh index`) | yes |
+| `<repo>/.flow/features/.ignore` | globs that are not features (for `coverage`) | yes |
 | `<repo>/.flow/ACTIVE` | slug of the active task, one line | no |
 | `<repo>/.flow/tasks/<slug>/` | task folder | no (trace can export) |
 
@@ -25,6 +28,7 @@ The single source of truth for file locations and formats. Skills and hooks both
 ```
 .flow/ACTIVE
 .flow/tasks/
+.flow/trail.jsonl
 ```
 
 ## Task folder: `.flow/tasks/<slug>/`
@@ -77,6 +81,22 @@ Only the evidence script writes these blocks. A hand-written evidence block is n
 ### DECISIONS.tsv
 
 Header row: `ts	who	decision	why	evidence	reversible`. `who` is `agent`, `human`, or an agent name. `reversible` is `yes` or `no`.
+
+## Feature files: `.flow/features/<id>.md`
+
+Frontmatter (one line per key; `features.sh` parses it):
+
+```
+id: auth.login                       # lowercase dotted, equals the file name, permanent
+title: Log in
+owns: src/auth/** src/routes/login.ts   # space-separated globs; ** crosses directories
+entries: web /login | api POST /api/session | cli acme login   # " | "-separated, every entry point
+scenario: bash .claude/skills/verify-acme/scripts/login.sh      # command; empty until make-verifier
+status: verified                     # verified | unverified | stale | broken
+verified: 2026-09-27 a1b2c3d         # date + short sha of the last PASS
+```
+
+Body sections, in order: `## Sub-features` (lines `- <id>.<sub> · <behavior>`), `## How to get to it`, `## Driving it`, `## Proof`, `## Gotchas`. Evidence labels for scenario runs are `feat:<id>`. Acceptance checks cite sub-feature IDs.
 
 ## Human gates
 

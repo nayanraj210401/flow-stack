@@ -62,6 +62,11 @@ fi
 [ -f "$FLOW_DIR/taste.md" ] && printf '\nRepo taste: .flow/taste.md overrides personal taste; read it before grading code or prose.\n'
 [ -f "$FLOW_DIR/map.md" ] && printf 'Repo map: .flow/map.md; read it before exploring the codebase.\n'
 [ -f "$FLOW_DIR/lessons.md" ] && printf 'Lessons: .flow/lessons.md; skim before planning.\n'
+if [ -d "$FLOW_DIR/features" ]; then
+  nfeat="$(ls "$FLOW_DIR"/features/*.md 2>/dev/null | grep -vc '/README\.md$' || true)"
+  nstale="$(grep -lE '^status: (stale|broken)' "$FLOW_DIR"/features/*.md 2>/dev/null | wc -l | tr -d ' ')"
+  printf 'Feature map: .flow/features/ (%s features%s). Before changing behavior, run %s impact.\n' "$nfeat" "$([ "$nstale" -gt 0 ] && printf ', %s stale or broken' "$nstale")" "$(cd "$(dirname "$0")/../skills/feature-map/scripts" && pwd)/features.sh"
+fi
 
 if [ -n "$FLOW_TASK_DIR" ]; then
   goal="$(awk '/<!--/{c=1} c{if(/-->/)c=0; next} /^## Goal/{on=1;next} on && /^## /{exit} on && NF{print; exit}' "$FLOW_TASK_DIR/INTENT.md" 2>/dev/null || true)"

@@ -17,6 +17,8 @@ A 600-line diff usually has about 40 lines that need a human. Find them.
 
 Use `../loop/scripts/diffstat.sh` and the hunks. When net lines are positive, add one line on what the added code buys (from INTENT `## Approaches`). For each tier-3 claim, say *why* it is safe ("codemod output; script at .flow/tasks/x/rename.ts; all 212 call sites compile"). "Safe to skip" is itself a claim and needs evidence.
 
+**Group by feature** when `.flow/features/` exists: `../feature-map/scripts/features.sh impact` maps each file to its feature. The human reviews "auth.login: 3 hunks, lockout logic" rather than a file list.
+
 ## Output
 
 ```

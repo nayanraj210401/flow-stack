@@ -55,10 +55,11 @@ Read [references/tools.md](references/tools.md). Offer only what the inventory s
 ## 5. This repo (when inside a git repo)
 
 1. `.flow/config.json`: create it from `../../templates/config.json` if missing, and fill `commands` from package scripts, the Makefile, and CI config. Run each command once to confirm it works (tests may be slow; ask first if more than a minute is likely).
-2. `.gitignore`: add `.flow/ACTIVE` and `.flow/tasks/` if missing.
+2. `.gitignore`: add `.flow/ACTIVE`, `.flow/tasks/`, and `.flow/trail.jsonl` if missing.
 3. **Forge census.** From `detect.sh`: which slots are filled (verify driver, run driver, gates, playbooks, map, repo taste). Offer the missing ones in one message, most valuable first:
    - no verify driver (neither `.claude/skills/verify-*/` nor `.claude/skills/verify/`, and no `verify-driver` Toolchain line) → `/flow-stack:make-verifier` (without one, verification is only unit tests)
    - no map → `/flow-stack:map`
+   - no feature map (`.flow/features/`) → `/flow-stack:feature-map` (it lets verify run exactly the features a change touches)
    - deploy or migration configs present but no `.flow/gates.md` → `/flow-stack:make-gates`
    - a team repo without `.flow/taste.md` → offer `../../templates/team-taste.md`
 

@@ -18,9 +18,10 @@ A skill that confidently describes a script that no longer exists sends the agen
 
 1. **Self-test**: run the `## Self-test` command. Record pass or fail with output.
 2. **Drift**: `git diff --stat <source-commit>..HEAD -- <paths the skill references>`. Referenced files that moved or vanished, renamed scripts, changed routes and selectors.
-3. **Map freshness**: commits since map's `source-commit` that touched modules listed in it.
-4. **Gates**: every `deny:`/`ask:` regex compiles (`grep -E`), and still matches something real in the repo's scripts or docs.
-5. **Taste**: entries contradicted by recent code, where the repo consistently does the opposite. These are candidates for the human.
+3. **Feature map**: `../feature-map/scripts/features.sh check`, then `stale --write`, then `run` on the stale ones. `coverage` shows code that no feature owns. Report it; assigning it is the human's call.
+4. **Map freshness**: commits since map's `source-commit` that touched modules listed in it.
+5. **Gates**: every `deny:`/`ask:` regex compiles (`grep -E`), and still matches something real in the repo's scripts or docs.
+6. **Taste**: entries contradicted by recent code, where the repo consistently does the opposite. These are candidates for the human.
 
 ## Report and fix
 

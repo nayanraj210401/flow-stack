@@ -11,7 +11,7 @@ Principle: `principle-smallest-verifiable-unit`.
 
 1. **It ends green.** After the slice, the repo builds, and its check passes.
 2. **It has one check.** It reuses an acceptance check or is a narrower one. `check:` is a single command.
-3. **Its fence is tight.** `fence:` lists repo-relative globs of the files it may touch. It is a scope promise, enforced by the fence hook.
+3. **Its fence is tight.** Start from the touched features' `owns:` (see `features.sh impact`), then narrow it. `fence:` lists repo-relative globs of the files it may touch. It is a scope promise, enforced by the fence hook.
 4. **Its budget is honest.** `budget:` is the maximum number of changed lines. Default 150; above 300 means split it.
 5. **The first slice is a tracer bullet**: the thinnest end-to-end path through every layer (route → logic → storage → response), even if it is ugly. Later slices thicken it.
 6. **Order by risk.** Unknowns go early. Mechanical work goes late.

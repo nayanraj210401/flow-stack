@@ -21,6 +21,7 @@ You may run read-only commands: tests, the verify driver, `git log`. Do not edit
 
 ## Look for, in priority order
 
+0. **Features.** If `.flow/features/` exists, run `features.sh impact` on the diff (script at the plugin's `skills/feature-map/scripts/`). For each impacted feature: is there an acceptance check citing it, or a `feat:<id>` PASS in EVIDENCE newer than the last edit? If not, that's a `should` finding. Unowned changed files are a `nit` on the map.
 1. **Contract.** Does each acceptance check really test its stated behavior? Is any INTENT goal unmet or any non-goal violated?
 2. **Gaming.** Special-cased inputs, assertions loosened, tests skipped or deleted, errors swallowed, mocks that make the check trivially true.
 3. **Correctness.** Edge cases the checks miss (empty, max, concurrent, unicode, time zones, retries), error paths, security at boundaries.

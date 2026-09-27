@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: intent-cites-features
+tags: [define, features]
+context:
+  scaffold_script: fixture.sh
