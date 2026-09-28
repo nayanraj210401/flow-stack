@@ -18,7 +18,10 @@ The single source of truth for file locations and formats. Skills and hooks both
 | `<repo>/.flow/features/<id>.md` | feature map: one file per user-facing feature (from `feature-map`) | yes |
 | `<repo>/.flow/features/README.md` | generated index (`features.sh index`) | yes |
 | `<repo>/.flow/features/.ignore` | globs that are not features (for `coverage`) | yes |
-| `<repo>/.flow/ACTIVE` | slug of the active task, one line | no |
+| `<repo>/.flow/board/` | board staging: `board.json`, `board.html` (from `board`; the artifact is the product) | no |
+| `~/.flow-stack/board/url` | the board artifact's link, reused on every publish | no (personal) |
+| `<repo>/.flow/ready.tsv` | ready-for-review ledger: `ts\tsha\tkind\tresult\tnote`, kinds review, deslop, tour, ready (from `review/scripts/ready.sh`) | no |
+| `<repo>/.flow/ACTIVE` | the active task: `<slug>`, or `@<home-repo-path>:<slug>` in a non-home repo of a multi-repo task | no |
 | `<repo>/.flow/tasks/<slug>/` | task folder | no (trace can export) |
 
 `FLOW_STACK_HOME` overrides `~/.flow-stack`.
@@ -47,7 +50,10 @@ The single source of truth for file locations and formats. Skills and hooks both
 | `HANDOFF.auto.md` | pre-compact hook | deterministic snapshot |
 | `TRACE.md` | trace skill | template `TRACE.md` |
 | `.circuit` | circuit hook | counters, internal |
+| `REPOS` | `task.sh new --workspace/--repos` | multi-repo tasks only: `name<TAB>path` per repo; names are the profile's `# Repos` names |
 | `lanes/<lane>/` | a worker in a linked git worktree | its own `EVIDENCE.md`, `trail.jsonl`, `.circuit`, `HANDOFF.auto.md`; imported with `task.sh accept <lane>` |
+
+**Multi-repo tasks.** A profile `# Workspaces` entry (`- repos: a, b, c`) lists repos from `# Repos` (`- path:`, `- role: primary|dep|reference`, optional `- remote:`, `- run:`). `task.sh new <slug> <playbook> --workspace <name>` puts the task folder in the primary repo and points every other repo's ACTIVE at it. Each slice names its `repo:` (default: the home repo) and its fence is relative to that repo; an edit in any other repo is denied, whichever repo the session runs in. SEALS paths outside the home repo are `<repo>:<path>`, and evidence blocks run elsewhere carry `- repo: <name>`. Each repo gets its own branch, PR, and ready-for-review stamp.
 
 **Worktrees.** `.flow/` is untracked, so a linked worktree has none. Every hook and script resolves `.flow/` through `hooks/roots.sh` to the main checkout's copy: plan files (INTENT, SLICES, SEALS, blind/) are shared and read-only from a lane, and per-agent writes go to `lanes/<branch>/` so parallel workers never write the same file.
 
@@ -57,6 +63,7 @@ The single source of truth for file locations and formats. Skills and hooks both
 ## S1 · short title
 status: todo            # todo | doing | done | blocked
 check: npm test -- rate-limit
+repo: api                # multi-repo tasks: which repo this slice edits (default: the home repo)
 fence: src/api/** tests/api/**
 budget: 150             # max changed lines (added + removed)
 red: n/a behavior-preserving refactor   # optional; default: a "<id>:before" FAIL is required

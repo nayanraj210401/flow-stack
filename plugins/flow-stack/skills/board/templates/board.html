@@ -1,0 +1,238 @@
+<title>Flow Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --bg:#F2F4F6; --surface:#FFFFFF; --sunk:#E9EDF1; --ink:#15202B; --muted:#5A6978; --line:#D9E0E7;
+  --accent:#2F55D4; --accent-soft:#E3E9FB;
+  --ok:#1E8556; --ok-soft:#DDF1E6; --warn:#A8690F; --warn-soft:#FBEBD2; --crit:#BE3A26; --crit-soft:#F9E0DB;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --cond:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark;
+  --bg:#0D1318; --surface:#141C23; --sunk:#1B252E; --ink:#E4EBF1; --muted:#8C9CAB; --line:#26323D;
+  --accent:#88A2FF; --accent-soft:#1E2A4A;
+  --ok:#4CC08A; --ok-soft:#153325; --warn:#E3A64A; --warn-soft:#3A2A12; --crit:#F07A64; --crit-soft:#3D1D17;
+}}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0D1318; --surface:#141C23; --sunk:#1B252E; --ink:#E4EBF1; --muted:#8C9CAB; --line:#26323D;
+  --accent:#88A2FF; --accent-soft:#1E2A4A;
+  --ok:#4CC08A; --ok-soft:#153325; --warn:#E3A64A; --warn-soft:#3A2A12; --crit:#F07A64; --crit-soft:#3D1D17;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:14px/1.5 var(--sans);padding-inline:16px;padding-block:20px 40px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+h1,h2{font-family:var(--cond);font-weight:600;margin:0;text-wrap:balance}
+h1{font-size:22px;letter-spacing:.01em}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.mono,td.num,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:12px;justify-content:space-between}
+.top .id{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.stamp{font:12px var(--mono);color:var(--muted)}
+.tabs{display:flex;gap:4px;background:var(--sunk);padding:3px;border-radius:8px}
+.tabs button{font:500 13px var(--sans);color:var(--muted);background:none;border:0;padding:6px 12px;border-radius:6px;cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgb(0 0 0 / .08)}
+.tabs button:focus-visible,.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.draft{font:500 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--warn);background:var(--warn-soft);padding:3px 8px;border-radius:4px}
+
+/* needs-you strip */
+.needs{display:grid;grid-template-columns:1.6fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.needs>div{background:var(--surface);padding:16px 18px;display:flex;flex-direction:column;gap:10px}
+.gate{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;align-items:start}
+.pill{font:500 11px var(--mono);letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:4px;white-space:nowrap}
+.p-gate{color:var(--crit);background:var(--crit-soft)} .p-pr{color:var(--accent);background:var(--accent-soft)}
+.p-ok{color:var(--ok);background:var(--ok-soft)} .p-warn{color:var(--warn);background:var(--warn-soft)} .p-crit{color:var(--crit);background:var(--crit-soft)}
+.p-mute{color:var(--muted);background:var(--sunk)}
+.tag{font:500 10px var(--mono);letter-spacing:.06em;text-transform:uppercase;padding:1px 6px;border-radius:3px;margin-left:6px;vertical-align:1px}
+.tag.real{color:var(--ok);background:var(--ok-soft)} .tag.sample{color:var(--muted);background:var(--sunk)}
+.shipped{display:grid;grid-template-columns:auto 1fr auto;gap:4px 12px;align-items:baseline;padding-block:10px;border-top:1px solid var(--line)}
+.shipped:first-of-type{border-top:0;padding-top:0}
+.shipped .t{font-weight:500}.shipped .d{grid-column:2/-1;color:var(--muted);font-size:13px}
+.gate .q{font-weight:500}
+.gate .rec{grid-column:2;color:var(--muted);font-size:13px}
+.meter{height:10px;background:var(--sunk);border-radius:5px;overflow:hidden}
+.meter i{display:block;height:100%;background:var(--accent);border-radius:5px}
+.big{font:500 28px/1 var(--mono);font-variant-numeric:tabular-nums}
+.big small{font-size:14px;color:var(--muted)}
+
+/* grid */
+.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:18px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.panel header{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.src{font:11px var(--mono);color:var(--muted)}
+.c7{grid-column:span 7}.c5{grid-column:span 5}.c6{grid-column:span 6}.c4{grid-column:span 4}.c8{grid-column:span 8}.c12{grid-column:span 12}
+@media (max-width:900px){.c7,.c5,.c6,.c4,.c8{grid-column:span 12}.needs{grid-template-columns:1fr}}
+
+/* tasks */
+.task{display:grid;grid-template-columns:1fr auto;gap:6px 12px;padding-block:10px;border-top:1px solid var(--line)}
+.task:first-of-type{border-top:0;padding-top:0}
+.task .goal{font-weight:500}
+.task .meta{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--muted)}
+.slices{display:flex;gap:3px;grid-column:1/-1}
+.slices span{flex:1;height:6px;border-radius:2px;background:var(--sunk)}
+.slices .d{background:var(--ok)} .slices .w{background:var(--accent)} .slices .b{background:var(--crit)}
+
+/* features */
+.feat{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
+.f{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:var(--sunk);font:12px var(--mono);min-width:0}
+.f b{width:8px;height:8px;border-radius:50%;flex:none}
+.f span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.f.ok b{background:var(--ok)} .f.un b{background:transparent;border:1.5px solid var(--muted)} .f.st b{background:var(--warn)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+
+/* tables */
+.tbl{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{font:500 11px var(--sans);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:left;padding:0 10px 8px 0;border-bottom:1px solid var(--line)}
+td{padding:8px 10px 8px 0;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right}
+
+/* charts */
+svg{display:block;width:100%;height:auto}
+svg text{fill:var(--muted);font:11px var(--mono)}
+.stats{display:flex;gap:22px;flex-wrap:wrap}
+.stats div{display:flex;flex-direction:column;gap:2px}
+.stats .l{font-size:12px;color:var(--muted)}
+.note{font-size:12px;color:var(--muted);margin:0}
+[hidden]{display:none!important}
+.empty{color:var(--muted);font-size:13px;margin:0}
+a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
+.item{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;align-items:start}
+.item .q{font-weight:500}.item .rec{grid-column:2;color:var(--muted);font-size:13px}
+.tabs{flex-wrap:wrap}
+</style>
+<script id="board-data" type="application/json">{{BOARD_JSON}}</script>
+
+<div class="wrap">
+  <div class="top">
+    <div class="id"><h1>Flow Board</h1><span class="stamp" id="stamp"></span></div>
+    <div class="tabs" role="tablist" id="tabs"></div>
+  </div>
+
+  <section class="needs" aria-label="Needs you">
+    <div><h2 id="needs-h">Needs you</h2><div id="needs" style="display:flex;flex-direction:column;gap:10px"></div></div>
+    <div><h2>Spend</h2><div id="spend-tile"></div></div>
+  </section>
+
+  <div id="views"></div>
+</div>
+
+<script>
+(function(){
+  const D = JSON.parse(document.getElementById('board-data').textContent);
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const pill = (cls, t) => `<span class="pill ${cls}">${esc(t)}</span>`;
+  const link = (url, t) => url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(t)}</a>` : esc(t);
+  const repos = D.repos || [];
+  const cur = repos.find(r => r.current) || repos[0];
+  const open = r => (r.tasks || []).filter(t => !t.closed);
+  const when = new Date(D.generated);
+  $('stamp').textContent = `${repos.length} repo${repos.length === 1 ? '' : 's'} · generated ${isNaN(when) ? D.generated : when.toLocaleString([], {dateStyle:'medium', timeStyle:'short'})}`;
+
+  // ---- needs you (every repo) ----
+  const needs = [];
+  repos.forEach(r => {
+    open(r).forEach(t => {
+      (t.gates || []).forEach(g => needs.push([pill('p-gate','gate'), `${esc(r.name)}/${esc(t.slug)} · ${esc(g)}`, t.goal]));
+      const s = t.slices || [];
+      if (s.length && s.every(x => x.status === 'done')) needs.push([pill('p-warn','close'), `${esc(r.name)}/${esc(t.slug)} · every slice done`, 'Prove, present, and close: merge gate, then trace.']);
+      if (s.some(x => x.status === 'blocked')) needs.push([pill('p-gate','blocked'), `${esc(r.name)}/${esc(t.slug)} · ${s.filter(x => x.status === 'blocked').map(x => x.id).join(', ')} blocked`, t.goal]);
+    });
+    ((r.prs || {}).review_requested || []).forEach(p => needs.push([pill('p-pr','review'), `${esc(r.name)} · ${link(p.url, '#' + p.number)} ${esc(p.title)}`, 'Review requested from you.']));
+    ((r.prs || {}).mine || []).forEach(p => needs.push([pill(p.draft ? 'p-mute' : 'p-pr', p.draft ? 'draft' : 'your PR'), `${esc(r.name)} · ${link(p.url, '#' + p.number)} ${esc(p.title)}`, p.review === 'APPROVED' ? 'Approved: ready to merge.' : p.review === 'CHANGES_REQUESTED' ? 'Changes requested.' : 'Open, awaiting merge or review.']));
+    (r.features || []).filter(f => f.status === 'stale' || f.status === 'broken').forEach(f => needs.push([pill(f.status === 'broken' ? 'p-crit' : 'p-warn', f.status), `${esc(r.name)} · feature ${esc(f.id)}`, 'Re-run its scenario: features.sh run ' + f.id]));
+  });
+  $('needs-h').textContent = `Needs you · ${needs.length}`;
+  $('needs').innerHTML = needs.length
+    ? needs.map(([p, q, rec]) => `<div class="item">${p}<span class="q">${q}</span>${rec ? `<span class="rec">${esc(rec)}</span>` : ''}</div>`).join('')
+    : '<p class="empty">Nothing is waiting on you.</p>';
+
+  // ---- spend tile ----
+  const sp = D.spend;
+  if (sp && sp.length) {
+    const today = sp[sp.length - 1], wk = sp.slice(-7).reduce((a, d) => a + d.usd, 0);
+    $('spend-tile').innerHTML = `<div class="big">$${today.usd.toFixed(2)}<small> ${esc(today.date)}</small></div>
+      <p class="note">$${wk.toFixed(2)} over the last 7 days.</p><svg viewBox="0 0 320 60" id="spark" role="img" aria-label="Daily spend, last ${sp.length} days"></svg>`;
+  } else {
+    $('spend-tile').innerHTML = '<p class="empty">Cost not collected (ccusage unavailable, or --no-cost).</p>';
+  }
+
+  // ---- views: one tab per repo + all repos ----
+  const views = $('views'), tabs = $('tabs');
+  const ids = repos.map((r, i) => 'repo-' + i).concat(['all']);
+  const names = repos.map(r => r.name).concat(['All repos']);
+  tabs.innerHTML = ids.map((id, i) => `<button role="tab" id="tab-${id}" aria-controls="view-${id}" aria-selected="false">${esc(names[i])}</button>`).join('');
+  views.innerHTML = repos.map((r, i) => `<div id="view-repo-${i}" class="grid" role="tabpanel" hidden>${repoView(r)}</div>`).join('') +
+    `<div id="view-all" class="grid" role="tabpanel" hidden>${allView()}</div>`;
+  const show = id => ids.forEach(x => { const on = x === id; $('tab-' + x).setAttribute('aria-selected', on); $('view-' + x).hidden = !on; });
+  tabs.querySelectorAll('button').forEach(b => b.addEventListener('click', () => show(b.getAttribute('aria-controls').slice(5))));
+  show(repos.length ? 'repo-' + Math.max(0, repos.indexOf(cur)) : 'all');
+
+  function panel(cls, title, src, inner) {
+    return `<section class="panel ${cls}"><header><h2>${title}</h2><span class="src">${esc(src)}</span></header>${inner}</section>`;
+  }
+  function repoView(r) {
+    const tasks = open(r), feats = r.features || [], ver = feats.filter(f => f.status === 'verified').length;
+    const taskHtml = tasks.length ? tasks.map(t => {
+      const s = t.slices || [], done = s.filter(x => x.status === 'done').length, doing = s.find(x => x.status === 'doing');
+      const state = (t.gates || []).length ? pill('p-gate', 'gate') : s.length && done === s.length ? pill('p-warn', 'ready to close') : t.active ? pill('p-pr', 'active') : pill('p-mute', 'paused');
+      return `<div class="task"><span class="goal">${esc(t.goal || t.slug)}</span>${state}
+        <div class="slices">${s.map(x => `<span class="${x.status === 'done' ? 'd' : x.status === 'doing' ? 'w' : x.status === 'blocked' ? 'b' : ''}" title="${esc(x.id + ' · ' + x.title + ' · ' + x.status)}"></span>`).join('')}</div>
+        <div class="meta"><span>${esc(t.slug)} · ${esc(t.playbook || '?')}</span><span>${done}/${s.length} slices</span>${doing ? `<span>${esc(doing.id)} doing</span>` : ''}${t.handoff ? '<span>handoff written</span>' : ''}${t.lanes ? `<span>${t.lanes} worker lane${t.lanes > 1 ? 's' : ''}</span>` : ''}${(t.repos || []).length > 1 ? `<span>repos: ${esc(t.repos.join(', '))}</span>` : ''}${t.estimate_usd != null ? `<span class="mono">est $${t.estimate_usd}</span>` : ''}</div></div>`;
+    }).join('') : r.linked ? `<p class="empty">Working on ${esc(r.linked.home)}/${esc(r.linked.slug)}, a multi-repo task whose folder lives in ${esc(r.linked.home)}.</p>` : '<p class="empty">No open flow tasks.</p>';
+    const shipped = (r.shipped || []).length ? `<div class="tbl"><table><tbody>${r.shipped.map(c => `<tr><td class="mono">${esc(c.sha)}</td><td>${esc(c.subject)}</td><td class="mono src">${esc(c.date)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">No commits in the last 7 days.</p>';
+    const featHtml = feats.length ? `<div class="feat">${feats.map(f => `<div class="f ${f.status === 'verified' ? 'ok' : f.status === 'unverified' ? 'un' : 'st'}" title="${esc(f.id + ' · ' + f.status + (f.verified ? ' · ' + f.verified : ''))}"><b></b><span>${esc(f.id)}</span></div>`).join('')}</div>
+      <div class="legend"><span>● verified</span><span>◐ stale or broken</span><span>○ never verified</span></div>` : '<p class="empty">No feature map. Run /flow-stack:feature-map.</p>';
+    const decs = (r.decisions || []).length ? `<div class="tbl"><table><thead><tr><th>Decision</th><th>Why</th><th>Undo</th></tr></thead><tbody>${r.decisions.map(d => `<tr><td>${esc(d.decision)}<div class="src">${esc(d.task)} · ${esc(d.ts)}</div></td><td>${esc(d.why)}</td><td>${pill(d.reversible === 'no' ? 'p-crit' : 'p-ok', d.reversible === 'no' ? 'no' : 'yes')}</td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">No agent decisions logged.</p>';
+    const debt = (r.debt || []).filter(d => d.open);
+    const debtHtml = debt.length ? `<div class="tbl"><table><thead><tr><th>ID</th><th>Shortcut</th><th>Repay when</th></tr></thead><tbody>${debt.map(d => `<tr><td class="mono">${esc(d.id)}</td><td>${esc(d.text)}</td><td>${esc(d.trigger)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">No open debt in .flow/debt.md.</p>';
+    const cal = (r.tasks || []).filter(t => t.estimate_usd != null && t.actual_usd != null);
+    return panel('c7', `Tasks · ${tasks.length} open`, '.flow/tasks/*', taskHtml)
+      + panel('c5', `Feature health · ${ver}/${feats.length} verified`, '.flow/features/', featHtml)
+      + panel('c7', 'Decided without you', 'DECISIONS.tsv', decs)
+      + panel('c5', `Debt · ${debt.length} open`, '.flow/debt.md', debtHtml)
+      + panel('c12', 'Shipped · last 7 days', `git log · ${r.branch || 'HEAD'} ${esc(r.head)}${r.dirty ? ' · ' + r.dirty + ' uncommitted' : ''}`, shipped)
+      + (cal.length ? panel('c12', 'Estimate vs actual', 'ESTIMATE, TRACE.md', `<svg viewBox="0 0 560 ${24 + cal.length * 30}" class="est" data-rows='${esc(JSON.stringify(cal.map(t => [t.slug, t.estimate_usd, t.actual_usd])))}' role="img" aria-label="Estimated vs actual dollars per task"></svg><p class="note">Grey: estimate. Colored: actual (amber when over by more than 20%).</p>`) : '');
+  }
+  function allView() {
+    const rows = repos.map(r => {
+      const f = r.features || [], v = f.filter(x => x.status === 'verified').length, g = open(r).reduce((a, t) => a + (t.gates || []).length, 0);
+      const p = r.prs || {}, prn = (p.mine || []).length + (p.review_requested || []).length;
+      return `<tr><td class="mono">${esc(r.name)}</td><td>${open(r).length}</td><td>${g ? pill('p-gate', g + ' gate' + (g > 1 ? 's' : '')) : '—'}</td><td>${prn ? pill('p-pr', prn + ' PR' + (prn > 1 ? 's' : '')) : '—'}</td><td>${f.length ? pill(v === f.length ? 'p-ok' : 'p-warn', v + '/' + f.length) : pill('p-mute', 'no map')}</td><td>${(r.debt || []).filter(d => d.open).length || '—'}</td><td class="num">${(r.shipped || []).length}</td></tr>`;
+    }).join('');
+    return panel('c12', 'Repos', 'profile # Repos', `<div class="tbl"><table><thead><tr><th>Repo</th><th>Open tasks</th><th>Gates</th><th>PRs</th><th>Features</th><th>Debt</th><th class="num">Commits 7d</th></tr></thead><tbody>${rows}</tbody></table></div>`)
+      + (D.spend && D.spend.length ? panel('c12', `Spend · ${D.spend.length} days`, 'ccusage', '<svg viewBox="0 0 560 150" id="spend" role="img" aria-label="Daily spend"></svg>') : '');
+  }
+
+  // ---- charts (colors via theme tokens, so both themes work live) ----
+  const NS = 'http://www.w3.org/2000/svg';
+  const el = (n, a, p) => { const e = document.createElementNS(NS, n); let st = ''; for (const k in a) { if ((k === 'fill' || k === 'stroke') && String(a[k]).startsWith('var(')) st += k + ':' + a[k] + ';'; else e.setAttribute(k, a[k]); } if (st) e.setAttribute('style', st); p.appendChild(e); return e; };
+  const txt = (p, x, y, s, anchor) => { const t = el('text', {x, y, 'text-anchor': anchor || 'start'}, p); t.textContent = s; };
+  function area(svg, vals, L, R, T, B, labels) {
+    const max = Math.max(1, ...vals) * 1.1, x = i => L + (R - L) * i / Math.max(1, vals.length - 1), y = v => B - (B - T) * v / max;
+    if (labels) [0, max / 2, max].forEach(v => { el('line', {x1: L, x2: R, y1: y(v), y2: y(v), stroke: 'var(--line)'}, svg); txt(svg, L - 6, y(v) + 4, '$' + Math.round(v), 'end'); });
+    const pts = vals.map((v, i) => x(i) + ',' + y(v)).join(' ');
+    el('polygon', {points: `${x(0)},${B} ${pts} ${x(vals.length - 1)},${B}`, fill: 'var(--accent-soft)'}, svg);
+    el('polyline', {points: pts, fill: 'none', stroke: 'var(--accent)', 'stroke-width': 2, 'stroke-linejoin': 'round'}, svg);
+    el('circle', {cx: x(vals.length - 1), cy: y(vals[vals.length - 1]), r: 3.5, fill: 'var(--accent)'}, svg);
+    return x;
+  }
+  if (D.spend && D.spend.length) {
+    const v = D.spend.map(d => d.usd);
+    if ($('spark')) area($('spark'), v, 2, 316, 4, 56);
+    if ($('spend')) { const x = area($('spend'), v, 40, 550, 8, 122, true); txt($('spend'), x(0), 142, D.spend[0].date); txt($('spend'), x(v.length - 1), 142, D.spend[v.length - 1].date, 'end'); }
+  }
+  document.querySelectorAll('svg.est').forEach(svg => {
+    const rows = JSON.parse(svg.dataset.rows), max = Math.max(...rows.flatMap(r => [r[1], r[2]])) * 1.1, L = 150, R = 540, x = v => L + (R - L) * v / max;
+    rows.forEach((r, i) => { const y = 8 + i * 30; txt(svg, 0, y + 12, r[0]);
+      el('rect', {x: L, y, width: x(r[1]) - L, height: 8, rx: 2, fill: 'var(--line)'}, svg);
+      el('rect', {x: L, y: y + 10, width: x(r[2]) - L, height: 8, rx: 2, fill: r[2] > r[1] * 1.2 ? 'var(--warn)' : 'var(--accent)'}, svg);
+      txt(svg, x(Math.max(r[1], r[2])) + 6, y + 16, `$${r[1]} → $${r[2]}`); });
+  });
+})();
+</script>

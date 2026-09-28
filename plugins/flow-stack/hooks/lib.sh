@@ -28,18 +28,11 @@ flow_init() {
   FLOW_CWD="$(jq -r '.cwd // empty' <<<"$FLOW_INPUT")"
   [ -n "$FLOW_CWD" ] || FLOW_CWD="$PWD"
   flow_roots "$FLOW_CWD"
-  FLOW_TASK=""
-  FLOW_TASK_DIR=""
+  flow_task
   FLOW_STATE_DIR=""
-  if [ -f "$FLOW_DIR/ACTIVE" ]; then
-    FLOW_TASK="$(head -n1 "$FLOW_DIR/ACTIVE" | tr -d '[:space:]')"
-    if [ -n "$FLOW_TASK" ] && [ -d "$FLOW_DIR/tasks/$FLOW_TASK" ]; then
-      FLOW_TASK_DIR="$FLOW_DIR/tasks/$FLOW_TASK"
-      FLOW_STATE_DIR="$(flow_state_dir "$FLOW_TASK_DIR")"
-      mkdir -p "$FLOW_STATE_DIR"
-    else
-      FLOW_TASK=""
-    fi
+  if [ -n "$FLOW_TASK_DIR" ]; then
+    FLOW_STATE_DIR="$(flow_state_dir "$FLOW_TASK_DIR")"
+    mkdir -p "$FLOW_STATE_DIR"
   fi
 }
 

@@ -10,16 +10,21 @@
 # file an explicit human decision.
 set -euo pipefail
 
-. "$(dirname "$0")/../../../hooks/roots.sh"; flow_roots
+. "$(dirname "$0")/../../../hooks/roots.sh"; flow_roots; flow_task
 root="$FLOW_ROOT"
-slug="$(head -n1 "$FLOW_DIR/ACTIVE" 2>/dev/null | tr -d '[:space:]' || true)"
-[ -n "$slug" ] || { echo "seal.sh: no active task" >&2; exit 2; }
-seals="$FLOW_DIR/tasks/$slug/SEALS"
+[ -n "$FLOW_TASK" ] || { echo "seal.sh: no active task" >&2; exit 2; }
+seals="$FLOW_TASK_DIR/SEALS"
+# SEALS names a file repo-relative in the task's home repo, "<repo>:<path>" in any other task repo.
+abs_of() {
+  local q="$1" n="${1%%:*}" p
+  if [ "$n" != "$q" ] && p="$(flow_repo_path "$n")" && [ -n "$p" ]; then printf '%s/%s' "$p" "${q#*:}"
+  else printf '%s/%s' "$FLOW_TASK_HOME" "$q"; fi
+}
 case "${1:-}" in add|reseal|rm) [ -z "$FLOW_LANE" ] || { echo "seal.sh: refused in worktree lane '$FLOW_LANE': the task plan is shared; return this to the delegate as a gate" >&2; exit 2; }
  ;; esac
 cd "$root"
 
-hash_file() { shasum -a 256 "$1" | awk -v p="$1" '{print $1 "  " p}'; }
+hash_file() { shasum -a 256 "$1" | awk -v p="$(flow_qual "$1")" '{print $1 "  " p}'; }
 
 expand() {
   local p="${1#./}"
@@ -39,10 +44,10 @@ case "${1:-}" in
     for p in "$@"; do
       while IFS= read -r f; do
         [ -n "$f" ] || continue
-        grep -v "  $f\$" "$seals" >"$seals.tmp" || true
+        grep -vF "  $(flow_qual "$f")" "$seals" >"$seals.tmp" || true
         mv "$seals.tmp" "$seals"
         hash_file "$f" >>"$seals"
-        echo "sealed: $f"
+        echo "sealed: $(flow_qual "$f")"
       done < <(expand "$p")
     done
     ;;
@@ -51,8 +56,9 @@ case "${1:-}" in
     bad=0
     while read -r h f; do
       [ -n "$f" ] || continue
-      if [ ! -f "$f" ]; then echo "MISSING  $f"; bad=1
-      elif [ "$(shasum -a 256 "$f" | awk '{print $1}')" != "$h" ]; then echo "CHANGED  $f"; bad=1
+      a="$(abs_of "$f")"
+      if [ ! -f "$a" ]; then echo "MISSING  $f"; bad=1
+      elif [ "$(shasum -a 256 "$a" | awk '{print $1}')" != "$h" ]; then echo "CHANGED  $f"; bad=1
       fi
     done <"$seals"
     [ "$bad" = 0 ] && echo "seals intact ($(wc -l <"$seals" | tr -d ' ') files)"
@@ -63,14 +69,16 @@ case "${1:-}" in
     [ -f "$seals" ] || { echo "no seals"; exit 0; }
     awk '{print $2}' "$seals" >"$seals.list"
     : >"$seals"
-    while IFS= read -r f; do [ -f "$f" ] && hash_file "$f" >>"$seals"; done <"$seals.list"
+    while IFS= read -r f; do a="$(abs_of "$f")"; [ -f "$a" ] && printf '%s  %s\n' "$(shasum -a 256 "$a" | awk '{print $1}')" "$f" >>"$seals"; done <"$seals.list"
     rm -f "$seals.list"
     echo "resealed"
     ;;
   rm)
     [ -n "${2:-}" ] || { echo "usage: seal.sh rm <path>" >&2; exit 2; }
-    grep -v "  ${2#./}\$" "$seals" >"$seals.tmp" || true
-    mv "$seals.tmp" "$seals"; echo "unsealed: $2"
+    line="$(awk -v q="$(flow_qual "${2#./}")" '$2 == q {print; exit}' "$seals" 2>/dev/null || true)"
+    [ -n "$line" ] || { echo "seal.sh: $(flow_qual "${2#./}") is not sealed (seal.sh list)" >&2; exit 1; }
+    grep -vxF "$line" "$seals" >"$seals.tmp" || true
+    mv "$seals.tmp" "$seals"; echo "unsealed: $(flow_qual "${2#./}")"
     ;;
   *) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//' ;;
 esac

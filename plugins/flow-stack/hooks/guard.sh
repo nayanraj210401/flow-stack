@@ -14,6 +14,14 @@ has() { grep -Eiq -- "$1" <<<"$cmd"; }
 if has 'rm[[:space:]]+-[a-z]*(rf|fr)[a-z]*[[:space:]]+(/|~|\$HOME)/?\*?([[:space:]]|$)'; then
   pre_decide deny "flow guard: recursive delete of / or home is never allowed."
 fi
+# 1b. Recursive delete of an unguarded variable: empty or wrong, it hits the wrong tree.
+#     ${VAR:?} aborts instead of expanding to nothing, so guarded targets pass.
+while IFS= read -r seg; do
+  grep -Eq '[[:space:]](-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)([[:space:]]|$)' <<<"$seg" || continue
+  if sed -E 's/\$\{[A-Za-z_0-9]+:\?[^}]*\}//g' <<<"$seg" | grep -Eq '\$\{?[A-Za-z_0-9@*]'; then
+    pre_decide ask "flow guard: recursive rm on an unguarded variable ('$seg'). If it's empty or points elsewhere, this deletes the wrong tree. Check it first, then guard it: rm -rf \"\${VAR:?}\"."
+  fi
+done < <(grep -Eo '(^|[;&|(`[:space:]])rm[[:space:]][^;&|]*' <<<"$cmd" || true)
 if has 'git[[:space:]]+push[^;&|]*(--force|[[:space:]]-f([[:space:]]|$))[^;&|]*[[:space:]:+](main|master)([[:space:]]|$)'; then
   pre_decide deny "flow guard: force-push to main/master is blocked. Push a branch and open a PR."
 fi
@@ -34,17 +42,49 @@ if [ -n "$FLOW_TASK_DIR" ] && [ -f "$FLOW_TASK_DIR/SEALS" ]; then
   if has '(SEALS|INTENT\.md)' && has '(sed[[:space:]]+-i|perl[[:space:]]+-p?i|>|tee|mv|rm|cp|truncate)'; then
     pre_decide ask "flow seal: task '$FLOW_TASK' is sealed; this command may change its acceptance contract."
   fi
+  # SEALS names "<path>" (home repo) or "<repo>:<path>"; match the absolute path from anywhere,
+  # and the relative path only inside the repo that owns it.
   while read -r _ sealed; do
     [ -n "$sealed" ] || continue
-    if grep -Fq -- "$sealed" <<<"$cmd" && has '(sed[[:space:]]+-i|perl[[:space:]]+-p?i|>[^&]|tee|mv|rm|cp|truncate|git[[:space:]]+(checkout|restore|rm))'; then
-      pre_decide ask "flow seal: this command may modify sealed check '$sealed'. Sealed checks change only with the human's approval."
+    n="${sealed%%:*}"; rest="$sealed"; base="$FLOW_TASK_HOME"; own=""
+    if [ "$n" != "$sealed" ] && [ -n "$(flow_repo_path "$n")" ]; then
+      rest="${sealed#*:}"; base="$(flow_repo_path "$n")"; [ "$n" = "$FLOW_REPO_KEY" ] && own=1
+    else
+      [ -z "$FLOW_REPO_KEY" ] && own=1
     fi
+    for needle in "$base/$rest" ${own:+"$rest"}; do
+      if grep -Fq -- "$needle" <<<"$cmd" && has '(sed[[:space:]]+-i|perl[[:space:]]+-p?i|>[^&]|tee|mv|rm|cp|truncate|git[[:space:]]+(checkout|restore|rm))'; then
+        pre_decide ask "flow seal: this command may modify sealed check '$sealed'. Sealed checks change only with the human's approval."
+      fi
+    done
   done <"$FLOW_TASK_DIR/SEALS"
 fi
 
 # 3b. Slice completion goes through the proof gate.
-if has 'SLICES\.md' && has 'status:[[:space:]]*done' && ! has 'task\.sh'; then
+# Only a write aimed at SLICES.md counts; reads, and writes elsewhere that mention it, pass.
+if has 'status:[[:space:]]*done' && ! has 'task\.sh' &&
+   has '(>>?|tee([[:space:]]+-a)?)[[:space:]]*[^[:space:]|;&]*SLICES\.md|(sed[[:space:]]+-i|perl[[:space:]]+-[a-z]*i|mv|cp|truncate)[^|;&]*SLICES\.md'; then
   pre_decide deny "flow gate: mark a slice done with task.sh slice <id> done (proof-gated), not by rewriting SLICES.md."
+fi
+
+# 3c. Ready for review: in a flow-stack repo, a non-draft PR or `gh pr ready` needs ready.sh's stamp for HEAD.
+#     Only a real invocation counts: heredoc bodies are dropped, and gh must start a command:
+#     line start, ; && || | (, or behind a wrapper (eval, sh/bash/zsh/dash, command, env, time,
+#     nohup, xargs, sudo, exec) with any flags of its own. Case-insensitive: case-insensitive
+#     filesystems run GH as gh. A commit message that mentions it mid-sentence passes.
+code="$(awk -v q="'" '
+  hd != "" { if ($0 == hd) hd = ""; next }
+  { print
+    if (match($0, "<<-?[ \t]*[\"" q "]?[A-Za-z_][A-Za-z0-9_]*")) {
+      hd = substr($0, RSTART, RLENGTH); sub("<<-?[ \t]*[\"" q "]?", "", hd) } }' <<<"$cmd")"
+lead='(^|[;&|(]|(^|[;&|([:space:]])(eval|command|env|time|nohup|xargs|sudo|exec|(ba|z|da)?sh)([[:space:]][^;&|]*)?[[:space:]])'
+pr_cmd="$(grep -Ei "$lead"'[[:space:]]*["'"'"']?gh[[:space:]]+pr[[:space:]]+(create|ready)([[:space:]]|$)' <<<"$code" || true)"
+if [ -d "$FLOW_DIR" ] && flow_enabled ready && [ -n "$pr_cmd" ] &&
+   ! grep -Eq '(--draft|--undo|[[:space:]]-d)([[:space:]=]|$)' <<<"$pr_cmd"; then
+  ready="$(cd "$(dirname "$0")/../skills/review/scripts" && pwd)/ready.sh"
+  if [ "$(cd "$FLOW_ROOT" && "$ready" mode)" != yolo ] && ! (cd "$FLOW_ROOT" && "$ready" stamped); then
+    pre_decide deny "flow ready-for-review: HEAD isn't stamped ready. Human review is the expensive step, so run $ready (it lists what's missing), or open a draft PR (--draft) meanwhile. review_gate: yolo in the profile or .flow/config.json turns this off."
+  fi
 fi
 
 # 4. Repo gates from .flow/gates.md:  "- deny: <ERE> · reason" / "- ask: <ERE> · reason"

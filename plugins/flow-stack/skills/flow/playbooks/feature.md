@@ -17,6 +17,6 @@ Principles: intent-before-code, design-it-twice, subtract-before-add, red-before
    - Run `deslop` on the diff and `unslop` on any prose you wrote (commit message, PR body, docs).
    - Record shortcuts with `debt`.
    A blind failure goes back to step 5 for the slice it names, and the human is told it happened.
-7. **Present.** One message: `tour` (a risk-ranked diff: what to read, what is safe to skip) plus `claims` (each statement tagged). If `dojo` is on, one explain-back question.
+7. **Present.** Run `../review/scripts/ready.sh` until it stamps HEAD (review, deslop, tour, and the live checks); only then open the PR as ready for review. One message: `tour` (a risk-ranked diff: what to read, what is safe to skip) plus `claims` (each statement tagged). If `dojo` is on, one explain-back question.
    **GATE:** the human approves the merge or push. Never push without it.
 8. **Close.** Run `trace` (TRACE.md with estimate vs. actual), then `reflect`. Taste, lesson, and calibration diffs need the human's approval. Then run `scripts/task.sh close`.

@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 # task.sh: manage flow-stack task folders.
-#   task.sh new <slug> [playbook]     create .flow/tasks/<slug>/, make it active
+#   task.sh new <slug> [playbook] [--workspace <name> | --repos <a,b,...>]
+#                                     create .flow/tasks/<slug>/, make it active. A multi-repo
+#                                     task (profile # Workspaces, or repo names from # Repos)
+#                                     lives in the primary repo (role: primary, else the first);
+#                                     REPOS lists name<TAB>path, and every other repo's ACTIVE
+#                                     points home: "@<home-path>:<slug>"
+#   task.sh repos                     the active task's repos (name<TAB>path)
 #   task.sh active                    print the active slug (empty if none)
 #   task.sh dir                       print the active task dir
 #   task.sh switch <slug>             make another task active
@@ -23,16 +29,41 @@ set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
 templates="$here/../../../templates"
-. "$here/../../../hooks/roots.sh"; flow_roots
+. "$here/../../../hooks/roots.sh"; flow_roots; flow_task
 root="$FLOW_MAIN"
 flow="$FLOW_DIR"
+profile="${FLOW_STACK_HOME:-$HOME/.flow-stack}/profile.md"
 
 die() { echo "task.sh: $*" >&2; exit 1; }
-active() { [ -f "$flow/ACTIVE" ] && head -n1 "$flow/ACTIVE" | tr -d '[:space:]' || true; }
+active() { printf '%s' "$FLOW_TASK"; }
 active_dir() {
-  local s; s="$(active)"
-  [ -n "$s" ] && [ -d "$flow/tasks/$s" ] || die "no active task (run: task.sh new <slug>)"
-  printf '%s' "$flow/tasks/$s"
+  [ -n "$FLOW_TASK_DIR" ] || die "no active task (run: task.sh new <slug>)"
+  printf '%s' "$FLOW_TASK_DIR"
+}
+
+# profile lookups: repo_field <name> <field> (from # Repos) · ws_repos <workspace> (from # Workspaces)
+repo_field() {
+  awk -v n="## $1" -v k="- $2:" '/^# /{on=($0=="# Repos")} on && /^## /{cur=$0}
+    on && cur==n && index($0,k)==1 {v=substr($0,length(k)+1); sub(/^[[:space:]]+/,"",v); sub(/[[:space:]]+$/,"",v); print v; exit}' "$profile" 2>/dev/null || true
+}
+ws_repos() {
+  awk -v n="## $1" '/^# /{on=($0=="# Workspaces")} on && /^## /{cur=$0}
+    on && cur==n && /^- repos:/ {sub(/^- repos:[[:space:]]*/,""); gsub(/[[:space:]]*,[[:space:]]*/,"\n"); print; exit}' "$profile" 2>/dev/null || true
+}
+# point_repos <task-dir> <slug>: ACTIVE in the home repo, pointers everywhere else
+point_repos() {
+  local d="$1" slug="$2" home name path cur
+  home="$(cd "$d/../../.." && pwd -P)"
+  printf '%s\n' "$slug" >"$home/.flow/ACTIVE"
+  [ -f "$d/REPOS" ] || return 0
+  while IFS=$'\t' read -r name path; do
+    [ "$path" = "$home" ] && continue
+    mkdir -p "$path/.flow"
+    cur="$(head -n1 "$path/.flow/ACTIVE" 2>/dev/null | tr -d '[:space:]' || true)"
+    [ -n "$cur" ] && [ "$cur" != "@$home:$slug" ] && echo "  $name: was on '$cur', now on $slug" >&2
+    printf '@%s:%s\n' "$home" "$slug" >"$path/.flow/ACTIVE"
+    git -C "$path" check-ignore -q .flow/ACTIVE 2>/dev/null || grep -qxF ".flow/ACTIVE" "$path/.gitignore" 2>/dev/null || printf '.flow/ACTIVE\n' >>"$path/.gitignore"
+  done <"$d/REPOS"
 }
 
 ensure_repo_files() {
@@ -40,6 +71,7 @@ ensure_repo_files() {
   [ -f "$flow/config.json" ] || cp "$templates/config.json" "$flow/config.json"
   local gi="$root/.gitignore"
   for line in ".flow/ACTIVE" ".flow/tasks/" ".flow/trail.jsonl"; do
+    git -C "$root" check-ignore -q "$line" 2>/dev/null && continue
     grep -qxF "$line" "$gi" 2>/dev/null || printf '%s\n' "$line" >>"$gi"
   done
 }
@@ -79,7 +111,8 @@ proofs() {
        else echo "  ✓ teeth: $ts"; fi ;;
   esac
   if [ -n "$budget" ]; then
-    set -f; line="$("$here/../../loop/scripts/diffstat.sh" $fence | head -n1 || true)"; set +f
+    local srepo; srepo="$(flow_repo_path "$(slice_field "$s" "$id" repo)")"
+    set -f; line="$(cd "${srepo:-.}" && "$here/../../loop/scripts/diffstat.sh" $fence | head -n1 || true)"; set +f
     local changed="${line#*changed=}"; changed="${changed%% *}"
     if [ "${changed:-0}" -le "$budget" ]; then echo "  ✓ budget: $line (≤ $budget)"
     else echo "  ✗ budget: $line (> $budget; split the slice or justify with --force)"; ok=1; fi
@@ -94,8 +127,30 @@ case "$cmd" in
 esac
 case "$cmd" in
   new)
-    slug="${1:-}"; [ -n "$slug" ] || die "usage: task.sh new <slug> [playbook]"
+    slug="${1:-}"; [ -n "$slug" ] || die "usage: task.sh new <slug> [playbook] [--workspace <name> | --repos <a,b>]"
     [[ "$slug" =~ ^[a-z0-9][a-z0-9-]*$ ]] || die "slug must be kebab-case: $slug"
+    shift; playbook=feature; names=""
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --workspace) names="$(ws_repos "${2:-}")"; [ -n "$names" ] || die "no workspace '${2:-}' in $profile (# Workspaces)"; shift 2 ;;
+        --repos) names="$(printf '%s' "${2:-}" | tr ',' '\n' | sed 's/^ *//; s/ *$//')"; shift 2 ;;
+        *) playbook="$1"; shift ;;
+      esac
+    done
+    repos_tsv=""
+    if [ -n "$names" ]; then
+      home=""; first=""
+      while IFS= read -r n; do
+        [ -n "$n" ] || continue
+        pth="$(repo_field "$n" path)"; pth="${pth/#\~/$HOME}"
+        [ -n "$pth" ] && [ -d "$pth" ] || die "repo '$n': no '- path:' in the profile's # Repos, or it doesn't exist"
+        pth="$(cd "$pth" && pwd -P)"
+        repos_tsv="$repos_tsv$n	$pth"$'\n'
+        [ -n "$first" ] || first="$pth"
+        [ -z "$home" ] && [ "$(repo_field "$n" role)" = primary ] && home="$pth"
+      done <<<"$names"
+      root="${home:-$first}"; flow="$root/.flow"
+    fi
     ensure_repo_files
     d="$flow/tasks/$slug"
     [ -e "$d" ] && die "task exists: $d (use: task.sh switch $slug)"
@@ -104,17 +159,25 @@ case "$cmd" in
     fill "$slug" "$templates/SLICES.md" >"$d/SLICES.md"
     cp "$templates/DECISIONS.tsv" "$d/DECISIONS.tsv"
     printf '# Evidence · %s\n<!-- Written only by verify/scripts/evidence.sh. -->\n\n' "$slug" >"$d/EVIDENCE.md"
-    printf '%s\n' "${2:-feature}" >"$d/PLAYBOOK"
-    printf '%s\n' "$slug" >"$flow/ACTIVE"
+    printf '%s\n' "$playbook" >"$d/PLAYBOOK"
+    [ -n "$repos_tsv" ] && printf '%s' "$repos_tsv" >"$d/REPOS"
+    point_repos "$d" "$slug"
     echo "$d"
     ;;
   active) active ;;
   dir) active_dir ;;
+  repos)
+    d="$(active_dir)"
+    if [ -f "$d/REPOS" ]; then cat "$d/REPOS"; else printf '%s\t%s\n' "$(basename "$FLOW_TASK_HOME")" "$FLOW_TASK_HOME"; fi ;;
   switch)
     [ -d "$flow/tasks/${1:-}" ] || die "no such task: ${1:-}"
-    printf '%s\n' "$1" >"$flow/ACTIVE"; echo "active: $1"
+    point_repos "$flow/tasks/$1" "$1"; echo "active: $1"
     ;;
-  close) rm -f "$flow/ACTIVE"; echo "no active task" ;;
+  close)
+    if [ -n "$FLOW_TASK_DIR" ] && [ -f "$FLOW_TASK_DIR/REPOS" ]; then
+      while IFS=$'\t' read -r _ path; do rm -f "$path/.flow/ACTIVE"; done <"$FLOW_TASK_DIR/REPOS"
+    fi
+    rm -f "$flow/ACTIVE" "${FLOW_TASK_HOME:-$root}/.flow/ACTIVE"; echo "no active task" ;;
   list)
     a="$(active)"
     for d in "$flow"/tasks/*/; do
@@ -170,6 +233,6 @@ case "$cmd" in
     printf 'usd=%s ctx_pct=%s human_min=%s at=%s\n' "$1" "$2" "$3" "$(date -u +%FT%TZ)" >"$(active_dir)/ESTIMATE"
     echo "estimate saved"
     ;;
-  -h|--help|"") sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//' ;;
+  -h|--help|"") sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//' ;;
   *) die "unknown command: $cmd (try -h)" ;;
 esac

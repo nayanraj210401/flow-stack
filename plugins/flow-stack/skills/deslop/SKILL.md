@@ -23,5 +23,6 @@ Scope: only the lines this task changed (`git diff <base>` plus uncommitted chan
 2. Apply fixes that don't change behavior directly.
 3. Re-run the slice or acceptance checks through `evidence.sh` (label `deslop`). Deslop must not change behavior. If a check fails, revert that fix.
 4. Report the count: `deslop: −47 lines (12 comments, 3 wrappers, 1 duplicate helper → utils/date.ts:12)`.
+5. Commit, then record it for the ready-for-review bar: `../review/scripts/ready.sh record deslop done "<the count>"`.
 
 If the same slop pattern shows up across tasks, tell `reflect`. It may deserve a lint rule (principle-encode-in-structure).

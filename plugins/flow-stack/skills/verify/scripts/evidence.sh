@@ -13,12 +13,11 @@ set -uo pipefail
 [ $# -ge 2 ] || { sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 label="$1"; check="$2"; shift 2
 
-. "$(dirname "$0")/../../../hooks/roots.sh"; flow_roots
+. "$(dirname "$0")/../../../hooks/roots.sh"; flow_roots; flow_task
 root="$FLOW_ROOT"
-slug="$(head -n1 "$FLOW_DIR/ACTIVE" 2>/dev/null | tr -d '[:space:]' || true)"
 ev=""
-if [ -n "$slug" ] && [ -d "$FLOW_DIR/tasks/$slug" ]; then
-  ev="$(flow_state_dir "$FLOW_DIR/tasks/$slug")/EVIDENCE.md"; mkdir -p "$(dirname "$ev")"
+if [ -n "$FLOW_TASK_DIR" ]; then
+  ev="$(flow_state_dir "$FLOW_TASK_DIR")/EVIDENCE.md"; mkdir -p "$(dirname "$ev")"
 fi
 
 out="$(mktemp)"
@@ -42,6 +41,7 @@ if [ -n "$ev" ]; then
   {
     printf '### %s · %s · %s · exit=%s\n' "$(date -u +%FT%TZ)" "$label" "$verdict" "$code"
     printf -- '- cmd: `%s`\n' "$check"
+    [ -n "$FLOW_REPO_KEY" ] && printf -- '- repo: %s\n' "$FLOW_REPO_KEY"
     printf -- '- head: %s  dirty: %s  took: %ss\n' "$head_sha" "$dirty" "$secs"
     for a in "$@"; do printf -- '- artifact: %s\n' "$a"; done
     printf '<details><summary>output (last 40 lines)</summary>\n\n```\n'
