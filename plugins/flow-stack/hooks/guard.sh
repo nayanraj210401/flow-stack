@@ -69,15 +69,16 @@ fi
 
 # 3c. Ready for review: in a flow-stack repo, a non-draft PR or `gh pr ready` needs ready.sh's stamp for HEAD.
 #     Only a real invocation counts: heredoc bodies are dropped, and gh must start a command:
-#     line start, ; && || | (, or behind eval, sh/bash/zsh -c, command, env VAR=…, time, nohup,
-#     xargs. A commit message that mentions it mid-sentence passes; a wrapped call doesn't.
+#     line start, ; && || | (, or behind a wrapper (eval, sh/bash/zsh/dash, command, env, time,
+#     nohup, xargs, sudo, exec) with any flags of its own. Case-insensitive: case-insensitive
+#     filesystems run GH as gh. A commit message that mentions it mid-sentence passes.
 code="$(awk -v q="'" '
   hd != "" { if ($0 == hd) hd = ""; next }
   { print
     if (match($0, "<<-?[ \t]*[\"" q "]?[A-Za-z_][A-Za-z0-9_]*")) {
       hd = substr($0, RSTART, RLENGTH); sub("<<-?[ \t]*[\"" q "]?", "", hd) } }' <<<"$cmd")"
-lead='(^|[;&|(]|eval[[:space:]]+|(ba|z|da)?sh[[:space:]]+-[a-z]*c[[:space:]]+|command[[:space:]]+|env([[:space:]]+[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*)*[[:space:]]+|time[[:space:]]+|nohup[[:space:]]+|xargs[[:space:]]+)'
-pr_cmd="$(grep -E "$lead"'[[:space:]]*["'"'"']?gh[[:space:]]+pr[[:space:]]+(create|ready)([[:space:]]|$)' <<<"$code" || true)"
+lead='(^|[;&|(]|(^|[;&|([:space:]])(eval|command|env|time|nohup|xargs|sudo|exec|(ba|z|da)?sh)([[:space:]][^;&|]*)?[[:space:]])'
+pr_cmd="$(grep -Ei "$lead"'[[:space:]]*["'"'"']?gh[[:space:]]+pr[[:space:]]+(create|ready)([[:space:]]|$)' <<<"$code" || true)"
 if [ -d "$FLOW_DIR" ] && flow_enabled ready && [ -n "$pr_cmd" ] &&
    ! grep -Eq '(--draft|--undo|[[:space:]]-d)([[:space:]=]|$)' <<<"$pr_cmd"; then
   ready="$(cd "$(dirname "$0")/../skills/review/scripts" && pwd)/ready.sh"
