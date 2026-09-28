@@ -88,6 +88,12 @@ if [ -n "$FLOW_TASK_DIR" ]; then
   fi
 fi
 
+# Daily brief: once a day, when the profile asks for one and wrap hasn't run today.
+digest="$(profile_fm digest 2>/dev/null || true)"
+if [ -n "$digest" ] && [ "$digest" != off ] && [ "$(cat "$FLOW_HOME/digest/last" 2>/dev/null || true)" != "$(date +%F)" ]; then
+  printf '\nNo daily brief yet today (digest: %s). Offer `/flow-stack:wrap` once at a natural pause.\n' "$digest"
+fi
+
 # Toolchain drift: suggest re-adapting when plugins, user hooks, MCP servers, or the status line changed.
 if [ -f "$FLOW_HOME/profile.md" ]; then
   inv="$(dirname "$0")/../skills/setup/scripts/inventory.sh"
