@@ -47,6 +47,9 @@ The single source of truth for file locations and formats. Skills and hooks both
 | `HANDOFF.auto.md` | pre-compact hook | deterministic snapshot |
 | `TRACE.md` | trace skill | template `TRACE.md` |
 | `.circuit` | circuit hook | counters, internal |
+| `lanes/<lane>/` | a worker in a linked git worktree | its own `EVIDENCE.md`, `trail.jsonl`, `.circuit`, `HANDOFF.auto.md`; imported with `task.sh accept <lane>` |
+
+**Worktrees.** `.flow/` is untracked, so a linked worktree has none. Every hook and script resolves `.flow/` through `hooks/roots.sh` to the main checkout's copy: plan files (INTENT, SLICES, SEALS, blind/) are shared and read-only from a lane, and per-agent writes go to `lanes/<branch>/` so parallel workers never write the same file.
 
 ### SLICES.md block
 

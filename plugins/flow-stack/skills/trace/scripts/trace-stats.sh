@@ -2,11 +2,14 @@
 # trace-stats.sh: mechanical facts for TRACE.md from the active task's trail,
 # evidence, decisions, and git. The trace skill turns them into the narrative.
 set -uo pipefail
-root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-slug="${1:-$(head -n1 "$root/.flow/ACTIVE" 2>/dev/null | tr -d '[:space:]')}"
-d="$root/.flow/tasks/$slug"
+. "$(dirname "$0")/../../../hooks/roots.sh"; flow_roots
+root="$FLOW_ROOT"
+slug="${1:-$(head -n1 "$FLOW_DIR/ACTIVE" 2>/dev/null | tr -d '[:space:]')}"
+d="$FLOW_DIR/tasks/$slug"
 [ -d "$d" ] || { echo "trace-stats: no task '$slug'" >&2; exit 2; }
-t="$d/trail.jsonl"
+t="$(mktemp)"; trap 'rm -f "$t"' EXIT
+cat "$d"/trail.jsonl "$d"/lanes/*/trail.jsonl 2>/dev/null | jq -sc 'sort_by(.ts) | .[]' >"$t" 2>/dev/null || true
+[ -s "$t" ] || rm -f "$t"
 
 echo "# facts · $slug"
 if [ -f "$t" ]; then

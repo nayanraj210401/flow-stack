@@ -18,10 +18,13 @@ while [ $# -gt 0 ]; do
   case "$1" in --keep) keep+=("${2#./}"); shift 2 ;; *) echo "probe: unknown arg $1" >&2; exit 2 ;; esac
 done
 
-root="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "probe: needs a git repo" >&2; exit 2; }
-cd "$root"
-slug="$(head -n1 .flow/ACTIVE 2>/dev/null | tr -d '[:space:]' || true)"
-seals=".flow/tasks/$slug/SEALS"
+git rev-parse --show-toplevel >/dev/null 2>&1 || { echo "probe: needs a git repo" >&2; exit 2; }
+. "$(dirname "$0")/../../../hooks/roots.sh"; flow_roots
+cd "$FLOW_ROOT"
+slug="$(head -n1 "$FLOW_DIR/ACTIVE" 2>/dev/null | tr -d '[:space:]' || true)"
+seals="$FLOW_DIR/tasks/$slug/SEALS"
+ev=""
+[ -n "$slug" ] && [ -d "$FLOW_DIR/tasks/$slug" ] && ev="$(flow_state_dir "$FLOW_DIR/tasks/$slug")/EVIDENCE.md"
 
 is_kept() {
   local f="$1" k
@@ -70,13 +73,14 @@ bash -c "$check" >"$out" 2>&1
 code=$?
 
 if [ "$code" -ne 0 ]; then verdict=TEETH; else verdict=TOOTHLESS; fi
-if [ -n "$slug" ] && [ -f ".flow/tasks/$slug/EVIDENCE.md" ]; then
+if [ -n "$ev" ]; then
+  mkdir -p "$(dirname "$ev")"
   {
     printf '### %s · probe:%s · %s · exit=%s\n' "$(date -u +%FT%TZ)" "$label" "$verdict" "$code"
     printf -- '- cmd (on reverted source): `%s`\n' "$check"
     printf -- '- reverted: %s\n' "$(printf '%s ' "${reverted[@]#* }")"
     printf '\n'
-  } >>".flow/tasks/$slug/EVIDENCE.md"
+  } >>"$ev"
 fi
 tail -n 8 "$out"; rm -f "$out"
 echo "flow-probe: $verdict"

@@ -2,6 +2,8 @@
 # Shared helpers for flow-stack hooks. Every hook fails open: any error
 # logs a warning and exits 0 so the stack can never lock the user out.
 
+. "$(dirname "${BASH_SOURCE[0]}")/roots.sh"
+
 FLOW_HOME="${FLOW_STACK_HOME:-$HOME/.flow-stack}"
 FLOW_LOG="$FLOW_HOME/hooks.log"
 
@@ -25,14 +27,16 @@ flow_init() {
   FLOW_INPUT="$(cat)"
   FLOW_CWD="$(jq -r '.cwd // empty' <<<"$FLOW_INPUT")"
   [ -n "$FLOW_CWD" ] || FLOW_CWD="$PWD"
-  FLOW_ROOT="$(git -C "$FLOW_CWD" rev-parse --show-toplevel 2>/dev/null || printf '%s' "$FLOW_CWD")"
-  FLOW_DIR="$FLOW_ROOT/.flow"
+  flow_roots "$FLOW_CWD"
   FLOW_TASK=""
   FLOW_TASK_DIR=""
+  FLOW_STATE_DIR=""
   if [ -f "$FLOW_DIR/ACTIVE" ]; then
     FLOW_TASK="$(head -n1 "$FLOW_DIR/ACTIVE" | tr -d '[:space:]')"
     if [ -n "$FLOW_TASK" ] && [ -d "$FLOW_DIR/tasks/$FLOW_TASK" ]; then
       FLOW_TASK_DIR="$FLOW_DIR/tasks/$FLOW_TASK"
+      FLOW_STATE_DIR="$(flow_state_dir "$FLOW_TASK_DIR")"
+      mkdir -p "$FLOW_STATE_DIR"
     else
       FLOW_TASK=""
     fi
@@ -58,6 +62,7 @@ flow_field() {
 flow_rel() {
   local p="$1"
   case "$p" in
+    "$FLOW_DIR"/*) printf '.flow/%s' "${p#"$FLOW_DIR"/}" ;;
     "$FLOW_ROOT"/*) printf '%s' "${p#"$FLOW_ROOT"/}" ;;
     /*) printf '%s' "$p" ;;
     *) printf '%s' "${p#./}" ;;

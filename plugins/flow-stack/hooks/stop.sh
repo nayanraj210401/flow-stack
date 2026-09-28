@@ -24,8 +24,8 @@ fi
 
 claims='\b(done|fixed|works|working now|all (tests|checks) pass(ing)?|passes|complete[d]?|ready to (merge|ship|review))\b'
 if [ -n "$last_msg" ] && grep -Eiq "$claims" <<<"$last_msg" && ! grep -q '~ assumed' <<<"$last_msg"; then
-  last_edit="$(jq -r 'select(.tool == "Edit" or .tool == "Write" or .tool == "MultiEdit") | .ts' "$FLOW_TASK_DIR/trail.jsonl" 2>/dev/null | tail -n1 || true)"
-  last_pass="$(grep -E '^### .* · PASS · ' "$FLOW_TASK_DIR/EVIDENCE.md" 2>/dev/null | tail -n1 | awk '{print $2}' || true)"
+  last_edit="$(jq -r 'select(.tool == "Edit" or .tool == "Write" or .tool == "MultiEdit") | .ts' "$FLOW_STATE_DIR/trail.jsonl" 2>/dev/null | tail -n1 || true)"
+  last_pass="$(grep -E '^### .* · PASS · ' "$FLOW_STATE_DIR/EVIDENCE.md" 2>/dev/null | tail -n1 | awk '{print $2}' || true)"
   if [ -n "$last_edit" ] && { [ -z "$last_pass" ] || [[ "$last_pass" < "$last_edit" ]]; }; then
     jq -n --arg r "flow claims check: your reply claims success, but there is no passing evidence in .flow/tasks/$FLOW_TASK/EVIDENCE.md since the last code edit ($last_edit). Either run the check through verify's scripts/evidence.sh and cite the entry, or rewrite the claim as '~ assumed: <what was not verified>'." \
       '{decision:"block", reason:$r}'

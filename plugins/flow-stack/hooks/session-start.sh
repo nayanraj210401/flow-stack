@@ -77,7 +77,7 @@ if [ -n "$FLOW_TASK_DIR" ]; then
 
   if [ "$source_kind" = compact ] || [ "$source_kind" = resume ]; then
     handoff="$FLOW_TASK_DIR/HANDOFF.md"
-    auto="$FLOW_TASK_DIR/HANDOFF.auto.md"
+    auto="$FLOW_STATE_DIR/HANDOFF.auto.md"
     if [ -f "$auto" ] && { [ ! -f "$handoff" ] || [ "$auto" -nt "$handoff" ]; }; then
       handoff="$auto"
     fi

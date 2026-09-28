@@ -11,14 +11,21 @@
 #                                     probe TEETH, diff budget (see proofs). Override with
 #                                     --force "<reason>" (logged to DECISIONS.tsv).
 #   task.sh proofs <id>               show which done-proofs a slice has and lacks
+#   task.sh accept <lane>             import a worker lane's EVIDENCE.md into the task
+#                                     (delegate, main checkout, after reviewing its branch)
 #   task.sh decide <who> <reversible yes|no> <decision> <why> [evidence]
+#
+# Inside a linked git worktree (a delegate worker's lane) the task folder is the
+# main checkout's, read-only: new, switch, close, slice, and accept are refused,
+# and proofs read the lane's own evidence and trail (.flow/tasks/<slug>/lanes/<lane>/).
 #   task.sh estimate <usd> <ctx_pct> <human_min>
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
 templates="$here/../../../templates"
-root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-flow="$root/.flow"
+. "$here/../../../hooks/roots.sh"; flow_roots
+root="$FLOW_MAIN"
+flow="$FLOW_DIR"
 
 die() { echo "task.sh: $*" >&2; exit 1; }
 active() { [ -f "$flow/ACTIVE" ] && head -n1 "$flow/ACTIVE" | tr -d '[:space:]' || true; }
@@ -47,7 +54,8 @@ slice_field() { # slice_field <SLICES.md> <id> <field>
 proofs() {
   local id="$1" d s ev trail last_edit ok=0 red teeth budget fence line ts
   [ -n "$id" ] || die "usage: task.sh proofs <id>"
-  d="$(active_dir)"; s="$d/SLICES.md"; ev="$d/EVIDENCE.md"; trail="$d/trail.jsonl"
+  d="$(active_dir)"; s="$d/SLICES.md"
+  local st; st="$(flow_state_dir "$d")"; ev="$st/EVIDENCE.md"; trail="$st/trail.jsonl"
   red="$(slice_field "$s" "$id" red)"; teeth="$(slice_field "$s" "$id" teeth)"
   budget="$(slice_field "$s" "$id" budget)"; fence="$(slice_field "$s" "$id" fence)"
   last_edit="$(jq -r 'select(.tool=="Edit" or .tool=="Write" or .tool=="MultiEdit") | .ts' "$trail" 2>/dev/null | tail -n1 || true)"
@@ -80,6 +88,10 @@ proofs() {
 }
 
 cmd="${1:-}"; shift || true
+case "$cmd" in
+  new|switch|close|slice|accept)
+    [ -z "$FLOW_LANE" ] || die "'$cmd' is refused in worktree lane '$FLOW_LANE': the task plan is shared. Return your evidence; the delegate accepts it and marks the slice." ;;
+esac
 case "$cmd" in
   new)
     slug="${1:-}"; [ -n "$slug" ] || die "usage: task.sh new <slug> [playbook]"
@@ -139,6 +151,13 @@ case "$cmd" in
       { print }' "$f" >"$tmp" && mv "$tmp" "$f"
     echo "$id → $st"
     ;;
+  accept)
+    lane="${1:-}"; [ -n "$lane" ] || die "usage: task.sh accept <lane>"
+    lev="$(active_dir)/lanes/$lane/EVIDENCE.md"
+    [ -f "$lev" ] || die "no evidence in lane '$lane' ($lev)"
+    { printf '<!-- accepted from lane %s at %s -->\n' "$lane" "$(date -u +%FT%TZ)"; cat "$lev"; } >>"$(active_dir)/EVIDENCE.md"
+    echo "accepted: $(grep -c '^### ' "$lev") evidence block(s) from lane $lane"
+    ;;
   decide)
     [ $# -ge 4 ] || die "usage: task.sh decide <who> <yes|no> <decision> <why> [evidence]"
     clean() { printf '%s' "$1" | tr '\t\n' '  '; }
@@ -151,6 +170,6 @@ case "$cmd" in
     printf 'usd=%s ctx_pct=%s human_min=%s at=%s\n' "$1" "$2" "$3" "$(date -u +%FT%TZ)" >"$(active_dir)/ESTIMATE"
     echo "estimate saved"
     ;;
-  -h|--help|"") sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//' ;;
+  -h|--help|"") sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//' ;;
   *) die "unknown command: $cmd (try -h)" ;;
 esac

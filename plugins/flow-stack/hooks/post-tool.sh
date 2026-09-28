@@ -10,7 +10,7 @@ tool="$(flow_field .tool_name)"
 
 # ---- trail ----
 if flow_enabled trail; then
-  trail="${FLOW_TASK_DIR:-$FLOW_DIR}/trail.jsonl"
+  trail="${FLOW_STATE_DIR:-$FLOW_DIR}/trail.jsonl"
   target="$(jq -r '
     .tool_input as $i |
     ($i.command // $i.file_path // $i.notebook_path // $i.pattern // $i.url // $i.query // $i.description // $i.skill // "")
@@ -29,7 +29,7 @@ fi
 
 # ---- circuit ----
 [ -n "$FLOW_TASK_DIR" ] && flow_enabled circuit || exit 0
-state="$FLOW_TASK_DIR/.circuit"
+state="$FLOW_STATE_DIR/.circuit"
 mkdir -p "$state"
 
 feedback() {

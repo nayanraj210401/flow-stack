@@ -12,10 +12,11 @@
 # so the builder cannot fit the code to the expected values.
 set -uo pipefail
 
-root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-slug="$(head -n1 "$root/.flow/ACTIVE" 2>/dev/null | tr -d '[:space:]' || true)"
+. "$(dirname "$0")/../../../hooks/roots.sh"; flow_roots
+root="$FLOW_ROOT"
+slug="$(head -n1 "$FLOW_DIR/ACTIVE" 2>/dev/null | tr -d '[:space:]' || true)"
 [ -n "$slug" ] || { echo "blind-run: no active task" >&2; exit 2; }
-blind="$root/.flow/tasks/$slug/blind"
+blind="$FLOW_DIR/tasks/$slug/blind"
 manifest="$blind/MANIFEST"
 [ -f "$manifest" ] || { echo "blind-run: no blind checks for $slug (nothing to run)"; exit 0; }
 
@@ -56,7 +57,7 @@ verdict=$([ "$code" -eq 0 ] && echo PASS || echo FAIL)
   printf -- '- held-out checks: %s file(s); details withheld by design\n' "${#installed[@]}"
   [ -n "$failing" ] && printf -- '- failing (names only):\n%s\n' "$(sed 's/^/  - /' <<<"$failing")"
   printf '\n'
-} >>"$root/.flow/tasks/$slug/EVIDENCE.md"
+} >>"$(mkdir -p "$(flow_state_dir "$FLOW_DIR/tasks/$slug")" && flow_state_dir "$FLOW_DIR/tasks/$slug")/EVIDENCE.md"
 
 echo "blind checks: $verdict (${#installed[@]} file(s))"
 [ -n "$failing" ] && printf 'failing (names only):\n%s\n' "$failing"
