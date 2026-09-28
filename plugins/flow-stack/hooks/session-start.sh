@@ -77,7 +77,7 @@ if [ -n "$FLOW_TASK_DIR" ]; then
 
   if [ "$source_kind" = compact ] || [ "$source_kind" = resume ]; then
     handoff="$FLOW_TASK_DIR/HANDOFF.md"
-    auto="$FLOW_TASK_DIR/HANDOFF.auto.md"
+    auto="$FLOW_STATE_DIR/HANDOFF.auto.md"
     if [ -f "$auto" ] && { [ ! -f "$handoff" ] || [ "$auto" -nt "$handoff" ]; }; then
       handoff="$auto"
     fi
@@ -86,6 +86,12 @@ if [ -n "$FLOW_TASK_DIR" ]; then
       head -n 60 "$handoff"
     fi
   fi
+fi
+
+# Daily brief: once a day, when the profile asks for one and wrap hasn't run today.
+digest="$(profile_fm digest 2>/dev/null || true)"
+if [ -n "$digest" ] && [ "$digest" != off ] && [ "$(cat "$FLOW_HOME/digest/last" 2>/dev/null || true)" != "$(date +%F)" ]; then
+  printf '\nNo daily brief yet today (digest: %s). Offer `/flow-stack:wrap` once at a natural pause.\n' "$digest"
 fi
 
 # Toolchain drift: suggest re-adapting when plugins, user hooks, MCP servers, or the status line changed.

@@ -36,3 +36,12 @@ TOMORROW, FIRST
 ```
 
 Then offer `reflect` if today had corrections worth keeping, and stop. No motivational sign-off.
+
+Run in the morning (before noon), it covers since the previous midnight and doubles as the day's brief.
+
+## Delivery (profile `digest:`)
+
+- `terminal` or `off`: the block above is the reply.
+- `page`: also write `$FLOW_STACK_HOME/digest/<date>.html` (default `~/.flow-stack/digest/`). One self-contained file, no external scripts: the same five sections as cards, WAITING ON YOU first, each PR and repo linked, readable in light and dark (`prefers-color-scheme`). Open it (`open` on macOS, `xdg-open` elsewhere). The reply is just the path and the WAITING ON YOU lines.
+
+Either way, finish with `date +%F > "${FLOW_STACK_HOME:-$HOME/.flow-stack}/digest/last"` (create the folder). The session-start nudge reads it.

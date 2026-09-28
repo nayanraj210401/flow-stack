@@ -17,7 +17,7 @@ Principle: `principle-smallest-verifiable-unit`.
 6. **Order by risk.** Unknowns go early. Mechanical work goes late.
 7. **Independent slices are marked** with `parallel: yes`, so `delegate` can fan them out.
 8. **Subtraction slices first.** If the challenge or the subtract scan found dead code, a wrapper, or a legacy path to remove, make it its own first slice (`S0 · delete …`). Its budget counts removals, and it must keep every check green.
-9. **Red and teeth.** Every slice owes a red run and a probe unless it says why not (`red: n/a …`, `teeth: n/a …`). Refactor slices usually have `red: n/a behavior-preserving` because their pin must stay green.
+9. **Red and teeth.** Every slice owes a red run and a probe unless it says why not (`red: n/a …`, `teeth: n/a …`). Refactor slices set both `red: n/a behavior-preserving` and `teeth: n/a behavior-preserving, pin probed at baseline`: their pin must stay green, so neither a red run nor a revert can fail it. The refactor playbook proves the pin once, up front.
 
 ## Output
 

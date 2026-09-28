@@ -26,7 +26,7 @@ if [ -f "$s" ] && have jq; then
   row user-hooks info "$(jq -r '[.hooks // {} | to_entries[] | "\(.key)×\(.value | length)"] | join(" ")' "$s")"
 fi
 [ -f "${FLOW_STACK_HOME:-$HOME/.flow-stack}/profile.md" ] && row profile ok "${FLOW_STACK_HOME:-$HOME/.flow-stack}/profile.md" || row profile missing "run the profile interview"
-root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+root=""; if git rev-parse --show-toplevel >/dev/null 2>&1; then . "$(dirname "$0")/../../../hooks/roots.sh"; flow_roots; root="$FLOW_MAIN"; fi
 if [ -n "$root" ]; then
   for f in config.json map.md taste.md gates.md; do
     [ -f "$root/.flow/$f" ] && row ".flow/$f" ok "" || row ".flow/$f" missing ""

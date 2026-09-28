@@ -24,7 +24,8 @@ set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "features.sh: needs a git repo" >&2; exit 2; }
 cd "$root"
-dir=".flow/features"
+. "$here/../../../hooks/roots.sh"; flow_roots
+dir="$FLOW_DIR/features"
 evidence="$here/../../verify/scripts/evidence.sh"
 
 die() { echo "features.sh: $*" >&2; exit 2; }

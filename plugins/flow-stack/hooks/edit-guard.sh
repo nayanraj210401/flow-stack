@@ -21,7 +21,7 @@ case "$rel" in
     count_done() { grep -c '^status: done' 2>/dev/null || true; }
     new_text="$(flow_field '.tool_input.new_string // .tool_input.content')"
     if [ "$(flow_field .tool_name)" = Write ]; then
-      before="$(count_done <"$FLOW_ROOT/$rel")"
+      before="$(count_done <"$FLOW_MAIN/$rel")"
     else
       before="$(flow_field .tool_input.old_string | count_done)"
     fi

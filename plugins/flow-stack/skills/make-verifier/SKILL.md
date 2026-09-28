@@ -1,12 +1,22 @@
 ---
 name: make-verifier
-description: "Forge .claude/skills/verify-<repo>/, a driver that runs this app like a user (CLI, HTTP, browser) and proves itself. /flow-stack:make-verifier."
+description: "Forge .claude/skills/verify-<repo>/, a driver that runs this app like a user (CLI, HTTP, browser) and proves itself; if one exists, check it for drift and refresh only what's stale. /flow-stack:make-verifier."
 disable-model-invocation: true
 ---
 
 # make-verifier: teach the agent to use this app like a user
 
 Generic skills can't know how to prove *this* app works. This skill writes the driver that can. The output is read cold, mid-task, by an agent that has never seen the app. Write for that reader.
+
+## 0. Driver already there? Refresh, don't regenerate
+
+If `.claude/skills/verify-<repo>/SKILL.md` exists with `generated-by: flow-stack:make-verifier`, measure drift instead of starting over:
+1. **Self-test**: run its `## Self-test` command.
+2. **Code drift**: `../feature-map/scripts/features.sh stale` (owned code changed since each feature was verified) and `git diff --stat <source-commit>..HEAD` on the launch files §1 found (build and start commands, env example, ports).
+3. **Coverage**: `features.sh coverage`. Features without a scenario (except ones the driver's Gotchas lists as not driven, with a reason), and code no feature owns.
+4. **Driver drift**: every script path, command, and flag the driver's SKILL.md names still exists.
+
+All clean → reply `verify-<repo> up to date · source-commit <sha>` and stop. Otherwise, fix only what drifted: add scenarios for the new features, repair the broken ones, and re-run §1 only for launch changes. Keep hand edits. Where one conflicts with the code, ask the human. Then run §4 on the scenarios you changed, bump `generated-at` and `source-commit`, and hand over the list of what changed.
 
 ## 1. Interview the repo, not the human
 
@@ -49,4 +59,4 @@ SKILL.md must have:
 
 ## 5. Hand over
 
-Tell the human in ≤ 4 lines: which features it covers, what it can't cover yet (`features.sh list` → unverified), and that it's committed-ready at `.claude/skills/verify-<repo>/`. `tend` keeps it honest as the code changes.
+Tell the human in ≤ 4 lines: which features it covers, what it can't cover yet (`features.sh list` → unverified), and that it's committed-ready at `.claude/skills/verify-<repo>/`. Re-running `/flow-stack:make-verifier` later refreshes it (§0); `tend` does the same across every generated skill.

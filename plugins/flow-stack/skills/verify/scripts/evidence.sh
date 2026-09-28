@@ -13,10 +13,13 @@ set -uo pipefail
 [ $# -ge 2 ] || { sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 label="$1"; check="$2"; shift 2
 
-root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-slug="$(head -n1 "$root/.flow/ACTIVE" 2>/dev/null | tr -d '[:space:]' || true)"
+. "$(dirname "$0")/../../../hooks/roots.sh"; flow_roots
+root="$FLOW_ROOT"
+slug="$(head -n1 "$FLOW_DIR/ACTIVE" 2>/dev/null | tr -d '[:space:]' || true)"
 ev=""
-[ -n "$slug" ] && [ -d "$root/.flow/tasks/$slug" ] && ev="$root/.flow/tasks/$slug/EVIDENCE.md"
+if [ -n "$slug" ] && [ -d "$FLOW_DIR/tasks/$slug" ]; then
+  ev="$(flow_state_dir "$FLOW_DIR/tasks/$slug")/EVIDENCE.md"; mkdir -p "$(dirname "$ev")"
+fi
 
 out="$(mktemp)"
 start=$(date +%s)

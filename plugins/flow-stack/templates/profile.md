@@ -12,6 +12,7 @@ budget:
 notify: osascript                 # osascript | ntfy:<topic> | off
 notify_on: blocked                # blocked | all
 dojo: off                         # off | light (explain-back) | on (TODO(you))
+digest: off                       # off | terminal | page: how /flow-stack:wrap delivers the daily brief
 rigor: standard                   # lean | standard | strict: how much ceremony flow spends per task
 ---
 

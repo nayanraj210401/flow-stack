@@ -10,10 +10,13 @@
 # file an explicit human decision.
 set -euo pipefail
 
-root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-slug="$(head -n1 "$root/.flow/ACTIVE" 2>/dev/null | tr -d '[:space:]' || true)"
+. "$(dirname "$0")/../../../hooks/roots.sh"; flow_roots
+root="$FLOW_ROOT"
+slug="$(head -n1 "$FLOW_DIR/ACTIVE" 2>/dev/null | tr -d '[:space:]' || true)"
 [ -n "$slug" ] || { echo "seal.sh: no active task" >&2; exit 2; }
-seals="$root/.flow/tasks/$slug/SEALS"
+seals="$FLOW_DIR/tasks/$slug/SEALS"
+case "${1:-}" in add|reseal|rm) [ -z "$FLOW_LANE" ] || { echo "seal.sh: refused in worktree lane '$FLOW_LANE': the task plan is shared; return this to the delegate as a gate" >&2; exit 2; }
+ ;; esac
 cd "$root"
 
 hash_file() { shasum -a 256 "$1" | awk -v p="$1" '{print $1 "  " p}'; }
