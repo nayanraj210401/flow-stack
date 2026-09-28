@@ -57,6 +57,7 @@ The single source of truth for file locations and formats. Skills and hooks both
 ## S1 · short title
 status: todo            # todo | doing | done | blocked
 check: npm test -- rate-limit
+repo: api                # multi-repo tasks: which repo this slice edits (default: the home repo)
 fence: src/api/** tests/api/**
 budget: 150             # max changed lines (added + removed)
 red: n/a behavior-preserving refactor   # optional; default: a "<id>:before" FAIL is required

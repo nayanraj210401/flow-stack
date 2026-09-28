@@ -45,6 +45,7 @@ Three currencies: tokens (cheap, capped), dollars (moderate), the human's attent
 | Rename, migration, sweep | `playbooks/refactor.md` | task folder |
 | Make a metric better | `playbooks/optimize.md` | task folder |
 | Spans days or sessions | `playbooks/multi-session.md` | task folder + handoffs |
+| Spans several repos (a ticket touching a profile workspace) | the matching playbook, opened with `task.sh new <slug> <playbook> --workspace <name>` | task folder in the primary repo; one slice per repo change; one PR per repo |
 | No playbook fits: ambitious, mixed kinds, or reviewed after stepping away | `playbooks/compose.md` | task folder, rigor +1 |
 | Source is a ticket someone else wrote | the matching playbook; `intent` fact-checks the ticket (§1a) | as that playbook |
 | Matches `.flow/playbooks/*.md` | that repo playbook | as it says |

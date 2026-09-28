@@ -8,7 +8,19 @@ flow_init edit-guard
 file="$(flow_field '.tool_input.file_path // .tool_input.notebook_path')"
 [ -n "$file" ] || exit 0
 rel="$(flow_rel "$file")"
-
+# The repo the file belongs to. In a multi-repo task a file in another task repo (or the
+# task's home .flow/) is judged as that repo's file, not waved through as "outside".
+erepo="$FLOW_REPO"; ekey="$FLOW_REPO_KEY"; epath="$FLOW_MAIN"
+case "$rel" in
+  /*) while IFS=$'\t' read -r n p; do
+        [ -n "$p" ] || continue
+        case "$file" in "$p"/*)
+          rel="${file#"$p"/}"; erepo="$n"; epath="$p"
+          if [ "$p" = "$FLOW_TASK_HOME" ]; then ekey=""; else ekey="$n"; fi
+          break ;;
+        esac
+      done < <(cat "$FLOW_TASK_DIR/REPOS" 2>/dev/null; printf '%s\t%s\n' "$(flow_repo_name "$FLOW_TASK_HOME")" "$FLOW_TASK_HOME") ;;
+esac
 case "$rel" in
   /*) exit 0 ;;          # outside the repo
   .flow/tasks/*/SEALS|.flow/tasks/*/INTENT.md)
@@ -21,7 +33,7 @@ case "$rel" in
     count_done() { grep -c '^status: done' 2>/dev/null || true; }
     new_text="$(flow_field '.tool_input.new_string // .tool_input.content')"
     if [ "$(flow_field .tool_name)" = Write ]; then
-      before="$(count_done <"$FLOW_MAIN/$rel")"
+      before="$(count_done <"$epath/$rel")"
     else
       before="$(flow_field .tool_input.old_string | count_done)"
     fi
@@ -34,18 +46,25 @@ case "$rel" in
 esac
 
 if flow_enabled seal && [ -f "$FLOW_TASK_DIR/SEALS" ]; then
-  if awk -v p="$rel" '$2 == p {found=1} END {exit !found}' "$FLOW_TASK_DIR/SEALS"; then
+  if awk -v p="${ekey:+$ekey:}$rel" '$2 == p {found=1} END {exit !found}' "$FLOW_TASK_DIR/SEALS"; then
     pre_decide ask "flow seal: '$rel' is a sealed acceptance check for task '$FLOW_TASK'. Changing it changes what 'done' means, so the human approves. If approved, re-seal afterwards."
   fi
 fi
 
 if flow_enabled fence && [ -f "$FLOW_TASK_DIR/SLICES.md" ]; then
-  read -r slice fence <<<"$(awk '
-    /^## / { h = $0; sub(/^## /, "", h); sub(/ .*/, "", h); f = ""; d = 0 }
+  IFS=$'\t' read -r slice srepo fence <<<"$(awk '
+    function out() { if (d && f != "") { printf "%s\t%s\t%s\n", h, (r == "" ? "-" : r), f; exit } }
+    /^## / { out(); h = $0; sub(/^## /, "", h); sub(/ .*/, "", h); f = ""; r = ""; d = 0 }
     /^fence:/ { f = $0; sub(/^fence:[[:space:]]*/, "", f); sub(/[[:space:]]*#.*/, "", f) }
+    /^repo:/ { r = $0; sub(/^repo:[[:space:]]*/, "", r); sub(/[[:space:]]*#.*/, "", r) }
     /^status: doing/ { d = 1 }
-    d && f != "" { print h, f; exit }' "$FLOW_TASK_DIR/SLICES.md")"
+    END { out() }' "$FLOW_TASK_DIR/SLICES.md")"
   if [ -n "$fence" ]; then
+    [ "$srepo" = - ] && srepo=""   # "-" keeps read from collapsing an empty field
+    want="${srepo:-$(flow_repo_name "$FLOW_TASK_HOME")}"
+    if [ "$erepo" != "$want" ]; then
+      pre_decide deny "flow fence: slice $slice works in repo '$want'; '$rel' is in '$erepo'. If this repo needs a change, give it its own slice (repo: $erepo) in .flow/tasks/$FLOW_TASK/SLICES.md."
+    fi
     inside=0
     set -f
     for g in $fence; do

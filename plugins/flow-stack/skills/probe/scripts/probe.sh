@@ -19,18 +19,18 @@ while [ $# -gt 0 ]; do
 done
 
 git rev-parse --show-toplevel >/dev/null 2>&1 || { echo "probe: needs a git repo" >&2; exit 2; }
-. "$(dirname "$0")/../../../hooks/roots.sh"; flow_roots
+. "$(dirname "$0")/../../../hooks/roots.sh"; flow_roots; flow_task
 cd "$FLOW_ROOT"
-slug="$(head -n1 "$FLOW_DIR/ACTIVE" 2>/dev/null | tr -d '[:space:]' || true)"
-seals="$FLOW_DIR/tasks/$slug/SEALS"
+slug="$FLOW_TASK"
+seals="$FLOW_TASK_DIR/SEALS"
 ev=""
-[ -n "$slug" ] && [ -d "$FLOW_DIR/tasks/$slug" ] && ev="$(flow_state_dir "$FLOW_DIR/tasks/$slug")/EVIDENCE.md"
+[ -n "$FLOW_TASK_DIR" ] && ev="$(flow_state_dir "$FLOW_TASK_DIR")/EVIDENCE.md"
 
 is_kept() {
   local f="$1" k
   case "$f" in .flow/*|.gitignore) return 0 ;; esac
   [[ "$f" =~ (^|/)(tests?|spec|__tests__)/|[._-](test|spec)\.[a-z]+$|_test\.[a-z]+$|(^|/)test_[^/]*\.py$ ]] && return 0
-  [ -f "$seals" ] && awk -v p="$f" '$2 == p {found=1} END {exit !found}' "$seals" && return 0
+  [ -f "$seals" ] && awk -v p="$(flow_qual "$f")" '$2 == p {found=1} END {exit !found}' "$seals" && return 0
   for k in "${keep[@]:-}"; do [ -n "$k" ] && [[ "$f" == "$k" || "$f" == "$k"/* ]] && return 0; done
   return 1
 }

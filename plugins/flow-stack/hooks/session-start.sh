@@ -73,6 +73,9 @@ if [ -n "$FLOW_TASK_DIR" ]; then
   slice="$(awk '/^## /{h=$0} /^status: doing/{print h; exit}' "$FLOW_TASK_DIR/SLICES.md" 2>/dev/null || true)"
   printf '\n## Active task: %s (.flow/tasks/%s)\n' "$FLOW_TASK" "$FLOW_TASK"
   [ -n "$goal" ] && printf 'Goal: %s\n' "$goal"
+  if [ -f "$FLOW_TASK_DIR/REPOS" ]; then
+    printf 'Multi-repo task · home: %s · repos: %s · this repo: %s. Each slice names its repo:.\n' "$FLOW_TASK_HOME" "$(cut -f1 "$FLOW_TASK_DIR/REPOS" | paste -sd, - | sed 's/,/, /g')" "$FLOW_REPO"
+  fi
   [ -n "$slice" ] && printf 'Current slice: %s\n' "${slice#\#\# }"
 
   if [ "$source_kind" = compact ] || [ "$source_kind" = resume ]; then
