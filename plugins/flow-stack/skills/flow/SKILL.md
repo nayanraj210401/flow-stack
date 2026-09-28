@@ -24,7 +24,7 @@ Three currencies: tokens (cheap, capped), dollars (moderate), the human's attent
 | Two failed fixes on the same thing | principle-attack-the-premise, then `challenge`. The circuit hook forces this at 3. |
 | About to ask the human | `gate`. If running something could answer it, run it instead. Batch what's left into one message. |
 | Irreversible or outward-facing action | Always a GATE: push, merge, deploy, publish, delete data, send messages, spend money, `.flow/gates.md` entries. |
-| A diff is ready | `deslop` (code), `unslop` (prose), then `review`, and `tour` for the human. |
+| A diff is ready | `deslop` (code), `unslop` (prose), then `review`, and `tour` for the human. Then `../review/scripts/ready.sh`: a non-draft PR is refused until it stamps HEAD (unless `review_gate: yolo`). |
 | Taking a shortcut | `debt`. |
 | Context past the handoff threshold | `handoff` at the next slice boundary. |
 | A reply longer than 5 lines | `brief`. Detail goes to a file. |

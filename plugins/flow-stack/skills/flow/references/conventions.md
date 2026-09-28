@@ -50,7 +50,10 @@ The single source of truth for file locations and formats. Skills and hooks both
 | `HANDOFF.auto.md` | pre-compact hook | deterministic snapshot |
 | `TRACE.md` | trace skill | template `TRACE.md` |
 | `.circuit` | circuit hook | counters, internal |
+| `REPOS` | `task.sh new --workspace/--repos` | multi-repo tasks only: `name<TAB>path` per repo; names are the profile's `# Repos` names |
 | `lanes/<lane>/` | a worker in a linked git worktree | its own `EVIDENCE.md`, `trail.jsonl`, `.circuit`, `HANDOFF.auto.md`; imported with `task.sh accept <lane>` |
+
+**Multi-repo tasks.** A profile `# Workspaces` entry (`- repos: a, b, c`) lists repos from `# Repos` (`- path:`, `- role: primary|dep|reference`, optional `- remote:`, `- run:`). `task.sh new <slug> <playbook> --workspace <name>` puts the task folder in the primary repo and points every other repo's ACTIVE at it. Each slice names its `repo:` (default: the home repo) and its fence is relative to that repo; an edit in any other repo is denied, whichever repo the session runs in. SEALS paths outside the home repo are `<repo>:<path>`, and evidence blocks run elsewhere carry `- repo: <name>`. Each repo gets its own branch, PR, and ready-for-review stamp.
 
 **Worktrees.** `.flow/` is untracked, so a linked worktree has none. Every hook and script resolves `.flow/` through `hooks/roots.sh` to the main checkout's copy: plan files (INTENT, SLICES, SEALS, blind/) are shared and read-only from a lane, and per-agent writes go to `lanes/<branch>/` so parallel workers never write the same file.
 

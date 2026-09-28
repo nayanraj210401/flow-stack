@@ -28,3 +28,9 @@ A verdict (`ship` / `fix-first` / `rethink`) and findings, each with a `file:lin
 - Disagree? Dismiss it with a concrete reason in DECISIONS.tsv. Don't churn code to appease a wrong finding.
 
 Show the human only the verdict and the blockers and shoulds that remain. Nits never reach them.
+
+Record the verdict for the ready-for-review bar, once the blockers are fixed and the last review ran on the current HEAD: `scripts/ready.sh record review ship|fix-first|rethink "<n blockers, n shoulds>"`.
+
+## Ready for review
+
+A PR goes to a human only after `scripts/ready.sh` passes for its exact HEAD, unless `review_gate: yolo` is set (repo `.flow/config.json` beats the profile). It runs the live checks (clean tree, lint, typecheck, impacted feature scenarios, and with a task: acceptance checks, seals, blind checks), then requires `review ship`, `deslop`, and `tour` recorded for HEAD. On a pass it stamps HEAD. The guard hook denies a non-draft `gh pr create` and `gh pr ready` without that stamp, and any new commit needs a new stamp. Drafts are always fine. If it fails, fix what it lists; never record a step you didn't do.

@@ -34,3 +34,5 @@ not verified: <anything no check covers>
 ```
 
 Order READ items by risk. Estimate review minutes honestly and compare them to the profile's attention budget. If the READ tier alone needs more than 20 minutes, offer to split the change.
+
+The tour goes in the PR body. Once it describes the current HEAD, record it for the ready-for-review bar: `../review/scripts/ready.sh record tour done`.
