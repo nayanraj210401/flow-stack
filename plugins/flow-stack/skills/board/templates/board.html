@@ -81,6 +81,13 @@ h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--mute
 .f b{width:8px;height:8px;border-radius:50%;flex:none}
 .f span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .f.ok b{background:var(--ok)} .f.un b{background:transparent;border:1.5px solid var(--muted)} .f.st b{background:var(--warn)}
+.qual{display:grid;grid-template-columns:auto 1fr;gap:18px;align-items:start}
+.qdims{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px 22px}
+.qd{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:baseline}
+.qd .meter{grid-column:1/-1;height:6px}.qd .rec{grid-column:1/-1;color:var(--muted);font-size:12px}
+.qd.na>span:first-child,.qd.na .num{color:var(--muted)}
+.meter i.ok{background:var(--ok)} .meter i.warn{background:var(--warn)} .meter i.crit{background:var(--crit)}
+@media (max-width:600px){.qual{grid-template-columns:1fr}}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
 
 /* tables */
@@ -176,6 +183,7 @@ a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
   function panel(cls, title, src, inner) {
     return `<section class="panel ${cls}"><header><h2>${title}</h2><span class="src">${esc(src)}</span></header>${inner}</section>`;
   }
+  function tone(s) { return s == null ? '' : s >= 80 ? 'ok' : s >= 50 ? 'warn' : 'crit'; }
   function repoView(r) {
     const tasks = open(r), feats = r.features || [], ver = feats.filter(f => f.status === 'verified').length;
     const taskHtml = tasks.length ? tasks.map(t => {
@@ -191,9 +199,13 @@ a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
     const decs = (r.decisions || []).length ? `<div class="tbl"><table><thead><tr><th>Decision</th><th>Why</th><th>Undo</th></tr></thead><tbody>${r.decisions.map(d => `<tr><td>${esc(d.decision)}<div class="src">${esc(d.task)} · ${esc(d.ts)}</div></td><td>${esc(d.why)}</td><td>${pill(d.reversible === 'no' ? 'p-crit' : 'p-ok', d.reversible === 'no' ? 'no' : 'yes')}</td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">No agent decisions logged.</p>';
     const debt = (r.debt || []).filter(d => d.open);
     const debtHtml = debt.length ? `<div class="tbl"><table><thead><tr><th>ID</th><th>Shortcut</th><th>Repay when</th></tr></thead><tbody>${debt.map(d => `<tr><td class="mono">${esc(d.id)}</td><td>${esc(d.text)}</td><td>${esc(d.trigger)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">No open debt in .flow/debt.md.</p>';
+    const q = r.quality || {}, qd = q.dims || [];
+    const qHtml = `<div class="qual"><div class="big">${q.score == null ? 'n/a' : esc(q.score)}<small> / 100</small></div><div class="qdims">${qd.map(d => `<div class="qd${d.score == null ? ' na' : ''}"><span>${esc(d.label)}</span><span class="num">${d.score == null ? 'n/a' : esc(d.score)}</span><div class="meter"><i class="${tone(d.score)}" style="width:${d.score == null ? 0 : Math.max(2, +d.score)}%"></i></div><span class="rec">${esc(d.detail)}</span></div>`).join('')}</div></div>
+      <p class="note">Overall is the mean of the scored rows; n/a means the repo has no data for that row.</p>`;
     const cal = (r.tasks || []).filter(t => t.estimate_usd != null && t.actual_usd != null);
     return panel('c7', `Tasks · ${tasks.length} open`, '.flow/tasks/*', taskHtml)
       + panel('c5', `Feature health · ${ver}/${feats.length} verified`, '.flow/features/', featHtml)
+      + panel('c12', `Quality · ${q.score == null ? 'n/a' : esc(q.score)}`, 'features, EVIDENCE, debt, ready.tsv, git ls-files', qHtml)
       + panel('c7', 'Decided without you', 'DECISIONS.tsv', decs)
       + panel('c5', `Debt · ${debt.length} open`, '.flow/debt.md', debtHtml)
       + panel('c12', 'Shipped · last 7 days', `git log · ${r.branch || 'HEAD'} ${esc(r.head)}${r.dirty ? ' · ' + r.dirty + ' uncommitted' : ''}`, shipped)
@@ -202,10 +214,10 @@ a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
   function allView() {
     const rows = repos.map(r => {
       const f = r.features || [], v = f.filter(x => x.status === 'verified').length, g = open(r).reduce((a, t) => a + (t.gates || []).length, 0);
-      const p = r.prs || {}, prn = (p.mine || []).length + (p.review_requested || []).length;
-      return `<tr><td class="mono">${esc(r.name)}</td><td>${open(r).length}</td><td>${g ? pill('p-gate', g + ' gate' + (g > 1 ? 's' : '')) : '—'}</td><td>${prn ? pill('p-pr', prn + ' PR' + (prn > 1 ? 's' : '')) : '—'}</td><td>${f.length ? pill(v === f.length ? 'p-ok' : 'p-warn', v + '/' + f.length) : pill('p-mute', 'no map')}</td><td>${(r.debt || []).filter(d => d.open).length || '—'}</td><td class="num">${(r.shipped || []).length}</td></tr>`;
+      const p = r.prs || {}, prn = (p.mine || []).length + (p.review_requested || []).length, qs = (r.quality || {}).score;
+      return `<tr><td class="mono">${esc(r.name)}</td><td>${qs == null ? pill('p-mute', 'n/a') : pill('p-' + tone(qs), qs)}</td><td>${open(r).length}</td><td>${g ? pill('p-gate', g + ' gate' + (g > 1 ? 's' : '')) : '—'}</td><td>${prn ? pill('p-pr', prn + ' PR' + (prn > 1 ? 's' : '')) : '—'}</td><td>${f.length ? pill(v === f.length ? 'p-ok' : 'p-warn', v + '/' + f.length) : pill('p-mute', 'no map')}</td><td>${(r.debt || []).filter(d => d.open).length || '—'}</td><td class="num">${(r.shipped || []).length}</td></tr>`;
     }).join('');
-    return panel('c12', 'Repos', 'profile # Repos', `<div class="tbl"><table><thead><tr><th>Repo</th><th>Open tasks</th><th>Gates</th><th>PRs</th><th>Features</th><th>Debt</th><th class="num">Commits 7d</th></tr></thead><tbody>${rows}</tbody></table></div>`)
+    return panel('c12', 'Repos', 'profile # Repos', `<div class="tbl"><table><thead><tr><th>Repo</th><th>Quality</th><th>Open tasks</th><th>Gates</th><th>PRs</th><th>Features</th><th>Debt</th><th class="num">Commits 7d</th></tr></thead><tbody>${rows}</tbody></table></div>`)
       + (D.spend && D.spend.length ? panel('c12', `Spend · ${D.spend.length} days`, 'ccusage', '<svg viewBox="0 0 560 150" id="spend" role="img" aria-label="Daily spend"></svg>') : '');
   }
 

@@ -46,6 +46,39 @@ task_json() { # task_json <task-dir> <active-slug>
       estimate_usd:($est|tonumber? // null), actual_usd:($actual|tonumber? // null)}'
 }
 
+quality_json() { # quality_json <repo> <features-json> <debt-json>: 0-100 per dimension, null when the repo has no data for it
+  local r="$1" fd="$1/.flow" ev="[]" code="" code_n=0 lines=0 marks=0 big=0 tests=0 ready="null"
+  ev="$(for e in "$fd"/tasks/*/EVIDENCE.md; do [ -f "$e" ] || continue
+      awk -v t="$(basename "$(dirname "$e")")" -F' · ' '/^### /{r[$2]=$3} END{for(l in r) print t":"l"\t"r[l]}' "$e"; done |
+    jq -Rsc 'split("\n") | map(select(length>0) | split("\t") | {label:.[0], result:.[1]})')"
+  [ -f "$fd/ready.tsv" ] && ready="$(awk -F'\t' -v h="$(git -C "$r" rev-parse HEAD 2>/dev/null)" '$2==h && $3=="ready" && $4=="pass"{f=1} END{print f?"true":"false"}' "$fd/ready.tsv")"
+  code="$(git -C "$r" ls-files 2>/dev/null | grep -E '\.(sh|bash|zsh|js|mjs|cjs|ts|tsx|jsx|py|go|rs|rb|java|kt|swift|c|h|cc|cpp|hpp|cs|php|scala|lua|ex|exs|vue|svelte)$' || true)"
+  if [ -n "$code" ]; then
+    code_n="$(printf '%s\n' "$code" | wc -l | tr -d ' ')"
+    read -r lines tests big < <(cd "$r" && printf '%s\n' "$code" | tr '\n' '\0' | xargs -0 wc -l 2>/dev/null |
+      awk '{p=$0; sub(/^ *[0-9]+ /,"",p)} p=="total"{next} {n+=$1} p ~ /(^|\/)(tests?|__tests__|specs?|evals?)\/|[._-](test|spec)s?\.[^\/]+$|(^|\/)test_[^\/]+$/{t++; next} $1>500{b++} END{print n+0, t+0, b+0}')
+    marks="$(cd "$r" && printf '%s\n' "$code" | tr '\n' '\0' | xargs -0 grep -ohwE 'TODO|FIXME|HACK|XXX' 2>/dev/null | wc -l | tr -d ' ')"
+  fi
+  jq -nc --argjson f "$2" --argjson d "$3" --argjson ev "$ev" --argjson ready "$ready" --argjson debtfile "$([ -f "$fd/debt.md" ] && echo true || echo false)" \
+    --argjson n "$code_n" --argjson t "$tests" --argjson lines "$lines" --argjson big "$big" --argjson marks "$marks" '
+    def pct(a; b): if b == 0 then null else (100 * a / b | round) end;
+    def dim($id; $name; $score; $detail): {id:$id, label:$name, score:$score, detail:$detail};
+    ($ev | map(select(.label | test("^[^:]+:probe:"))) ) as $pr
+    | ($ev | map(select((.label | test("^[^:]+:probe:")) or (.label | test(":(before|red)$")) | not))) as $ck
+    | ($f | map(select(.status == "verified")) | length) as $fv
+    | ($d | map(select(.open)) | length) as $dopen
+    | ($n - $t) as $src
+    | [ dim("features"; "Features verified"; pct($fv; $f|length); "\($fv)/\($f|length) verified, \($f | map(select(.status == "stale" or .status == "broken")) | length) stale or broken"),
+        dim("checks"; "Checks passing"; pct($ck | map(select(.result == "PASS")) | length; $ck|length); "\($ck | map(select(.result == "PASS")) | length)/\($ck|length) latest results PASS"),
+        dim("teeth"; "Checks with teeth"; pct($pr | map(select(.result == "TEETH")) | length; $pr|length); "\($pr | map(select(.result == "TEETH")) | length)/\($pr|length) probes TEETH"),
+        dim("debt"; "Debt"; (if $debtfile then ([0, 100 - 15 * $dopen] | max) else null end); "\($dopen) open shortcuts"),
+        dim("review"; "Review stamp"; (if $ready == null then null elif $ready then 100 else 0 end); (if $ready == null then "no .flow/ready.tsv" elif $ready then "HEAD stamped ready" else "HEAD not stamped by ready.sh" end)),
+        dim("tests"; "Test coverage (files)"; (if $n == 0 then null elif $src == 0 then 100 else ([100, 200 * $t / $src | round] | min) end); "\($t) test files for \($src) source files"),
+        dim("size"; "File size"; pct($src - $big; $src); "\($big) of \($src) source files over 500 lines"),
+        dim("markers"; "TODO markers"; (if $lines == 0 then null else ([0, 100 - 10 * ($marks * 1000 / $lines)] | max | round) end); "\($marks) TODO/FIXME/HACK/XXX in \($lines) lines") ]
+    | {score: (map(.score | select(. != null)) | if length == 0 then null else (add / length | round) end), dims: .}'
+}
+
 repo_json() {
   local r="$1"; [ -d "$r/.git" ] || [ -f "$r/.git" ] || return 0
   local fd="$r/.flow" active tasks="[]" feats="[]" decs="[]" debt="[]" shipped pr="null"
@@ -80,8 +113,9 @@ repo_json() {
     --argjson current "$([ "$r" = "$current" ] && echo true || echo false)" \
     --argjson tasks "$tasks" --argjson features "${feats:-[]}" --argjson decisions "${decs:-[]}" \
     --argjson debt "${debt:-[]}" --argjson shipped "${shipped:-[]}" --argjson prs "${pr:-null}" --argjson linked "$linked" \
+    --argjson quality "$(quality_json "$r" "${feats:-[]}" "${debt:-[]}")" \
     '{name:$name, path:$path, head:$head, branch:$branch, dirty:$dirty, current:$current,
-      tasks:$tasks, linked:$linked, features:$features, decisions:$decisions, debt:$debt, shipped:$shipped, prs:$prs}'
+      tasks:$tasks, linked:$linked, features:$features, decisions:$decisions, debt:$debt, shipped:$shipped, prs:$prs, quality:$quality}'
 }
 
 spend="null"
