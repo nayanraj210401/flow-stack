@@ -18,7 +18,10 @@ The single source of truth for file locations and formats. Skills and hooks both
 | `<repo>/.flow/features/<id>.md` | feature map: one file per user-facing feature (from `feature-map`) | yes |
 | `<repo>/.flow/features/README.md` | generated index (`features.sh index`) | yes |
 | `<repo>/.flow/features/.ignore` | globs that are not features (for `coverage`) | yes |
-| `<repo>/.flow/ACTIVE` | slug of the active task, one line | no |
+| `<repo>/.flow/board/` | board staging: `board.json`, `board.html` (from `board`; the artifact is the product) | no |
+| `~/.flow-stack/board/url` | the board artifact's link, reused on every publish | no (personal) |
+| `<repo>/.flow/ready.tsv` | ready-for-review ledger: `ts\tsha\tkind\tresult\tnote`, kinds review, deslop, tour, ready (from `review/scripts/ready.sh`) | no |
+| `<repo>/.flow/ACTIVE` | the active task: `<slug>`, or `@<home-repo-path>:<slug>` in a non-home repo of a multi-repo task | no |
 | `<repo>/.flow/tasks/<slug>/` | task folder | no (trace can export) |
 
 `FLOW_STACK_HOME` overrides `~/.flow-stack`.
