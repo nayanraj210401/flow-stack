@@ -17,7 +17,7 @@ List 2 or 3 candidate causes. For each one, name the single observation that wou
 
 ## 3. Observe
 
-Run the cheapest decisive observation first. Tools, cheapest first: read the stack trace → add one targeted log → run a minimal input → `git bisect run <repro>` for regressions → a debugger. Record what you saw, not what you expected.
+Run the cheapest decisive observation first. Tools, cheapest first: read the stack trace → add one targeted log → run a minimal input → `git bisect run <repro>` for regressions → a debugger. Record what you saw, not what you expected. Test one hypothesis at a time. If you changed code to test one and the evidence refutes it, revert that change fully before the next, so failed attempts don't stack up and blur what the evidence says.
 
 ## 4. Ask why until you hit the defect
 

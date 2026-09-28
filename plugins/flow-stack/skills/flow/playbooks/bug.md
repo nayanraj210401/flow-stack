@@ -10,4 +10,4 @@ Every shipped line traces to evidence. A "might help" change is a hypothesis, no
 3. **Root cause.** Inside `diagnose`: ask why until you reach the defect, not the symptom. Record the cause in DECISIONS.tsv with its evidence.
 4. **Fix.** Run `loop` on one slice whose fence covers the root-cause site plus the check.
 5. **Teeth.** Run `probe` on C1. The check must fail without the fix. If it passes both ways, the reproduction was wrong; go back to step 1.
-6. **Prove, present, close** as in feature steps 5 to 7. The regression check stays in the suite. `reflect` asks whether the bug class deserves a lesson or a lint rule.
+6. **Prove, present, close** as in feature steps 6 to 8. The regression check stays in the suite. `reflect` asks whether the bug class deserves a lesson or a lint rule.
