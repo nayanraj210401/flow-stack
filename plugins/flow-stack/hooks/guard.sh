@@ -18,7 +18,7 @@ fi
 #     ${VAR:?} aborts instead of expanding to nothing, so guarded targets pass.
 while IFS= read -r seg; do
   grep -Eq '[[:space:]](-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)([[:space:]]|$)' <<<"$seg" || continue
-  if sed -E 's/\$\{[A-Za-z_][A-Za-z0-9_]*:\?[^}]*\}//g' <<<"$seg" | grep -Eq '\$\{?[A-Za-z_]'; then
+  if sed -E 's/\$\{[A-Za-z_0-9]+:\?[^}]*\}//g' <<<"$seg" | grep -Eq '\$\{?[A-Za-z_0-9@*]'; then
     pre_decide ask "flow guard: recursive rm on an unguarded variable ('$seg'). If it's empty or points elsewhere, this deletes the wrong tree. Check it first, then guard it: rm -rf \"\${VAR:?}\"."
   fi
 done < <(grep -Eo '(^|[;&|(`[:space:]])rm[[:space:]][^;&|]*' <<<"$cmd" || true)
@@ -68,14 +68,16 @@ if has 'status:[[:space:]]*done' && ! has 'task\.sh' &&
 fi
 
 # 3c. Ready for review: in a flow-stack repo, a non-draft PR or `gh pr ready` needs ready.sh's stamp for HEAD.
-#     Only a real invocation counts: heredoc bodies are dropped, and gh must start a command
-#     (line start, ; && || | or a subshell), so a commit message that mentions it passes.
+#     Only a real invocation counts: heredoc bodies are dropped, and gh must start a command:
+#     line start, ; && || | (, or behind eval, sh/bash/zsh -c, command, env VAR=…, time, nohup,
+#     xargs. A commit message that mentions it mid-sentence passes; a wrapped call doesn't.
 code="$(awk -v q="'" '
   hd != "" { if ($0 == hd) hd = ""; next }
   { print
     if (match($0, "<<-?[ \t]*[\"" q "]?[A-Za-z_][A-Za-z0-9_]*")) {
       hd = substr($0, RSTART, RLENGTH); sub("<<-?[ \t]*[\"" q "]?", "", hd) } }' <<<"$cmd")"
-pr_cmd="$(grep -E '(^|[;&|(])[[:space:]]*gh[[:space:]]+pr[[:space:]]+(create|ready)([[:space:]]|$)' <<<"$code" || true)"
+lead='(^|[;&|(]|eval[[:space:]]+|(ba|z|da)?sh[[:space:]]+-[a-z]*c[[:space:]]+|command[[:space:]]+|env([[:space:]]+[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*)*[[:space:]]+|time[[:space:]]+|nohup[[:space:]]+|xargs[[:space:]]+)'
+pr_cmd="$(grep -E "$lead"'[[:space:]]*["'"'"']?gh[[:space:]]+pr[[:space:]]+(create|ready)([[:space:]]|$)' <<<"$code" || true)"
 if [ -d "$FLOW_DIR" ] && flow_enabled ready && [ -n "$pr_cmd" ] &&
    ! grep -Eq '(--draft|--undo|[[:space:]]-d)([[:space:]=]|$)' <<<"$pr_cmd"; then
   ready="$(cd "$(dirname "$0")/../skills/review/scripts" && pwd)/ready.sh"

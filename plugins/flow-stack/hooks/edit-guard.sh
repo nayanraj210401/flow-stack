@@ -19,7 +19,8 @@ case "$rel" in
           if [ "$p" = "$FLOW_TASK_HOME" ]; then ekey=""; else ekey="$n"; fi
           break ;;
         esac
-      done < <(cat "$FLOW_TASK_DIR/REPOS" 2>/dev/null; printf '%s\t%s\n' "$(flow_repo_name "$FLOW_TASK_HOME")" "$FLOW_TASK_HOME") ;;
+      done < <({ cat "$FLOW_TASK_DIR/REPOS" 2>/dev/null; printf '%s\t%s\n' "$(flow_repo_name "$FLOW_TASK_HOME")" "$FLOW_TASK_HOME"; } |
+               awk -F'\t' '{ print length($2) "\t" $0 }' | sort -rn | cut -f2-) ;;   # longest path first: nested checkouts
 esac
 case "$rel" in
   /*) exit 0 ;;          # outside the repo

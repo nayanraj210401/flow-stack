@@ -75,8 +75,10 @@ case "${1:-}" in
     ;;
   rm)
     [ -n "${2:-}" ] || { echo "usage: seal.sh rm <path>" >&2; exit 2; }
-    grep -vxF "$(awk -v q="$(flow_qual "${2#./}")" '$2 == q {print; exit}' "$seals")" "$seals" >"$seals.tmp" || true
-    mv "$seals.tmp" "$seals"; echo "unsealed: $2"
+    line="$(awk -v q="$(flow_qual "${2#./}")" '$2 == q {print; exit}' "$seals" 2>/dev/null || true)"
+    [ -n "$line" ] || { echo "seal.sh: $(flow_qual "${2#./}") is not sealed (seal.sh list)" >&2; exit 1; }
+    grep -vxF "$line" "$seals" >"$seals.tmp" || true
+    mv "$seals.tmp" "$seals"; echo "unsealed: $(flow_qual "${2#./}")"
     ;;
   *) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//' ;;
 esac

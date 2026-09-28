@@ -138,14 +138,14 @@ a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
   const needs = [];
   repos.forEach(r => {
     open(r).forEach(t => {
-      (t.gates || []).forEach(g => needs.push([pill('p-gate','gate'), `${r.name}/${t.slug} · ${esc(g)}`, t.goal]));
+      (t.gates || []).forEach(g => needs.push([pill('p-gate','gate'), `${esc(r.name)}/${esc(t.slug)} · ${esc(g)}`, t.goal]));
       const s = t.slices || [];
-      if (s.length && s.every(x => x.status === 'done')) needs.push([pill('p-warn','close'), `${r.name}/${t.slug} · every slice done`, 'Prove, present, and close: merge gate, then trace.']);
-      if (s.some(x => x.status === 'blocked')) needs.push([pill('p-gate','blocked'), `${r.name}/${t.slug} · ${s.filter(x => x.status === 'blocked').map(x => x.id).join(', ')} blocked`, t.goal]);
+      if (s.length && s.every(x => x.status === 'done')) needs.push([pill('p-warn','close'), `${esc(r.name)}/${esc(t.slug)} · every slice done`, 'Prove, present, and close: merge gate, then trace.']);
+      if (s.some(x => x.status === 'blocked')) needs.push([pill('p-gate','blocked'), `${esc(r.name)}/${esc(t.slug)} · ${s.filter(x => x.status === 'blocked').map(x => x.id).join(', ')} blocked`, t.goal]);
     });
-    ((r.prs || {}).review_requested || []).forEach(p => needs.push([pill('p-pr','review'), `${r.name} · ${link(p.url, '#' + p.number)} ${esc(p.title)}`, 'Review requested from you.']));
-    ((r.prs || {}).mine || []).forEach(p => needs.push([pill(p.draft ? 'p-mute' : 'p-pr', p.draft ? 'draft' : 'your PR'), `${r.name} · ${link(p.url, '#' + p.number)} ${esc(p.title)}`, p.review === 'APPROVED' ? 'Approved: ready to merge.' : p.review === 'CHANGES_REQUESTED' ? 'Changes requested.' : 'Open, awaiting merge or review.']));
-    (r.features || []).filter(f => f.status === 'stale' || f.status === 'broken').forEach(f => needs.push([pill(f.status === 'broken' ? 'p-crit' : 'p-warn', f.status), `${r.name} · feature ${esc(f.id)}`, 'Re-run its scenario: features.sh run ' + f.id]));
+    ((r.prs || {}).review_requested || []).forEach(p => needs.push([pill('p-pr','review'), `${esc(r.name)} · ${link(p.url, '#' + p.number)} ${esc(p.title)}`, 'Review requested from you.']));
+    ((r.prs || {}).mine || []).forEach(p => needs.push([pill(p.draft ? 'p-mute' : 'p-pr', p.draft ? 'draft' : 'your PR'), `${esc(r.name)} · ${link(p.url, '#' + p.number)} ${esc(p.title)}`, p.review === 'APPROVED' ? 'Approved: ready to merge.' : p.review === 'CHANGES_REQUESTED' ? 'Changes requested.' : 'Open, awaiting merge or review.']));
+    (r.features || []).filter(f => f.status === 'stale' || f.status === 'broken').forEach(f => needs.push([pill(f.status === 'broken' ? 'p-crit' : 'p-warn', f.status), `${esc(r.name)} · feature ${esc(f.id)}`, 'Re-run its scenario: features.sh run ' + f.id]));
   });
   $('needs-h').textContent = `Needs you · ${needs.length}`;
   $('needs').innerHTML = needs.length
@@ -196,7 +196,7 @@ a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
       + panel('c5', `Feature health · ${ver}/${feats.length} verified`, '.flow/features/', featHtml)
       + panel('c7', 'Decided without you', 'DECISIONS.tsv', decs)
       + panel('c5', `Debt · ${debt.length} open`, '.flow/debt.md', debtHtml)
-      + panel('c12', 'Shipped · last 7 days', `git log · ${r.branch || 'HEAD'} ${r.head}${r.dirty ? ' · ' + r.dirty + ' uncommitted' : ''}`, shipped)
+      + panel('c12', 'Shipped · last 7 days', `git log · ${r.branch || 'HEAD'} ${esc(r.head)}${r.dirty ? ' · ' + r.dirty + ' uncommitted' : ''}`, shipped)
       + (cal.length ? panel('c12', 'Estimate vs actual', 'ESTIMATE, TRACE.md', `<svg viewBox="0 0 560 ${24 + cal.length * 30}" class="est" data-rows='${esc(JSON.stringify(cal.map(t => [t.slug, t.estimate_usd, t.actual_usd])))}' role="img" aria-label="Estimated vs actual dollars per task"></svg><p class="note">Grey: estimate. Colored: actual (amber when over by more than 20%).</p>`) : '');
   }
   function allView() {
