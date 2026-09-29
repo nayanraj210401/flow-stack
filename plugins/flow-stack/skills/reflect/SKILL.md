@@ -9,7 +9,7 @@ Nothing is written without the human's approval. Everything proposed has a sourc
 
 ## 1. Gather
 
-- **Corrections**: places in this conversation where the human changed your output, rejected an approach, or said "no, do X". These are the richest signal.
+- **Corrections**: places in this conversation where the human changed your output, rejected an approach, or said "no, do X". These are the richest signal. For corrections from earlier conversations, `../recall/scripts/recall.sh grep '\b(no|don.t|instead|stop|wrong)\b' --days 14` lists the human's pushback lines.
 - The task's DECISIONS.tsv (human rows), TRACE.md (estimate vs. actual), and EVIDENCE.md (what failed repeatedly).
 - `.flow/lessons.md`, `.flow/taste.md`, and the profile's `# Taste`, to avoid duplicates and spot contradictions.
 - For "across tasks" reflection: the other `TRACE.md` files in `.flow/tasks/*/`.
