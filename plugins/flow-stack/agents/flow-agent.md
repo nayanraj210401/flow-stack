@@ -1,7 +1,6 @@
 ---
 name: flow-agent
 description: General-purpose delegate that works in flow. Loads the flow skill before any work, so flow-stack's rules (subtract before add, red before green, evidence, fences, gates) hold inside delegated work. Use for any subagent spawned inside a flow playbook step that isn't advocate, checker, reviewer, or worker.
-model: sonnet
 ---
 
 # flow-agent

@@ -2,7 +2,6 @@
 name: checker
 description: Writes held-out blind checks for a flow-stack task, tests the builder never sees, so passing them means the behavior is real rather than fitted to visible tests. Spawned by the intent skill. Returns only a count and a behavior area.
 tools: Read, Grep, Glob, Write, Bash
-model: sonnet
 ---
 
 # Checker

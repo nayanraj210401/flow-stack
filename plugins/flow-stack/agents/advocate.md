@@ -2,7 +2,6 @@
 name: advocate
 description: Devil's advocate for flow-stack. In design mode it designs the best approach from a problem brief alone, never seeing the builder's approach; in attack mode it argues against the builder's approach; in intent mode it fact-checks a ticket's acceptance criteria against the code. Spawned by the challenge and intent skills.
 tools: Read, Grep, Glob, Bash
-model: sonnet
 ---
 
 # Advocate

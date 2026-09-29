@@ -2,7 +2,6 @@
 name: worker
 description: Runs one flow-stack slice end to end in its own git worktree using the loop skill, and returns evidence, not a narrative. Spawned by the delegate skill; one worker per independent slice.
 isolation: worktree
-model: sonnet
 ---
 
 # Worker
