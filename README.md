@@ -60,7 +60,7 @@ flowchart LR
     end
 
     subgraph L4["④ Workers"]
-        AG["subagents · Sonnet<br/>advocate · checker<br/>reviewer · worker"]
+        AG["subagents · model per role<br/>advocate · checker<br/>reviewer · worker"]
         SC["⚙ scripts · 0 tokens<br/>task.sh · evidence.sh<br/>seal · probe · diffstat<br/>blind-run · trace-stats"]
     end
 
@@ -80,7 +80,7 @@ Read it left to right. A request passes through five layers:
 1. **Context.** At session start, a hook injects about 2k tokens: your profile (rules, taste, which of your tools to use, how much ceremony you want), the repo's `.flow/` files (including the feature map), and your Toolchain delegations. The forge skills, which you run yourself, generate the repo-specific parts.
 2. **Hooks.** These wrap every tool call and cost no model tokens. They block destructive commands and secret reads, protect sealed checks, keep edits inside the slice's fence, gate "done" on proofs, log the trail, break fix-loops, and refuse an unverified "done".
 3. **Skills.** `flow` classifies the request and runs a playbook. Its outer loop goes understand → intent → challenge → slice → prove → present → close, and each slice runs the inner `loop`. The other skills load only when a step needs them.
-4. **Workers.** Judgment goes to subagents (advocate, checker, reviewer, worker), on Sonnet by default. Bookkeeping goes to shell scripts, which cost 0 tokens.
+4. **Workers.** Judgment goes to subagents (advocate, checker, reviewer, worker), each on the profile's `budget:` model for its role. Bookkeeping goes to shell scripts, which cost 0 tokens.
 5. **Task memory.** Everything lands in `.flow/tasks/<slug>/`: intent, sealed checks, evidence, decisions, the tool-call trail, and the handoff and trace. A fresh session resumes from these files, not from chat history.
 
 The diagrams are Mermaid. GitHub renders them. VS Code's built-in preview doesn't, unless you install a Mermaid extension such as "Markdown Preview Mermaid Support".
@@ -136,7 +136,7 @@ Type a skill yourself when you want a specific thing: `/flow-stack:challenge`, `
 - *flow*: `flow` calls it at the right step.
 - *you*: you type it (these don't appear in the model's skill list, which saves tokens).
 
-**Agent** means the skill spawns a subagent, the most expensive kind of step. Subagents run on Sonnet by default.
+**Agent** means the skill spawns a subagent, the most expensive kind of step. Its model comes from the profile's `budget:` for that role.
 
 ### Orchestration
 
@@ -273,7 +273,7 @@ A rework loop or a wrong approach usually costs more than the overhead. Judge it
    | Trace / reflect | on request | at close | at close |
 
    The solo-hacker preset uses `lean`. Override per task by saying "quick" or "go strict".
-4. **Cheaper models where judgment isn't needed.** Subagents run on Sonnet by default, even when your session runs on Opus. Exploration goes to `budget.subagent_model` (default Haiku).
+4. **Cheaper models where judgment isn't needed.** Each spawn names its model from `budget:`: `design_model` for review and design, `build_model` for building, `subagent_model` (default Haiku) for exploration. The agents pin no model, so a spawn that names none inherits the session's.
 5. **Files instead of re-reading.** `map.md` replaces re-exploring the repo each session. HANDOFF.md replaces a lossy compaction. The anchor re-injects 3 lines instead of re-reading INTENT.
 6. **Loops are stopped early.** The circuit breaker trips after the same failure three times, the most expensive pattern in agent work.
 7. **Uses what you already have.** `setup` records your token savers (rtk, headroom, serena) and delegates to tools you already pay for, instead of duplicating them.
