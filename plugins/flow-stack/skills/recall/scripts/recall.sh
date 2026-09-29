@@ -4,6 +4,7 @@
 # expansions, agent hand-backs, and task notifications are dropped. Output is redacted.
 #   recall.sh sessions [--days N]          recent conversations: date · id · title · prompts · PRs
 #   recall.sh grep <regex> [--days N]      matching lines (case-insensitive): date · id · who: text
+#                                          (a regex starting with -: recall.sh grep -- '--auto')
 #   recall.sh show <id-prefix> [--full]    one conversation in order; --full keeps long replies whole
 # Options: --days N (default 7) · --repo <path> (default: this git repo) · --skip <id-prefix>
 # Transcripts: ${CLAUDE_CONFIG_DIR:-~/.claude}/projects/<repo path, non-alphanumerics as "->/*.jsonl
@@ -19,6 +20,7 @@ while [ $# -gt 0 ]; do
     --repo) repo="$2"; shift 2 ;;
     --skip) skip="$2"; shift 2 ;;
     --full) full=1; shift ;;
+    --) arg="${2:-}"; shift $(( $# > 1 ? 2 : 1 )) ;;
     *) arg="$1"; shift ;;
   esac
 done
@@ -48,7 +50,7 @@ files() { # newest first, within --days, minus --skip
     { if [ -n "$skip" ]; then grep -v "/$skip[^/]*\.jsonl$" || true; else cat; fi; }
 }
 id8() { basename "$1" .jsonl | cut -c1-8; }
-oneline() { tr '\t' ' ' | awk -F'\t' -v w="$1" '{ gsub(/\\n/, " "); if (w > 0 && length($0) > w) $0 = substr($0, 1, w) "…"; print }'; }
+oneline() { awk -v w="$1" '{ gsub(/\\[nt]/, " "); if (w > 0 && length($0) > w) $0 = substr($0, 1, w) "…"; print }'; }
 
 case "$cmd" in
   sessions)
