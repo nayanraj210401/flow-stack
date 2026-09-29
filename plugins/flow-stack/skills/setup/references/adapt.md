@@ -25,6 +25,7 @@ Toolchain lines use these keys: `- <key>: <provider> · <why>`. A key is a flow-
 | `tdd` / `diagnose` | flow-stack | `pstack:tdd`, gstack `/investigate`, mattpocock `/diagnosing-bugs` |
 | `unslop` / `deslop` | flow-stack | `pstack:unslop`, `pstack:deslop` |
 | `handoff` | flow-stack | mattpocock `/handoff` |
+| `recall` | flow-stack | `pstack:recall` |
 | `decision-log` | DECISIONS.tsv | `pstack:show-me-your-work` |
 | `delegate` | flow-stack worker agents | `pstack:swarm` or `pstack:arena` for exploration |
 | `compaction` | PreCompact snapshot | a compaction plugin (e.g. jev-compaction); keep both unless it conflicts |

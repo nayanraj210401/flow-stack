@@ -121,6 +121,7 @@ Type a skill yourself when you want a specific thing: `/flow-stack:challenge`, `
 | Reply too long | `/flow-stack:brief` | the last reply in 3 plain lines |
 | Clean up a diff / prose | `/flow-stack:deslop` / `/flow-stack:unslop` | slop removed, graded against your taste |
 | Context filling up / stopping for the day | `/flow-stack:handoff` | HANDOFF.md; the next session starts with `/flow resume` |
+| "What did we decide about X?" | `/flow-stack:recall` | a short brief from past conversations and flow's records, your own words quoted |
 | Many independent slices | `/flow-stack:delegate` | parallel worktree workers, capped by your review budget |
 | Audit what the agent did | `/flow-stack:trace` | TRACE.md: timeline, who decided what, evidence, cost |
 | End of day | `/flow-stack:wrap` | shipped, waiting on you, and your first step tomorrow |
@@ -160,6 +161,7 @@ Type a skill yourself when you want a specific thing: `/flow-stack:challenge`, `
 | `how` | auto | How code works: runtime flow, ownership, where a change belongs. Cites `file:line`. |
 | `why` | auto | Why it's built this way, from git log and blame, PRs, issues, and docs, with a confidence level. |
 | `what` | auto | A summary of a diff, PR, branch, module, or the agent's session. |
+| `recall` | auto · you | What happened in earlier conversations in this repo: flow's records first, then `recall.sh` searches past Claude Code transcripts (your prompts and Claude's replies only, redacted) and checks what it finds against git and gh. |
 | `teach` | auto · you | A deep explanation at your level (from the profile), ending with a check for understanding. |
 | `map` | auto · flow | Builds `.flow/map.md` once, so later sessions read it instead of re-exploring the repo. |
 

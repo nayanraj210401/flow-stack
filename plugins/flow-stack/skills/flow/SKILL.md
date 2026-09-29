@@ -118,7 +118,7 @@ Spawn one when it saves the human's attention or the main context: bulk reading 
 
 ## /flow resume
 
-`scripts/task.sh list` → pick the active task (ask if several are open) → read HANDOFF.md (or HANDOFF.auto.md when newer), GATES.md if present, INTENT.md, and SLICES.md → re-run the current slice's check → continue.
+`scripts/task.sh list` → pick the active task (ask if several are open) → read HANDOFF.md (or HANDOFF.auto.md when newer), GATES.md if present, INTENT.md, and SLICES.md → re-run the current slice's check → continue. No handoff, or it predates the last conversation on this task: `recall` first.
 
 ## Done means
 
