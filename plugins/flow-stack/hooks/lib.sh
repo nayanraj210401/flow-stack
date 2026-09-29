@@ -69,8 +69,16 @@ glob_match() {
   [[ "$path" == $glob ]]
 }
 
+# Auto mode (--auto in a prompt): the human is away for this session. Flag: $FLOW_HOME/auto/<session_id>.
+flow_auto_flag() { local s; s="$(flow_field .session_id)"; [ -n "$s" ] && printf '%s/auto/%s' "$FLOW_HOME" "${s//\//_}"; }
+flow_auto() { local f; f="$(flow_auto_flag)" && [ -f "$f" ]; }
+FLOW_AUTO_QUEUE="Add it to .flow/tasks/<slug>/GATES.md (question, options, recommendation), keep going on work it doesn't block, and list GATES.md first in the handoff."
+
 pre_decide() {
-  # pre_decide <allow|deny|ask> <reason>
+  # pre_decide <allow|deny|ask> <reason>. In auto mode nobody can answer an ask, so it is queued instead.
+  if [ "$1" = ask ] && flow_auto; then
+    set -- deny "flow auto: the human is away, so this waits. $2 $FLOW_AUTO_QUEUE"
+  fi
   jq -n --arg d "$1" --arg r "$2" \
     '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:$d,permissionDecisionReason:$r}}'
   exit 0

@@ -5,6 +5,12 @@
 flow_init guard
 flow_enabled guard || exit 0
 
+# Auto mode: nobody is there to answer a question.
+if [ "$(flow_field .tool_name)" = AskUserQuestion ]; then
+  flow_auto && pre_decide deny "flow auto: the human is away (--auto). Don't ask: pick your recommended option if it's reversible and log it (task.sh decide agent), otherwise queue it. $FLOW_AUTO_QUEUE"
+  exit 0
+fi
+
 cmd="$(flow_field .tool_input.command)"
 [ -n "$cmd" ] || exit 0
 
@@ -100,6 +106,11 @@ if [ -f "$FLOW_DIR/gates.md" ]; then
       pre_decide "$kind" "flow gate (.flow/gates.md): $reason"
     fi
   done < <(grep -E '^- (deny|ask): ' "$FLOW_DIR/gates.md")
+fi
+
+# 4b. Auto mode: outward-facing actions wait for the human even where nothing else gates them.
+if flow_auto && grep -Eiq "$lead"'[[:space:]]*["'"'"']?(git[[:space:]]+push|gh[[:space:]]+(pr[[:space:]]+(create|merge|ready)|release[[:space:]]+create)|npm[[:space:]]+publish)([[:space:]]|$)' <<<"$code"; then
+  pre_decide ask "flow: outward-facing action."
 fi
 
 # 5. Built-in escalations: reversible only with effort, so the human decides.

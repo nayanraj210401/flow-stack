@@ -6,5 +6,6 @@
     "typecheck": "",
     "run": ""
   },
+  "ready": [],
   "hooks": {}
 }
