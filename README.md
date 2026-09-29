@@ -18,7 +18,7 @@ It is built from skills, bash + jq hooks, and existing tools. There is no new ru
 ## Quick start
 
 ```bash
-# inside Claude Code (the repo is private: your git credentials must be able to clone it)
+# inside Claude Code
 /plugin marketplace add nayanraj210401/flow-stack
 /plugin install flow-stack@flow-stack
 /flow-stack:setup
