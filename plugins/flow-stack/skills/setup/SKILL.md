@@ -55,8 +55,9 @@ Read [references/tools.md](references/tools.md). Offer only what the inventory s
 ## 5. This repo (when inside a git repo)
 
 1. `.flow/config.json`: create it from `../../templates/config.json` if missing, and fill `commands` from package scripts, the Makefile, and CI config. Run each command once to confirm it works (tests may be slow; ask first if more than a minute is likely).
-2. `.gitignore`: add `.flow/ACTIVE`, `.flow/tasks/`, and `.flow/trail.jsonl` if missing.
-3. **Forge census.** From `detect.sh`: which slots are filled (verify driver, run driver, gates, playbooks, map, repo taste). Offer the missing ones in one message, most valuable first:
+2. **Quality gates before a PR.** Ask once: "Anything you run before opening a PR? (a script, an MCP scan, a manual check)". Offer what CI, pre-push hooks, and the usage counts suggest. Write each one to `ready` in `.flow/config.json`: `{"id": "e2e", "run": "npm run e2e"}` for a command ready.sh runs itself, or `{"id": "sec-scan", "do": "Run the semgrep MCP on the diff; done only with 0 new findings"}` for a step the agent performs and then records with `ready.sh record <id> done`. Run each `run` once to confirm it works.
+3. `.gitignore`: add `.flow/ACTIVE`, `.flow/tasks/`, and `.flow/trail.jsonl` if missing.
+4. **Forge census.** From `detect.sh`: which slots are filled (verify driver, run driver, gates, playbooks, map, repo taste). Offer the missing ones in one message, most valuable first:
    - no verify driver (neither `.claude/skills/verify-*/` nor `.claude/skills/verify/`, and no `verify-driver` Toolchain line) → `/flow-stack:make-verifier` (without one, verification is only unit tests)
    - no map → `/flow-stack:map`
    - no feature map (`.flow/features/`) → `/flow-stack:feature-map` (it lets verify run exactly the features a change touches)

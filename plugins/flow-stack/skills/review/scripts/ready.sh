@@ -4,10 +4,13 @@
 #   ready.sh [--base <ref>]                  run the bar; on pass, stamp HEAD in .flow/ready.tsv
 #   ready.sh record <kind> <result> [note]   record a model-judged step for HEAD:
 #                                            review ship|fix-first|rethink · deslop done · tour done
+#                                            · <id> done for a repo `do` step (below)
 #   ready.sh stamped [<sha>]                 exit 0 if <sha> (default HEAD) has a pass stamp
 #   ready.sh mode                            on | yolo  (repo .flow/config.json > profile > on)
 # Live checks: clean tree, lint + typecheck (config commands), impacted feature scenarios,
 # and with an active flow task: acceptance checks, seals, blind checks.
+# Repo quality gates: .flow/config.json "ready": [{"id","run":"<cmd>"} | {"id","do":"<step>"}].
+# A run entry is a live check; a do entry (an MCP scan, a manual script) needs `record <id> done`.
 # The guard hook denies a non-draft `gh pr create` and `gh pr ready` without a stamp.
 set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -22,6 +25,10 @@ mode() {
   [ -n "$v" ] || v="$(sed -n 's/^review_gate:[[:space:]]*\([a-z]*\).*/\1/p' "$profile" 2>/dev/null | head -n1)"
   printf '%s\n' "${v:-on}"
 }
+custom() { # custom [<do-id>]: the repo's ready entries as id<TAB>run|do<TAB>body, or test one do id
+  if [ -n "${1:-}" ]; then jq -e --arg k "$1" '.ready // [] | any(.id == $k and has("do"))' "$FLOW_DIR/config.json" >/dev/null 2>&1; return; fi
+  jq -r '.ready // [] | .[] | select(.id) | [.id, (if .run then "run" else "do" end), (.run // .do // "")] | @tsv' "$FLOW_DIR/config.json" 2>/dev/null
+}
 latest() { awk -F'\t' -v s="$1" -v k="$2" '$2 == s && $3 == k { r = $4 } END { print r }' "$ledger" 2>/dev/null; }
 
 case "${1:-}" in
@@ -31,7 +38,8 @@ case "${1:-}" in
     kind="${2:-}"; res="${3:-}"
     case "$kind:$res" in
       review:ship|review:fix-first|review:rethink|deslop:done|tour:done) ;;
-      *) echo "usage: ready.sh record review ship|fix-first|rethink | deslop done | tour done [note]" >&2; exit 2 ;;
+      *:done) custom "$kind" || { echo "ready.sh: '$kind' is not a do entry in .flow/config.json ready[]" >&2; exit 2; } ;;
+      *) echo "usage: ready.sh record review ship|fix-first|rethink | deslop done | tour done | <do-id> done [note]" >&2; exit 2 ;;
     esac
     mkdir -p "$FLOW_DIR"
     printf '%s\t%s\t%s\t%s\t%s\n' "$(date -u +%FT%TZ)" "$(sha)" "$kind" "$res" "$(printf '%s' "${4:-}" | tr '\t\n' '  ')" >>"$ledger"
@@ -62,6 +70,13 @@ for c in lint typecheck; do
   [ -n "$cmd" ] || continue
   if run "ready:$c" "$cmd"; then pass "$c"; else miss "$c fails: $cmd"; fi
 done
+
+while IFS=$'\t' read -r id kind body; do
+  if [ "$kind" = run ]; then
+    if run "ready:$id" "$body"; then pass "$id"; else miss "$id fails: $body"; fi
+  elif [ "$(latest "$head" "$id")" = done ]; then pass "$id"
+  else miss "$id: not done for this HEAD. $body, then: ready.sh record $id done"; fi
+done < <(custom)
 
 if [ -d "$FLOW_DIR/features" ] && [ -n "$base" ]; then
   out="$(cd "$FLOW_ROOT" && "$sk/feature-map/scripts/features.sh" run --impacted --base "$base" 2>&1 || true)"

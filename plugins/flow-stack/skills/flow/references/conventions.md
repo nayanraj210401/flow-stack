@@ -20,7 +20,8 @@ The single source of truth for file locations and formats. Skills and hooks both
 | `<repo>/.flow/features/.ignore` | globs that are not features (for `coverage`) | yes |
 | `<repo>/.flow/board/` | board staging: `board.json`, `board.html` (from `board`; the artifact is the product) | no |
 | `~/.flow-stack/board/url` | the board artifact's link, reused on every publish | no (personal) |
-| `<repo>/.flow/ready.tsv` | ready-for-review ledger: `ts\tsha\tkind\tresult\tnote`, kinds review, deslop, tour, ready (from `review/scripts/ready.sh`) | no |
+| `~/.flow-stack/auto/<session_id>` | auto mode is on for that session: `--auto` in a prompt creates it, `--no-auto` removes it (anchor hook); hooks turn every ask into deny-and-queue | no |
+| `<repo>/.flow/ready.tsv` | ready-for-review ledger: `ts\tsha\tkind\tresult\tnote`, kinds review, deslop, tour, ready, and each `do` id (from `review/scripts/ready.sh`). The repo's own pre-PR gates are `.flow/config.json` `"ready": [{"id": "e2e", "run": "<cmd>"}, {"id": "sec-scan", "do": "<step, e.g. an MCP scan>"}]`: a `run` is checked live, and a `do` needs `ready.sh record <id> done` for HEAD | no |
 | `<repo>/.flow/ACTIVE` | the active task: `<slug>`, or `@<home-repo-path>:<slug>` in a non-home repo of a multi-repo task | no |
 | `<repo>/.flow/tasks/<slug>/` | task folder | no (trace can export) |
 

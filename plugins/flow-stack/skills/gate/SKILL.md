@@ -33,6 +33,10 @@ Use `AskUserQuestion` when available, with the recommended option first. Never a
 
 Log it: `../flow/scripts/task.sh decide human <yes|no> "<decision>" "<their reason>"`. If it reveals a preference that will recur, note it for `reflect` to propose as a Taste entry.
 
+## Auto mode
+
+After `--auto` in a prompt (until `--no-auto`), nobody answers. Don't ask. Take the recommended option on reversible decisions and log it `who=agent`. Queue the rest in `.flow/tasks/<slug>/GATES.md`. The hooks enforce this: an ask comes back as a deny that says "queue it".
+
 ## Blocked and waiting
 
 The Notification hook pings the human through the profile's `notify` target. Before going idle on a gate, finish every piece of work that doesn't depend on the answer.

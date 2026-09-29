@@ -99,7 +99,7 @@ Base the forecast on the change size and the profile's `# Calibration`. If the h
 | Mode | Trigger | Behavior |
 |---|---|---|
 | **Interactive** (default) | — | Proceed on reversible work. Stop at gates. |
-| **Autonomous** | "going to bed", "run until done", "don't stop", `/loop` | Never block on a question. Put open gates in `.flow/tasks/<slug>/GATES.md` (question, options, recommendation), pick the recommended reversible option, log it with `who=agent`, and keep going on anything the gate doesn't block. **Irreversible actions still never happen.** They wait in GATES.md. At the end, notify, then `trace` plus a HANDOFF that lists the GATES.md items first. |
+| **Autonomous** | `--auto` anywhere in a prompt (`--no-auto` ends it), "going to bed", "run until done", "don't stop", `/loop` | Never block on a question. Intent and seal approval are yours to give; log them with `who=agent`. With `--auto` the hooks enforce it for the session: every ask is denied with "queue it", and so are AskUserQuestion, push, and PR commands. Put open gates in `.flow/tasks/<slug>/GATES.md` (question, options, recommendation), pick the recommended reversible option, log it with `who=agent`, and keep going on anything the gate doesn't block. **Irreversible actions still never happen.** They wait in GATES.md. At the end, notify, then `trace` plus a HANDOFF that lists the GATES.md items first. |
 | **Quick** | "quick", "just do it" | rigor `lean` for this task. The hooks stay on. |
 
 ## 6. Subagents

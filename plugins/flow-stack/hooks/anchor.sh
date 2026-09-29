@@ -4,6 +4,23 @@
 . "$(dirname "$0")/lib.sh"
 flow_init anchor
 flow_enabled anchor || exit 0
+
+# --auto / --no-auto anywhere in a prompt switch this session's auto mode. Only the human's own
+# prompts count: agent hand-backs and task notifications arrive as prompts too.
+prompt="$(flow_field .prompt)"
+grep -Eq '<(agent-message|task-notification)[[:space:]>]' <<<"$prompt" && prompt=""
+if flag="$(flow_auto_flag)"; then
+  if grep -Eq '(^|[[:space:]])--no-auto([[:space:],.;:!?)]|$)' <<<"$prompt"; then
+    rm -f "$flag"; echo "[flow auto] off: the human is back; gates ask again."
+  elif grep -Eq '(^|[[:space:]])--auto([[:space:],.;:!?)]|$)' <<<"$prompt"; then
+    mkdir -p "${flag%/*}"; touch "$flag"
+    find "${flag%/*}" -type f -mtime +7 -delete 2>/dev/null || true
+  fi
+  if [ -f "$flag" ]; then
+    echo "[flow auto] the human is away (--auto; --no-auto ends it). Never wait on them: run flow's Autonomous mode. Reversible gates, including intent and seal approval: take your recommended option and log it with task.sh decide agent. Irreversible actions (push, PR, merge, deploy, publish, .flow/gates.md) never happen: queue them in GATES.md. The hooks catch push, PR, publish, and gates.md; a deploy script is on you. Notify and hand off at the end."
+  fi
+fi
+
 [ -n "$FLOW_TASK_DIR" ] && [ -f "$FLOW_TASK_DIR/INTENT.md" ] || exit 0
 
 section_first() {
