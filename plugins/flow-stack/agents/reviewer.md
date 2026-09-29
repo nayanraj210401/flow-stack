@@ -2,7 +2,6 @@
 name: reviewer
 description: Fresh-context reviewer for flow-stack. Grades a diff against the task's INTENT, EVIDENCE, and the user's Taste, and returns a verdict with file:line findings. Spawned by the review skill; never by the builder for its own reassurance.
 tools: Read, Grep, Glob, Bash
-model: sonnet
 ---
 
 # Reviewer
