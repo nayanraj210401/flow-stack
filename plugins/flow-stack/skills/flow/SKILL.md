@@ -73,9 +73,11 @@ The profile's `rigor:` sets the default. The human overrides per task: "quick" m
 ## 4. Open the task and run the playbook
 
 ```bash
-scripts/task.sh new <kebab-slug> <playbook>
+scripts/task.sh new <kebab-slug> <playbook> --goal "<outcome, user's view>" --check "<command that proves it>"
 scripts/task.sh estimate <usd> <ctx_pct> <human_min>
 ```
+
+The goal and C1 are written at birth; `intent` refines them. `evidence.sh C1` runs exactly that command, and the Stop hook accepts a success claim only after a passing check. Copy the playbook's steps into the todo list verbatim. A step you skip stays there as `skip: <reason>`.
 
 Base the forecast on the change size and the profile's `# Calibration`. If the human-minutes estimate is more than a third of `attention.review_minutes_per_day`, say so and offer to cut scope. Then read the playbook and follow it. Every playbook is built from these phases:
 

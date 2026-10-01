@@ -109,8 +109,15 @@ if [ -f "$FLOW_DIR/gates.md" ]; then
 fi
 
 # 4b. Auto mode: outward-facing actions wait for the human even where nothing else gates them.
+# `--auto ship` lets exactly these through once ready.sh stamped HEAD: a plain push of a branch
+# other than main, gh pr create/ready, and merging the current branch's PR. Anything else asks.
 if flow_auto && grep -Eiq "$lead"'[[:space:]]*["'"'"']?(git[[:space:]]+push|gh[[:space:]]+(pr[[:space:]]+(create|merge|ready)|release[[:space:]]+create)|npm[[:space:]]+publish)([[:space:]]|$)' <<<"$code"; then
-  pre_decide ask "flow: outward-facing action."
+  one="$(sed -E 's/^[[:space:]]+|[[:space:]]+$//g' <<<"$cmd")"
+  ship_ok='^(git push( -u| --set-upstream)? [A-Za-z0-9._-]+ [A-Za-z0-9._/-]+|gh pr (create|ready)( [^;&|`$<>()]*)?|gh pr merge( --(squash|merge|rebase|delete-branch))*)$'
+  if ! flow_auto_ship || [[ "$one" == *$'\n'* ]] || ! grep -Eq "$ship_ok" <<<"$one" || grep -Eq ' (main|master|HEAD)$' <<<"$one" \
+     || ! (cd "$FLOW_ROOT" && "$(dirname "$0")/../skills/review/scripts/ready.sh" stamped) 2>/dev/null; then
+    pre_decide ask "flow: outward-facing action$(flow_auto_ship && echo ". --auto ship allows only a plain push of a non-main branch, gh pr create/ready, and gh pr merge of the current branch's PR, once review/scripts/ready.sh has stamped HEAD")."
+  fi
 fi
 
 # 5. Built-in escalations: reversible only with effort, so the human decides.

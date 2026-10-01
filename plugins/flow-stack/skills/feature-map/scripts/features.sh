@@ -139,6 +139,7 @@ case "$cmd" in
       fi
     done
     rm -f /tmp/feat.$$
+    [ $rc -ne 0 ] || echo "flow-evidence: PASS"
     exit $rc
     ;;
 

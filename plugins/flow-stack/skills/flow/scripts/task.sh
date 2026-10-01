@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # task.sh: manage flow-stack task folders.
-#   task.sh new <slug> [playbook] [--workspace <name> | --repos <a,b,...>]
-#                                     create .flow/tasks/<slug>/, make it active. A multi-repo
+#   task.sh new <slug> [playbook] --goal "<outcome>" --check "<cmd>" [--workspace <name> | --repos <a,b,...>]
+#                                     create .flow/tasks/<slug>/, make it active; --goal and
+#                                     --check fill INTENT's Goal and C1. A multi-repo
 #                                     task (profile # Workspaces, or repo names from # Repos)
 #                                     lives in the primary repo (role: primary, else the first);
 #                                     REPOS lists name<TAB>path, and every other repo's ACTIVE
@@ -129,11 +130,14 @@ case "$cmd" in
   new)
     slug="${1:-}"; [ -n "$slug" ] || die "usage: task.sh new <slug> [playbook] [--workspace <name> | --repos <a,b>]"
     [[ "$slug" =~ ^[a-z0-9][a-z0-9-]*$ ]] || die "slug must be kebab-case: $slug"
-    shift; playbook=feature; names=""
+    shift; playbook=feature; names=""; goal=""; c1=""
     while [ $# -gt 0 ]; do
       case "$1" in
         --workspace) names="$(ws_repos "${2:-}")"; [ -n "$names" ] || die "no workspace '${2:-}' in $profile (# Workspaces)"; shift 2 ;;
         --repos) names="$(printf '%s' "${2:-}" | tr ',' '\n' | sed 's/^ *//; s/ *$//')"; shift 2 ;;
+        --goal|--check) [ $# -ge 2 ] || die "$1 needs a value"
+          if [ "$1" = --goal ]; then goal="$2"; else c1="$2"; fi; shift 2 ;;
+        -*) die "unknown option: $1" ;;
         *) playbook="$1"; shift ;;
       esac
     done
@@ -155,7 +159,11 @@ case "$cmd" in
     d="$flow/tasks/$slug"
     [ -e "$d" ] && die "task exists: $d (use: task.sh switch $slug)"
     mkdir -p "$d"
-    fill "$slug" "$templates/INTENT.md" >"$d/INTENT.md"
+    fill "$slug" "$templates/INTENT.md" | GOAL="$goal" C1="$c1" awk '
+      /^- \[ \] C1 ·  · ``$/ && ENVIRON["C1"] != "" { print "- [ ] C1 · the goal holds · `" ENVIRON["C1"] "`"; next }
+      { print }
+      /^## Goal/ { g = 1 }
+      g && /-->$/ { if (ENVIRON["GOAL"] != "") print ENVIRON["GOAL"]; g = 0 }' >"$d/INTENT.md"
     fill "$slug" "$templates/SLICES.md" >"$d/SLICES.md"
     cp "$templates/DECISIONS.tsv" "$d/DECISIONS.tsv"
     printf '# Evidence · %s\n<!-- Written only by verify/scripts/evidence.sh. -->\n\n' "$slug" >"$d/EVIDENCE.md"

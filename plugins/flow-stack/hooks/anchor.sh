@@ -12,11 +12,15 @@ grep -Eq '<(agent-message|task-notification)[[:space:]>]' <<<"$prompt" && prompt
 if flag="$(flow_auto_flag)"; then
   if grep -Eq '(^|[[:space:]])--no-auto([[:space:],.;:!?)]|$)' <<<"$prompt"; then
     rm -f "$flag"; echo "[flow auto] off: the human is back; gates ask again."
+  elif grep -Eq '(^|[[:space:]])--auto[[:space:]]+ship([[:space:],.;:!?)]|$)' <<<"$prompt"; then
+    mkdir -p "${flag%/*}"; echo ship >"$flag"
   elif grep -Eq '(^|[[:space:]])--auto([[:space:],.;:!?)]|$)' <<<"$prompt"; then
-    mkdir -p "${flag%/*}"; touch "$flag"
+    mkdir -p "${flag%/*}"; : >"$flag"
     find "${flag%/*}" -type f -mtime +7 -delete 2>/dev/null || true
   fi
-  if [ -f "$flag" ]; then
+  if flow_auto_ship; then
+    echo "[flow auto ship] the human is away and granted shipping (--auto ship; --no-auto ends it). Never wait on them: run flow's Autonomous mode. Push (not to main), PR create/ready, and merge proceed only once review/scripts/ready.sh has stamped the current HEAD; anything else irreversible (deploy, publish, .flow/gates.md) is queued in GATES.md. Notify and hand off at the end."
+  elif [ -f "$flag" ]; then
     echo "[flow auto] the human is away (--auto; --no-auto ends it). Never wait on them: run flow's Autonomous mode. Reversible gates, including intent and seal approval: take your recommended option and log it with task.sh decide agent. Irreversible actions (push, PR, merge, deploy, publish, .flow/gates.md) never happen: queue them in GATES.md. The hooks catch push, PR, publish, and gates.md; a deploy script is on you. Notify and hand off at the end."
   fi
 fi

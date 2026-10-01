@@ -88,9 +88,9 @@ fi
 task="$FLOW_TASK"
 td="$FLOW_TASK_DIR"
 if [ -n "$task" ] && [ -f "$td/INTENT.md" ]; then
-  while IFS=$'\t' read -r id cmd; do
-    if run "$id" "$cmd"; then pass "$id acceptance check"; else miss "$id acceptance check fails: $cmd"; fi
-  done < <(sed -n 's/^- \[.\] \(C[0-9][0-9]*\) · .*`\([^`]*\)`[[:space:]]*$/\1	\2/p' "$td/INTENT.md")
+  while read -r id; do
+    if run "$id" ""; then pass "$id acceptance check"; else miss "$id acceptance check fails (evidence.sh $id)"; fi
+  done < <(sed -n 's/^- \[.\] \(C[0-9][0-9]*\) · .*`[[:space:]]*$/\1/p' "$td/INTENT.md")
   if [ -s "$td/SEALS" ]; then
     if ( cd "$FLOW_ROOT" && "$sk/seal/scripts/seal.sh" verify >/dev/null 2>&1 ); then pass "seals intact"; else miss "a sealed check changed (seal.sh verify)"; fi
   fi
