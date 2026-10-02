@@ -28,7 +28,7 @@ A worker's report is a claim. Before merging its branch:
 3. Its diff stays inside its fence and budget.
 4. `review` on its diff returns no blockers.
 
-Merge into the task branch only when all four hold. Then import the worker's evidence and mark the slice from the main checkout: `../flow/scripts/task.sh accept <lane>`, then `task.sh slice <id> done`. Workers never mark slices themselves; one writer keeps SLICES.md and EVIDENCE.md race-free. Otherwise send the failure back to a fresh worker, once. A second failure becomes a gate.
+Merge into the task branch only when all four hold. Then import the worker's evidence and mark the slice from the main checkout: `../flow/scripts/task.sh accept <lane>`, then `task.sh slice <id> done`. `accept` first re-runs the features this merge touched (`features.sh run --impacted --base ORIG_HEAD`) on the merged tree. If one fails, the lanes drifted apart: it refuses the evidence and marks the feature broken. Feature runs inside a lane go to `.flow/features/lanes/<lane>.tsv`; only the main checkout moves the shared status. Workers never mark slices themselves; one writer keeps SLICES.md and EVIDENCE.md race-free. Otherwise send the failure back to a fresh worker, once. A second failure becomes a gate.
 
 ## After all slices
 

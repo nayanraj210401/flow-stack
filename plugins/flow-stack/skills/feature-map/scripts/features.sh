@@ -7,7 +7,9 @@
 #                                             changes vs HEAD, incl. untracked) + unowned files
 #   features.sh run <id ...> | --impacted [--base REF] | --all
 #                                             run each feature's scenario through evidence.sh
-#                                             (label feat:<id>); PASS marks it verified
+#                                             (label feat:<id>); PASS marks it verified. In a
+#                                             worktree lane, results go to lanes/<lane>.tsv instead;
+#                                             task.sh accept moves the shared status after the merge
 #   features.sh mark <id> <verified|unverified|stale|broken>
 #   features.sh stale [--write]               features whose owned code changed since verified
 #   features.sh coverage                      unowned code, features without scenarios, dead globs
@@ -40,12 +42,15 @@ specs_of() { # pathspecs for a feature's owns globs
   for g in $(fm "$1" owns); do printf '%s\n' ":(glob)$g"; done
   set +f
 }
-set_fm() { # set_fm <file> <key> <value>
-  local f="$1" k="$2" v="$3" tmp
-  tmp="$(mktemp)"
-  awk -v k="$k" -v v="$v" 'NR==1 && $0=="---" {on=1; print; next}
-    on && $0=="---" { if (!done) print k ": " v; on=0; print; next }
-    on && index($0, k ":") == 1 { print k ": " v; done=1; next } { print }' "$f" >"$tmp" && mv "$tmp" "$f"
+set_fm() { # set_fm <file> <key> <value> [<key> <value> ...]: one rewrite, so readers never see half
+  local f="$1" kv="" tmp; shift
+  while [ $# -ge 2 ]; do kv="$kv$1"$'\t'"$2"$'\n'; shift 2; done
+  tmp="$(mktemp "$f.XXXXXX")"
+  KV="$kv" awk 'BEGIN { m = split(ENVIRON["KV"], L, "\n") - 1; for (i = 1; i <= m; i++) { split(L[i], p, "\t"); key[i] = p[1]; val[p[1]] = p[2] } }
+    NR==1 && $0=="---" {on=1; print; next}
+    on && $0=="---" { for (i = 1; i <= m; i++) if (!(key[i] in done)) print key[i] ": " val[key[i]]; on=0; print; next }
+    on { k = $0; sub(/:.*/, "", k); if (k in val) { print k ": " val[k]; done[k] = 1; next } }
+    { print }' "$f" >"$tmp" && mv "$tmp" "$f"
 }
 changed_files() { # changed_files <base>
   { git diff --name-only "$1" -- 2>/dev/null; git ls-files --others --exclude-standard; } | grep -v '^\.flow/' | sort -u
@@ -129,14 +134,15 @@ case "$cmd" in
     for id in "${ids[@]}"; do
       f="$(file_of "$id")"; sc="$(fm "$f" scenario)"
       if [ -z "$sc" ]; then echo "feat:$id · NO SCENARIO (add one, or run /flow-stack:make-verifier)"; rc=1; continue; fi
-      if "$evidence" "feat:$id" "$sc" >/tmp/feat.$$ 2>&1; then
-        set_fm "$f" status verified
-        set_fm "$f" verified "$(date +%F) $(git rev-parse --short HEAD)"
-        echo "feat:$id · PASS"
-      else
-        set_fm "$f" status broken
-        echo "feat:$id · FAIL"; tail -n 8 /tmp/feat.$$ | sed 's/^/    /'; rc=1
+      if "$evidence" "feat:$id" "$sc" >/tmp/feat.$$ 2>&1; then res=PASS; else res=FAIL; rc=1; fi
+      at="$(date +%F) $(git rev-parse --short HEAD)"
+      if [ -n "$FLOW_LANE" ]; then
+        mkdir -p "$dir/lanes"; printf '%s\t%s\t%s\n' "$id" "$res" "$at" >>"$dir/lanes/$FLOW_LANE.tsv"
+      elif [ "$res" = PASS ]; then set_fm "$f" status verified verified "$at"
+      else set_fm "$f" status broken
       fi
+      echo "feat:$id · $res"
+      [ "$res" = PASS ] || tail -n 8 /tmp/feat.$$ | sed 's/^/    /'
     done
     rm -f /tmp/feat.$$
     [ $rc -ne 0 ] || echo "flow-evidence: PASS"
@@ -145,8 +151,8 @@ case "$cmd" in
 
   mark)
     [[ "${2:-}" =~ ^(verified|unverified|stale|broken)$ ]] || die "usage: features.sh mark <id> <verified|unverified|stale|broken>"
-    f="$(file_of "$1")"; set_fm "$f" status "$2"
-    [ "$2" = verified ] && set_fm "$f" verified "$(date +%F) $(git rev-parse --short HEAD)"
+    f="$(file_of "$1")"
+    if [ "$2" = verified ]; then set_fm "$f" status verified verified "$(date +%F) $(git rev-parse --short HEAD)"; else set_fm "$f" status "$2"; fi
     echo "$1 → $2"
     ;;
 

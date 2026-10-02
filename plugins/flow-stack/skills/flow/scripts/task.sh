@@ -226,6 +226,16 @@ case "$cmd" in
     lane="${1:-}"; [ -n "$lane" ] || die "usage: task.sh accept <lane>"
     lev="$(active_dir)/lanes/$lane/EVIDENCE.md"
     [ -f "$lev" ] || die "no evidence in lane '$lane' ($lev)"
+    if [ -d "$flow/features" ]; then
+      if git -C "$root" rev-parse -q --verify ORIG_HEAD >/dev/null; then
+        out="$(cd "$root" && "$here/../../feature-map/scripts/features.sh" run --impacted --base ORIG_HEAD 2>&1)" \
+          || die "lane '$lane' is merged, but features it touched fail on the merged tree, so its evidence is not accepted. Fix it with a fresh worker, or undo the merge (git reset --hard ORIG_HEAD).
+$out"
+        [ -z "$out" ] || printf '%s\n' "$out"
+      else
+        echo "task.sh: no merge found (ORIG_HEAD), so impacted features were not re-run; merge the lane first" >&2
+      fi
+    fi
     { printf '<!-- accepted from lane %s at %s -->\n' "$lane" "$(date -u +%FT%TZ)"; cat "$lev"; } >>"$(active_dir)/EVIDENCE.md"
     echo "accepted: $(grep -c '^### ' "$lev") evidence block(s) from lane $lane"
     ;;
