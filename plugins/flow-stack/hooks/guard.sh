@@ -109,14 +109,22 @@ if [ -f "$FLOW_DIR/gates.md" ]; then
 fi
 
 # 4b. Auto mode: outward-facing actions wait for the human even where nothing else gates them.
-# `--auto ship` lets exactly these through once ready.sh stamped HEAD: a plain push of a branch
-# other than main, gh pr create/ready, and merging the current branch's PR. Anything else asks.
+# `--auto ship` lets exactly these through once ready.sh stamped HEAD: pushing the current branch
+# (not main) by its name, gh pr create/ready, and merging the current branch's PR. Anything else asks.
+ship_allowed() { # ship_allowed <one-line command>
+  local cur
+  [[ "$1" != *$'\n'* ]] || return 1
+  case "$1" in
+    git\ push\ *)
+      cur="$(git -C "$FLOW_ROOT" symbolic-ref --short -q HEAD)" && [ "$cur" != main ] && [ "$cur" != master ] || return 1
+      [[ "$1" =~ ^git\ push(\ -u|\ --set-upstream)?\ [A-Za-z0-9._-]+\ ([^[:space:]]+)$ ]] && [ "${BASH_REMATCH[2]}" = "$cur" ] ;;
+    *) grep -Eq '^(gh pr (create|ready)( [^;&|`$<>()]*)?|gh pr merge( --(squash|merge|rebase|delete-branch))*)$' <<<"$1" ;;
+  esac
+}
 if flow_auto && grep -Eiq "$lead"'[[:space:]]*["'"'"']?(git[[:space:]]+push|gh[[:space:]]+(pr[[:space:]]+(create|merge|ready)|release[[:space:]]+create)|npm[[:space:]]+publish)([[:space:]]|$)' <<<"$code"; then
-  one="$(sed -E 's/^[[:space:]]+|[[:space:]]+$//g' <<<"$cmd")"
-  ship_ok='^(git push( -u| --set-upstream)? [A-Za-z0-9._-]+ [A-Za-z0-9._/-]+|gh pr (create|ready)( [^;&|`$<>()]*)?|gh pr merge( --(squash|merge|rebase|delete-branch))*)$'
-  if ! flow_auto_ship || [[ "$one" == *$'\n'* ]] || ! grep -Eq "$ship_ok" <<<"$one" || grep -Eq ' (main|master|HEAD)$' <<<"$one" \
+  if ! flow_auto_ship || ! ship_allowed "$(sed -E 's/^[[:space:]]+|[[:space:]]+$//g' <<<"$cmd")" \
      || ! (cd "$FLOW_ROOT" && "$(dirname "$0")/../skills/review/scripts/ready.sh" stamped) 2>/dev/null; then
-    pre_decide ask "flow: outward-facing action$(flow_auto_ship && echo ". --auto ship allows only a plain push of a non-main branch, gh pr create/ready, and gh pr merge of the current branch's PR, once review/scripts/ready.sh has stamped HEAD")."
+    pre_decide ask "flow: outward-facing action$(flow_auto_ship && echo ". --auto ship allows only \`git push [-u] <remote> <current branch>\` (not main), gh pr create/ready (body via --body-file or --fill, no shell expansions), and gh pr merge of the current branch's PR, once review/scripts/ready.sh has stamped HEAD")."
   fi
 fi
 

@@ -30,7 +30,11 @@ events="$(tail -n 3000 "$transcript" | jq -nrR --argjson roots "$roots" --arg ch
   def shell_write: gsub("\"[^\"]*\"|'"'"'[^'"'"']*'"'"'"; "")
     | gsub("[0-9]*>>?[[:space:]]*(/dev/null|&[0-9]-?)"; "")
     | gsub("(>>?|\\btee( -a)?)[[:space:]]*[^[:space:];|&]*(\\.flow/|/tmp/|scratchpad|\\.md|\\.txt)[^[:space:];|&]*"; "")
-    | test("\\bsed -[a-zA-Z]*i|\\bperl -[a-z]*i|\\btee\\b|>>?[[:space:]]*[^[:space:]=>&]|(^|[;&|[:space:]])(cp|mv|patch|git apply)[[:space:]]");
+    | test("\\bsed -[a-zA-Z]*i|\\bperl -[a-z]*i|\\btee\\b|>>?[[:space:]]*[^[:space:]=>&]"
+      + "|(^|[;&|][[:space:]]*)(cp|mv)( -[A-Za-z]+)*( [^-;&|[:space:]][^;&|[:space:]]*)+"
+      + " (?![^;&|[:space:]]*(/tmp/|scratchpad|\\.flow/))[^-;&|[:space:]][^;&|[:space:]]*[[:space:]]*($|[;&|])"
+      + "|(^|[;&|][[:space:]]*)patch[[:space:]]"
+      + "|git apply[[:space:]]+(?!--(check|stat|numstat|summary))");
   def verdict: txt | split("\n") | map(select(test("\\S"))) | (last // "")
     | test("^flow-evidence: PASS|^ready for review: [0-9a-f]+ stamped");
   reduce (inputs | fromjson? | .message.content? // [] | if type == "array" then .[] else empty end) as $c

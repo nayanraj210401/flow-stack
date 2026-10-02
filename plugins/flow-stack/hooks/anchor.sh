@@ -19,7 +19,7 @@ if flag="$(flow_auto_flag)"; then
     find "${flag%/*}" -type f -mtime +7 -delete 2>/dev/null || true
   fi
   if flow_auto_ship; then
-    echo "[flow auto ship] the human is away and granted shipping (--auto ship; --no-auto ends it). Never wait on them: run flow's Autonomous mode. Push (not to main), PR create/ready, and merge proceed only once review/scripts/ready.sh has stamped the current HEAD; anything else irreversible (deploy, publish, .flow/gates.md) is queued in GATES.md. Notify and hand off at the end."
+    echo "[flow auto ship] the human is away and granted shipping (--auto ship; --no-auto ends it). Never wait on them: run flow's Autonomous mode. Pushing the current branch (not main) by name, gh pr create/ready (body via --body-file or --fill), and gh pr merge of the current branch's PR proceed only once review/scripts/ready.sh has stamped the current HEAD; anything else irreversible (deploy, publish, .flow/gates.md) is queued in GATES.md. Notify and hand off at the end."
   elif [ -f "$flag" ]; then
     echo "[flow auto] the human is away (--auto; --no-auto ends it). Never wait on them: run flow's Autonomous mode. Reversible gates, including intent and seal approval: take your recommended option and log it with task.sh decide agent. Irreversible actions (push, PR, merge, deploy, publish, .flow/gates.md) never happen: queue them in GATES.md. The hooks catch push, PR, publish, and gates.md; a deploy script is on you. Notify and hand off at the end."
   fi
