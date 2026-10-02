@@ -40,6 +40,11 @@ root="$FLOW_ROOT"
 ev=""
 if [ -n "$FLOW_TASK_DIR" ]; then
   ev="$(flow_state_dir "$FLOW_TASK_DIR")/EVIDENCE.md"; mkdir -p "$(dirname "$ev")"
+  # A lane records its branch and fork point once, so task.sh accept knows exactly what it merges.
+  if [ -n "$FLOW_LANE" ] && [ ! -s "$(dirname "$ev")/BASE" ]; then
+    git -C "$root" rev-parse --abbrev-ref HEAD >"$(dirname "$ev")/BRANCH" 2>/dev/null
+    git -C "$root" merge-base HEAD "$(git -C "$FLOW_MAIN" rev-parse HEAD)" >"$(dirname "$ev")/BASE" 2>/dev/null
+  fi
 fi
 
 out="$(mktemp)"

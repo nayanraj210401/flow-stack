@@ -226,6 +226,19 @@ case "$cmd" in
     lane="${1:-}"; [ -n "$lane" ] || die "usage: task.sh accept <lane>"
     lev="$(active_dir)/lanes/$lane/EVIDENCE.md"
     [ -f "$lev" ] || die "no evidence in lane '$lane' ($lev)"
+    if [ -d "$flow/features" ]; then
+      ld="$(dirname "$lev")"; br="$(cat "$ld/BRANCH" 2>/dev/null || true)"; base="$(cat "$ld/BASE" 2>/dev/null || true)"
+      [ -n "$br" ] && [ -n "$base" ] || die "lane '$lane' has no BRANCH/BASE record (its first evidence.sh run writes them); re-run its check inside the lane"
+      git -C "$root" merge-base --is-ancestor "$br" HEAD 2>/dev/null || die "lane '$lane' (branch $br) is not merged into HEAD; merge it (not --squash) first"
+      feats="$here/../../feature-map/scripts/features.sh"; ids=()
+      while IFS= read -r i; do [ -n "$i" ] && ids+=("$i"); done < <(cd "$root" && git diff --name-only "$base" "$br" | { paths=(); while IFS= read -r p; do paths+=("$p"); done; [ ${#paths[@]} -eq 0 ] || "$feats" impact --ids "${paths[@]}"; })
+      if [ ${#ids[@]} -gt 0 ]; then
+        out="$(cd "$root" && "$feats" run "${ids[@]}" 2>&1)" \
+          || die "lane '$lane' is merged, but features it touched fail on the merged tree, so its evidence is not accepted. Fix it with a fresh worker, or undo the merge.
+$out"
+        printf '%s\n' "$out"
+      fi
+    fi
     { printf '<!-- accepted from lane %s at %s -->\n' "$lane" "$(date -u +%FT%TZ)"; cat "$lev"; } >>"$(active_dir)/EVIDENCE.md"
     echo "accepted: $(grep -c '^### ' "$lev") evidence block(s) from lane $lane"
     ;;
