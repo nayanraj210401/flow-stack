@@ -8,6 +8,7 @@
 set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/../../../hooks/roots.sh"
+. "$here/../../../hooks/lib.sh"
 
 cost=1; prs=1; repos=()
 while [ $# -gt 0 ]; do
@@ -135,6 +136,9 @@ for r in "${repos[@]}"; do
   j="$(repo_json "$r")"; [ -n "$j" ] && rj+=("$j")
 done
 [ -n "$current" ] && current="$(cd "$current" && pwd -P)"
-printf '%s\n' "${rj[@]:-}" | jq -sc --arg at "$(date +%FT%T%z)" --argjson spend "${spend:-null}" \
+# the profile's board: picks which panels the page shows, and in what order; the template has one layout per view
+view="$(profile_fm board 2>/dev/null)"
+case "$view" in builder|lead|solo) ;; *) view=builder ;; esac
+printf '%s\n' "${rj[@]:-}" | jq -sc --arg at "$(date +%FT%T%z)" --arg view "$view" --argjson spend "${spend:-null}" \
   --argjson budget "$(sed -n 's/^[[:space:]]*review_minutes_per_day:[[:space:]]*\([0-9]*\).*/\1/p' "$profile" 2>/dev/null | head -n1 | grep . || echo null)" \
-  '{generated:$at, review_minutes_per_day:$budget, spend:$spend, repos:map(select(. != null))}'
+  '{generated:$at, view:$view, review_minutes_per_day:$budget, spend:$spend, repos:map(select(. != null))}'

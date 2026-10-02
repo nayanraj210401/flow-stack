@@ -13,7 +13,7 @@ The board is an Artifact: one private link that each run republishes with fresh 
 mkdir -p .flow/board && scripts/collect.sh > .flow/board/board.json
 ```
 
-It reads the profile's `# Repos` plus the current repo: `.flow/tasks/*`, `.flow/features/`, `.flow/debt.md`, and each task's DECISIONS.tsv, plus git, `gh pr status`, and ccusage. Each repo also gets a quality score (0–100): features verified, checks passing, checks with teeth, open debt, the review stamp on HEAD, test files per source file, oversized files, and TODO markers. A row with no data is null (n/a), never 0, and the overall is the mean of the rest. It runs no repo commands. Add `--no-cost` when ccusage is missing or slow, and `--no-prs` when gh isn't authed. Say which one you skipped.
+It reads the profile's `# Repos` plus the current repo: `.flow/tasks/*`, `.flow/features/`, `.flow/debt.md`, and each task's DECISIONS.tsv, plus git, `gh pr status`, and ccusage. Each repo also gets a quality score (0–100): features verified, checks passing, checks with teeth, open debt, the review stamp on HEAD, test files per source file, oversized files, and TODO markers. A row with no data is null (n/a), never 0, and the overall is the mean of the rest. It runs no repo commands. The profile's `board:` (builder, lead, or solo; anything else is builder) picks the view: which panels the page shows, their order, and the tab it opens on. The layouts live in `templates/board.html` as `LAYOUTS`. Add `--no-cost` when ccusage is missing or slow, and `--no-prs` when gh isn't authed. Say which one you skipped.
 
 ## 2. Render
 

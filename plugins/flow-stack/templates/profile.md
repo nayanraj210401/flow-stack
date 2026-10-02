@@ -15,6 +15,7 @@ dojo: off                         # off | light (explain-back) | on (TODO(you))
 digest: off                       # off | terminal | page: how /flow-stack:wrap delivers the daily brief
 review_gate: on                   # on | yolo: on = a PR needs ready.sh (review, deslop, tour, checks) before human review
 rigor: standard                   # lean | standard | strict: how much ceremony flow spends per task
+board: builder                    # builder | lead | solo: which panels /flow-stack:board shows (setup picks it from your role)
 ---
 
 # Who
