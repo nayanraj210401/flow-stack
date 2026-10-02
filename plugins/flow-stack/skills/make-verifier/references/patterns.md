@@ -1,14 +1,23 @@
 # Driver patterns
 
-Every scenario script: `set -euo pipefail`, prints what it did, exits non-zero on failure, and writes artifacts to `${FLOW_ARTIFACTS:-.flow/artifacts}/`.
+Every scenario: written for the runner `scripts/ecosystem.sh` reports (`node --test`, `pytest`, `bun test`, … or `set -euo pipefail` bash), prints what it did, fails the runner on failure, and writes artifacts to `${FLOW_ARTIFACTS:-.flow/artifacts}/`.
+
+## Stay inside auto mode
+The driver runs unattended, so nothing in it may look like an attack on the user's machine:
+- **Stop only what you started.** Spawn the app from the fixture in its own process group (`detached: true`, `start_new_session=True`) and kill that group in teardown, since `npm start` and friends fork; in bash, kill the PID your `up.sh` wrote. Never `pkill`, `killall`, or `kill $(lsof -ti :PORT)`: a process already on the port may be the user's; fail with "port busy" instead.
+- **Install only from the lockfile**, with `ecosystem.sh`'s `install` line. No global installs, `curl | sh`, `npx <pkg>` that isn't a dependency, or `pip install` outside the repo's venv.
+- **Credentials**: `.env.example` and seed users only. Never read `.env`, keychains, or `~/.config`.
+- **Write** only to the repo, `mktemp -d`, and `.flow/artifacts/`. Never to `$HOME`, shell rc files, or `.claude/settings*.json`.
+- **Git** read-only in scenarios. Breaking code on purpose (teeth) happens in a throwaway worktree.
+- **One plain command per scenario.** No `eval`, base64, or generated-then-executed code; the classifier must be able to read what runs.
 
 ## CLI
 - Build once, run the binary with realistic args in a temp dir (`mktemp -d`), and assert on stdout, the exit code, and the files produced.
 - Cover `--help`, the happy path, one bad-input path, and one idempotency path (run twice).
 
 ## HTTP service
-- `up.sh`: start in the background, write the PID to `.flow/run/<name>.pid`, and poll `/health` (or the first route) until 200, with a timeout.
-- Scenarios: `curl -sS -o resp.json -w '%{http_code}'`, then assert the status plus `jq` assertions on the body. Save the response as an artifact.
+- `_app` fixture (`before`/`after` in node:test, a session fixture in pytest): spawn the start command, poll `/health` (or the first route) until 200 with a timeout, and kill the child in teardown. With `runner bash`, `up.sh` does the same in the background and writes the PID to `.flow/run/<name>.pid` for `down.sh`.
+- Scenarios: request with the language's own client (`fetch`, `httpx`/`urllib`; `curl -sS -w '%{http_code}'` + `jq` in bash), assert the status and the body fields, and save the response as an artifact.
 - Auth: log in through the real endpoint with the seed user and reuse the cookie or token file.
 
 ## Web UI
