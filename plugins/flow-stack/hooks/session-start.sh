@@ -77,6 +77,9 @@ if [ -n "$FLOW_TASK_DIR" ]; then
     printf 'Multi-repo task · home: %s · repos: %s · this repo: %s. Each slice names its repo:.\n' "$FLOW_TASK_HOME" "$(cut -f1 "$FLOW_TASK_DIR/REPOS" | paste -sd, - | sed 's/,/, /g')" "$FLOW_REPO"
   fi
   [ -n "$slice" ] && printf 'Current slice: %s\n' "${slice#\#\# }"
+  if [ -z "$(find "$FLOW_TASK_DIR" -type f ! -name trail.jsonl ! -name '.*' -mtime -3 2>/dev/null | head -n1)" ]; then
+    printf 'Stale: this task is untouched for more than 3 days. If this session is about something else, run task.sh close (or switch) first, or its goal anchors every prompt.\n'
+  fi
 
   if [ "$source_kind" = compact ] || [ "$source_kind" = resume ]; then
     handoff="$FLOW_TASK_DIR/HANDOFF.md"

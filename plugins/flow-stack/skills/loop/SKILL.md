@@ -11,7 +11,7 @@ One slice at a time. Paths are relative to this skill's base directory. `T` belo
 
 1. `T slice <id> doing`. The fence hook now enforces the slice's `fence:` globs.
 2. Read the slice's `check:` and `budget:`. If the check is empty, write it now, in the slice block, before any code (principle-intent-before-code). If it is a new test file, seal it: `../seal/scripts/seal.sh add <path>`.
-3. Run the check once **before** building: `../verify/scripts/evidence.sh <id>:before "<check>"`. It should fail. If it already passes, the check does not test this slice. Fix the check, not the code.
+3. Run the check once **before** building: `../verify/scripts/evidence.sh <id>:before` (it runs the slice's declared check). It should fail. If it already passes, the check does not test this slice. Fix the check, not the code.
 
 ## Cycle
 
@@ -19,7 +19,7 @@ One slice at a time. Paths are relative to this skill's base directory. `T` belo
 
 **a. Build.** Make the smallest change that could make the check pass. Stay inside the fence. Delete before you add (principle-subtract-before-add). Follow the profile and repo Taste. When something falls outside the fence, the hook tells you how to widen it on purpose.
 
-**b. Verify.** Run `../verify/scripts/evidence.sh <id> "<check>"`, plus the repo's lint and typecheck from `.flow/config.json` `commands` when set. Use the repo verify driver (`.claude/skills/verify-*/`) for UI, API, or CLI behavior. A unit test alone doesn't prove a user-visible behavior.
+**b. Verify.** Run `../verify/scripts/evidence.sh <id>`, plus the repo's lint and typecheck from `.flow/config.json` `commands` when set. Use the repo verify driver (`.claude/skills/verify-*/`) for UI, API, or CLI behavior. A unit test alone doesn't prove a user-visible behavior.
 
 **c. Pass?**
 - **Yes:** run `../probe/scripts/probe.sh <id> "<check>"`. TEETH means record the slice done. TOOTHLESS means the check passes without your change, so it proves nothing. Strengthen the check, re-seal (the human approves), and go back to b.

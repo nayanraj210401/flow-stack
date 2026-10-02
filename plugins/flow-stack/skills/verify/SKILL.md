@@ -17,10 +17,13 @@ Principle: `principle-evidence-over-claims`. "It compiles", "the tests I wrote p
 ## Record every check
 
 ```bash
-scripts/evidence.sh <label> "<command>" [artifact paths…]
+scripts/evidence.sh C1                              # runs C1's command from INTENT.md
+scripts/evidence.sh S2:before                        # runs S2's check: from SLICES.md
+scripts/evidence.sh smoke "<command>" [artifacts…]   # any other label runs the command given
 ```
 
-- `<label>` is the slice or check id (`S2`, `C1`, `final`).
+- A `C<n>`/`S<n>` label runs the declared command. Passing a different one is refused; change the declaration instead (sealed checks need the human). A check that can't fail (empty, `:`, `true`) is refused.
+- The Stop hook accepts a success claim only when a tool result after your last code edit ends in `flow-evidence: PASS` (or a ready stamp), task or not.
 - It appends a block to EVIDENCE.md, prints the tail of the output, and ends with a `flow-evidence:` line that the circuit breaker reads.
 - Artifacts (screenshots, response dumps) go in `.flow/tasks/<slug>/artifacts/`. Pass their paths so the block links them.
 - Never write an EVIDENCE block by hand.
