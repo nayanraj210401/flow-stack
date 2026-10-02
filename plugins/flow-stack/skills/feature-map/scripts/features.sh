@@ -8,8 +8,8 @@
 #   features.sh run <id ...> | --impacted [--base REF] | --all
 #                                             run each feature's scenario through evidence.sh
 #                                             (label feat:<id>); PASS marks it verified. In a
-#                                             worktree lane, results go to lanes/<lane>.tsv instead;
-#                                             task.sh accept moves the shared status after the merge
+#                                             worktree lane, results go to lanes/<lane>.tsv (the
+#                                             lane's own record); task.sh accept re-runs after merge
 #   features.sh mark <id> <verified|unverified|stale|broken>
 #   features.sh stale [--write]               features whose owned code changed since verified
 #   features.sh coverage                      unowned code, features without scenarios, dead globs
