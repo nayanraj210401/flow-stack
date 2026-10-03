@@ -141,7 +141,7 @@ a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
   const LAYOUTS = {
     builder: {open: 'repo', panels: [['tasks', 7], ['features', 5], ['quality', 12], ['decisions', 7], ['debt', 5], ['shipped', 12], ['estimate', 12]]},
     lead: {open: 'all', panels: [['decisions', 7], ['debt', 5], ['tasks', 7], ['features', 5], ['shipped', 12], ['quality', 12]]},
-    solo: {open: 'repo', panels: [['tasks', 7], ['shipped', 5], ['features', 5], ['debt', 7], ['estimate', 12]]},
+    solo: {open: 'repo', panels: [['tasks', 7], ['shipped', 5], ['decisions', 7], ['debt', 5], ['features', 12], ['estimate', 12]]},
   };
   const view = Object.hasOwn(LAYOUTS, D.view) ? D.view : 'builder', L = LAYOUTS[view];
   const open = r => (r.tasks || []).filter(t => !t.closed);

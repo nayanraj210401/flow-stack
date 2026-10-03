@@ -5,6 +5,7 @@
 attention: { review_minutes_per_day: 45, max_parallel_agents: 3 }
 dojo: off
 rigor: lean
+board: solo
 ```
 
 # Rules

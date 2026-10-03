@@ -7,7 +7,6 @@
 # PRs come from gh and cost from ccusage when available (both optional, both skippable).
 set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
-. "$here/../../../hooks/roots.sh"
 . "$here/../../../hooks/lib.sh"
 
 cost=1; prs=1; repos=()
