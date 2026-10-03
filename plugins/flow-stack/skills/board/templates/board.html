@@ -137,9 +137,16 @@ a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
   const link = (url, t) => url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(t)}</a>` : esc(t);
   const repos = D.repos || [];
   const cur = repos.find(r => r.current) || repos[0];
+  // one layout per profile `board:` view (collect.sh accepts exactly these): panel order, column span, opening tab
+  const LAYOUTS = {
+    builder: {open: 'repo', panels: [['tasks', 7], ['features', 5], ['quality', 12], ['decisions', 7], ['debt', 5], ['shipped', 12], ['estimate', 12]]},
+    lead: {open: 'all', panels: [['decisions', 7], ['debt', 5], ['tasks', 7], ['features', 5], ['shipped', 12], ['quality', 12]]},
+    solo: {open: 'repo', panels: [['tasks', 7], ['shipped', 5], ['decisions', 7], ['debt', 5], ['features', 12], ['estimate', 12]]},
+  };
+  const view = Object.hasOwn(LAYOUTS, D.view) ? D.view : 'builder', L = LAYOUTS[view];
   const open = r => (r.tasks || []).filter(t => !t.closed);
   const when = new Date(D.generated);
-  $('stamp').textContent = `${repos.length} repo${repos.length === 1 ? '' : 's'} · generated ${isNaN(when) ? D.generated : when.toLocaleString([], {dateStyle:'medium', timeStyle:'short'})}`;
+  $('stamp').textContent = `${repos.length} repo${repos.length === 1 ? '' : 's'} · ${view} view · generated ${isNaN(when) ? D.generated : when.toLocaleString([], {dateStyle:'medium', timeStyle:'short'})}`;
 
   // ---- needs you (every repo) ----
   const needs = [];
@@ -178,7 +185,7 @@ a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
     `<div id="view-all" class="grid" role="tabpanel" hidden>${allView()}</div>`;
   const show = id => ids.forEach(x => { const on = x === id; $('tab-' + x).setAttribute('aria-selected', on); $('view-' + x).hidden = !on; });
   tabs.querySelectorAll('button').forEach(b => b.addEventListener('click', () => show(b.getAttribute('aria-controls').slice(5))));
-  show(repos.length ? 'repo-' + Math.max(0, repos.indexOf(cur)) : 'all');
+  show(repos.length && L.open === 'repo' ? 'repo-' + Math.max(0, repos.indexOf(cur)) : 'all');
 
   function panel(cls, title, src, inner) {
     return `<section class="panel ${cls}"><header><h2>${title}</h2><span class="src">${esc(src)}</span></header>${inner}</section>`;
@@ -203,13 +210,16 @@ a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
     const qHtml = `<div class="qual"><div class="big">${q.score == null ? 'n/a' : esc(q.score)}<small> / 100</small></div><div class="qdims">${qd.map(d => `<div class="qd${d.score == null ? ' na' : ''}"><span>${esc(d.label)}</span><span class="num">${d.score == null ? 'n/a' : esc(d.score)}</span><div class="meter"><i class="${tone(d.score)}" style="width:${d.score == null ? 0 : Math.max(2, +d.score)}%"></i></div><span class="rec">${esc(d.detail)}</span></div>`).join('')}</div></div>
       <p class="note">Overall is the mean of the scored rows; n/a means the repo has no data for that row.</p>`;
     const cal = (r.tasks || []).filter(t => t.estimate_usd != null && t.actual_usd != null);
-    return panel('c7', `Tasks · ${tasks.length} open`, '.flow/tasks/*', taskHtml)
-      + panel('c5', `Feature health · ${ver}/${feats.length} verified`, '.flow/features/', featHtml)
-      + panel('c12', `Quality · ${q.score == null ? 'n/a' : esc(q.score)}`, 'features, EVIDENCE, debt, ready.tsv, git ls-files', qHtml)
-      + panel('c7', 'Decided without you', 'DECISIONS.tsv', decs)
-      + panel('c5', `Debt · ${debt.length} open`, '.flow/debt.md', debtHtml)
-      + panel('c12', 'Shipped · last 7 days', `git log · ${r.branch || 'HEAD'} ${esc(r.head)}${r.dirty ? ' · ' + r.dirty + ' uncommitted' : ''}`, shipped)
-      + (cal.length ? panel('c12', 'Estimate vs actual', 'ESTIMATE, TRACE.md', `<svg viewBox="0 0 560 ${24 + cal.length * 30}" class="est" data-rows='${esc(JSON.stringify(cal.map(t => [t.slug, t.estimate_usd, t.actual_usd])))}' role="img" aria-label="Estimated vs actual dollars per task"></svg><p class="note">Grey: estimate. Colored: actual (amber when over by more than 20%).</p>`) : '');
+    const P = {
+      tasks: [`Tasks · ${tasks.length} open`, '.flow/tasks/*', taskHtml],
+      features: [`Feature health · ${ver}/${feats.length} verified`, '.flow/features/', featHtml],
+      quality: [`Quality · ${q.score == null ? 'n/a' : esc(q.score)}`, 'features, EVIDENCE, debt, ready.tsv, git ls-files', qHtml],
+      decisions: ['Decided without you', 'DECISIONS.tsv', decs],
+      debt: [`Debt · ${debt.length} open`, '.flow/debt.md', debtHtml],
+      shipped: ['Shipped · last 7 days', `git log · ${r.branch || 'HEAD'} ${esc(r.head)}${r.dirty ? ' · ' + r.dirty + ' uncommitted' : ''}`, shipped],
+      estimate: cal.length && ['Estimate vs actual', 'ESTIMATE, TRACE.md', `<svg viewBox="0 0 560 ${24 + cal.length * 30}" class="est" data-rows='${esc(JSON.stringify(cal.map(t => [t.slug, t.estimate_usd, t.actual_usd])))}' role="img" aria-label="Estimated vs actual dollars per task"></svg><p class="note">Grey: estimate. Colored: actual (amber when over by more than 20%).</p>`],
+    };
+    return L.panels.filter(([k]) => P[k]).map(([k, w]) => panel('c' + w, ...P[k])).join('');
   }
   function allView() {
     const rows = repos.map(r => {

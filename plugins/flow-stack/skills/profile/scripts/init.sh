@@ -26,12 +26,12 @@ if [ "$preset" != none ]; then
   rev="$(sed -n '/^```yaml/,/^```/p' "$p")"
   rmin="$(grep -Eo 'review_minutes_per_day: *[0-9]+' <<<"$rev" | grep -Eo '[0-9]+' || true)"
   maxa="$(grep -Eo 'max_parallel_agents: *[0-9]+' <<<"$rev" | grep -Eo '[0-9]+' || true)"
-  dojo="$(grep -Eo '^dojo: *[a-z]+' <<<"$rev" | awk '{print $2}' || true)"
   [ -n "$rmin" ] && perl -pi -e "s/(review_minutes_per_day:\s*)\d+/\${1}$rmin/" "$out"
   [ -n "$maxa" ] && perl -pi -e "s/(max_parallel_agents:\s*)\d+/\${1}$maxa/" "$out"
-  [ -n "$dojo" ] && perl -pi -e "s/^dojo:\s*\w+/dojo: $dojo/" "$out"
-  rigor="$(grep -Eo '^rigor: *[a-z]+' <<<"$rev" | awk '{print $2}' || true)"
-  [ -n "$rigor" ] && perl -pi -e "s/^rigor:\s*\w+/rigor: $rigor/" "$out"
+  for k in dojo rigor board; do
+    v="$(grep -Eo "^$k: *[a-z]+" <<<"$rev" | awk '{print $2}' || true)"
+    [ -n "$v" ] && perl -pi -e "s/^$k:\s*\w+/$k: $v/" "$out"
+  done
   # rules
   rules="$(awk '/^# Rules/{on=1;next} /^# /{on=0} on && /^- /' "$p")"
   if [ -n "$rules" ]; then
