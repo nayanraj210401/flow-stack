@@ -11,6 +11,7 @@ It is built from skills, bash + jq hooks, and existing tools. There is no new ru
 - [Skill catalog](#skill-catalog)
 - [What it costs, and how it keeps cost down](#what-it-costs-and-how-it-keeps-cost-down)
 - [Guardrails (hooks)](#guardrails-hooks)
+- [Mods (UI inside Claude Code)](#mods-ui-inside-claude-code)
 - [How it works](#how-it-works)
 - [Feature map](#feature-map) · [Your profile](#your-profile) · [Adapting to your setup](#adapting-to-your-setup) · [Forge](#forge-skills-specific-to-your-repo)
 - [Files](#files) · [Limits](#limits) · [Development](#development)
@@ -296,13 +297,58 @@ Check your own spend with `/flow-stack:budget` (uses ccusage) and the estimate-v
 | **claims** (Stop) | "Done", "works", or "fixed" with no passing evidence since the last edit → sent back once to verify or say `~ assumed`. |
 | **anchor** (UserPromptSubmit) | A 3-line goal and slice reminder on every prompt while a task is active. |
 | **session-start / pre-compact / notify** | Profile and toolchain context; a handoff snapshot before compaction; a notification when the agent is blocked on you. |
-| **flow band** (mod) | A dim line above the prompt with the active task, the current slice, slices done, the TDD phase, and the last evidence (flagged `edited since` when it's stale); the slice id beside the spinner. Terminal and Desktop only. |
-| **/flow-pane** (mod) | A pane with the task's slices (status and last verdict), the open gates from `GATES.md` with Approve/Reject buttons, and the other leads. A button runs `task.sh gate <n> approve\|reject`, which logs the decision, then tells Claude. Terminal and Desktop only. |
-| **model per role** (mod) | A flow-stack agent spawned with no model gets one from your profile's `budget:`: `design_model` for advocate and reviewer, `build_model` for worker, checker, and flow-agent. Built-in agents such as Explore keep Claude Code's choice. A model the call names wins; a toast names the model picked, and a budget value that isn't a model name is ignored with a warning. |
-
-The two mod rows are `hooks/register.tsx`, a [mod](https://code.claude.com/docs/en/plugins/mods/overview) (Claude Code 2.1.287+). It changes no guard; the band reads `skills/flow/scripts/status.sh`.
 
 Hooks fail open: if `jq` is missing or a script errors, the action is allowed and a warning goes to `~/.flow-stack/hooks.log`. Turn any hook off in `.flow/config.json` (repo) or `~/.flow-stack/config.json` (global): `{"hooks": {"fence": false}}`.
+
+## Mods (UI inside Claude Code)
+
+`hooks/register.tsx` is a [mod](https://code.claude.com/docs/en/plugins/mods/overview): code that runs inside Claude Code (2.1.287+), next to the bash hooks. The mod adds these features. None of them changes a guard. They draw only in the terminal and the Desktop app; in VS Code chat and `claude -p` nothing draws, but model per role still applies.
+
+| Mod | What you get | Reads |
+|---|---|---|
+| **Flow band** | A dim line above the prompt: `flow · <task> · <slice> · n/m slices · tdd red · C1 PASS · edited since`. Empty when no task is active. | `status.sh` |
+| **Spinner** | While Claude works, the spinner shows the slice: `Thinking · S2 · red…` | `status.sh` |
+| **`/flow-pane`** | A pane with slices, open gates with **Approve / Reject**, and your other leads. It is a command, so it runs instantly with no Claude turn and no tokens. | `status.sh --full` |
+| **Model per role** | A flow-stack agent started with no model gets one from your profile's `budget:`. advocate and reviewer get `design_model`; worker, checker and flow-agent get `build_model`. A model the call names wins, including one set by another router. Built-ins such as Explore are left alone. A toast names each pick. | `~/.flow-stack/profile.md` |
+
+```
+ ╭ flow ─────────────────────────────────────────────╮
+ │ flow · rate-limit · S2 token bucket · 1/3 slices  │   ← the band's line
+ │                                                   │
+ │ S1 bucket            · done  · PASS               │   ← slices: status · last verdict
+ │ S2 token bucket      · doing · FAIL               │
+ │ S3 headers           · todo                       │
+ │                                                   │
+ │ GATES                                             │   ← open gates in GATES.md
+ │ merge PR #3                                       │
+ │ options: A) merge  B) wait   (recommend: A)       │
+ │ [ Approve ]  [ Reject ]                           │
+ │                                                   │
+ │ LEADS                                             │   ← your other flow sessions
+ │ a1b2c3d4 · api · feat/login · login S2            │
+ ╰───────────────────────────────────────────────────╯
+```
+
+How a gate press works:
+
+```
+  agent (auto mode, or a gate it can't take)        you
+  ─────────────────────────────────────────         ───
+  writes  GATE · merge PR #3                       /flow-pane
+          into .flow/tasks/<slug>/GATES.md   ──▶   pane lists the open gates
+                                                    │
+                                                 [ Approve ]
+                                                    │
+                                                    ▼
+          task.sh gate 3 approve "merge PR #3"   (refused if gate 3 no longer
+            ├─ GATES.md:  + decided: human approve <ts>   reads "merge PR #3")
+            └─ DECISIONS.tsv: who=human · approve: merge PR #3
+                                                    │
+                                                    ▼
+  Claude reads "The human approved gate 3 in the /flow-pane"  ──▶  acts on it
+```
+
+All the data comes from bash. `status.sh` turns the task's files into one JSON line and strips control characters from repo text. It runs after each Bash or Edit call and at the end of each turn, one run at a time. `--full` is added only while the pane is open. The guard denies the agent running `task.sh gate`, so only your press decides a gate.
 
 ## How it works
 
