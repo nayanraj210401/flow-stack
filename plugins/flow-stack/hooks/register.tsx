@@ -25,13 +25,20 @@ const ROLE: Record<string, Budget> = {
   'flow-stack:flow-agent': 'build_model',
 }
 
-// The profile's frontmatter `budget:` block: "  build_model: sonnet   # comment"
-export function parseBudget(profile: string): Partial<Record<Budget, string>> {
-  const out: Partial<Record<Budget, string>> = {}
+// The profile's frontmatter `budget:` block: "  build_model: sonnet   # comment".
+// A value that isn't a model alias or id is dropped and named in `rejected`, so a typo
+// leaves the spawn on Claude Code's own choice instead of refusing it.
+const MODEL = /^(haiku|sonnet|opus|fable|claude-[a-z0-9.-]+)(\[1m\])?$/
+
+export function parseBudget(profile: string) {
+  const models: Partial<Record<Budget, string>> = {}
+  const rejected: string[] = []
   for (const m of profile.matchAll(/^\s+(subagent_model|build_model|design_model):\s*([^\s#]+)/gm)) {
-    out[m[1] as Budget] = m[2]
+    const [, key, value] = m as unknown as [string, Budget, string]
+    if (MODEL.test(value)) models[key] = value
+    else rejected.push(`${key}: ${value}`)
   }
-  return out
+  return { models, rejected }
 }
 
 export function bandText(s: Status): string {
@@ -75,7 +82,11 @@ async function refresh($: EngineInterface) {
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const home = (await $.env.get('FLOW_STACK_HOME')) ?? `${await $.env.get('HOME')}/.flow-stack`
-    models = parseBudget(await $.fs.read(`${home}/profile.md`).catch(() => ''))
+    const budget = parseBudget(await $.fs.read(`${home}/profile.md`).catch(() => ''))
+    models = budget.models
+    if (budget.rejected.length) {
+      $.ui.toast(`flow-stack: ignoring budget ${budget.rejected.join(', ')} (not a model name)`, { timeoutMs: 10000 })
+    }
     await refresh($)
     return next(e)
   })
@@ -95,7 +106,9 @@ export const register: Register = on => {
   on('agent.spawn', async ($, e, next) => {
     const role = ROLE[e.subagentType]
     const model = role && models[role]
-    return e.model || !model ? next(e) : next({ ...e, model })
+    if (e.model || !model) return next(e)
+    $.ui.toast(`${e.subagentType.replace('flow-stack:', '')} → ${model}`)
+    return next({ ...e, model })
   }).catch(($, e, next) => next(e))
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {

@@ -21,7 +21,18 @@ const STATUS = {
 }
 
 test('parseBudget reads the profile budget block', () => {
-  expect(parseBudget(PROFILE)).toEqual({ subagent_model: 'haiku', build_model: 'sonnet', design_model: 'opus' })
+  expect(parseBudget(PROFILE)).toEqual({
+    models: { subagent_model: 'haiku', build_model: 'sonnet', design_model: 'opus' },
+    rejected: [],
+  })
+})
+
+test('parseBudget drops a value that is not a model name', () => {
+  const typo = PROFILE.replace('build_model: sonnet', 'build_model: sonet').replace('design_model: opus', 'design_model: claude-opus-5-5[1m]')
+  expect(parseBudget(typo)).toEqual({
+    models: { subagent_model: 'haiku', design_model: 'claude-opus-5-5[1m]' },
+    rejected: ['build_model: sonet'],
+  })
 })
 
 test('bandText shows task, slice, progress, tdd phase, and evidence freshness', () => {
@@ -30,8 +41,8 @@ test('bandText shows task, slice, progress, tdd phase, and evidence freshness', 
 })
 
 // Starts a session whose profile is PROFILE and whose status.sh prints `status`.
-async function start($: any, on: any, status: object = {}) {
-  on('fs.read', async () => ({ value: PROFILE }))
+async function start($: any, on: any, status: object = {}, profile = PROFILE) {
+  on('fs.read', async () => ({ value: profile }))
   on('process.run', async () => ({ value: { exitCode: 0, stdout: JSON.stringify(status), stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
   on('env.get', async () => ({ value: '/home/me' }))
   on('session.cwd', async () => ({ value: '/tmp' }))
@@ -39,13 +50,13 @@ async function start($: any, on: any, status: object = {}) {
   await $.session.start({ cwd: '/tmp', surface: null, isInteractive: false })
 }
 
-async function spawnWith($: any, on: any, args: { subagentType: string; model?: string }) {
+async function spawnWith($: any, on: any, args: { subagentType: string; model?: string }, profile = PROFILE) {
   let model: string | undefined
   on('agent.spawn', async (_$: unknown, e: { model?: string }) => {
     model = e.model
     return { model: e.model ?? 'inherit' }
   })
-  await start($, on)
+  await start($, on, {}, profile)
   await $.agent.spawn({ prompt: 'go', ...args })
   return model
 }
@@ -64,6 +75,11 @@ for (const [type, want] of [
 
 test('agent.spawn keeps a model the Agent call named', async ($, on) => {
   expect(await spawnWith($, on, { subagentType: 'flow-stack:worker', model: 'opus' })).toBe('opus')
+})
+
+test('agent.spawn leaves a worker on the default when build_model is a typo', async ($, on) => {
+  const typo = PROFILE.replace('build_model: sonnet', 'build_model: sonet')
+  expect(await spawnWith($, on, { subagentType: 'flow-stack:worker' }, typo)).toBe(undefined)
 })
 
 for (const type of ['general-purpose', 'Explore']) {
