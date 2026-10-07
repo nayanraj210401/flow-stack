@@ -10,7 +10,7 @@
       "name": "flow-stack",
       "source": "./plugins/flow-stack",
       "description": "Intent before code, evidence over claims, checks with teeth, and an audit trail. Outer loop (flow) + inner loop (loop), guardrail hooks, a personal profile with evolving taste, and forge skills that generate repo-specific skills.",
-      "version": "0.9.2"
+      "version": "0.9.3"
     }
   ]
 }
