@@ -1,8 +1,8 @@
 // flow-stack's mod: what bash hooks can't do.
 //   - the flow band above the prompt, and the slice beside the spinner (state from skills/flow/scripts/status.sh)
 //   - each flow-stack agent spawns on the model its role gets in the profile's budget:
-//   - /flow-pane: the task's slices, open gates with Approve/Reject, and the other leads
-import type { EngineInterface, Register } from 'claude-code'
+//   - /flow-pane: the task's slices, open gates with Approve/Reject, and the other leads, animated while open
+import type { EngineInterface, Register, Timer } from 'claude-code'
 
 type Status = {
   task?: string
@@ -59,6 +59,26 @@ export function bandText(s: Status): string {
   }
   return parts.join(' · ')
 }
+
+const SPIN = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+const EIGHTHS = ' ▏▎▍▌▋▊▉'
+const FRAME_MS = 100
+
+// A progress bar `width` cells wide, filled to `fraction` in eighths of a cell.
+export function bar(fraction: number, width: number): string {
+  const eighths = Math.round(Math.min(1, Math.max(0, fraction)) * width * 8)
+  const full = Math.floor(eighths / 8)
+  const part = eighths % 8 ? EIGHTHS[eighths % 8] : ''
+  return '█'.repeat(full) + part + '░'.repeat(width - full - (part ? 1 : 0))
+}
+
+export const spin = (frame: number) => SPIN[frame % SPIN.length]
+
+// The pane's animation: a frame count, the bar easing toward done/total, rows fading in after open.
+let frame = 0
+let openedAt = 0
+let shown = 0
+let ticker: Timer | null = null
 
 let status: Status | null = null
 let models: Partial<Record<Budget, string>> = {}
@@ -131,6 +151,14 @@ export const register: Register = on => {
   on('command.run', { command: 'flow-pane' }, async $ => {
     await $.ui.open({ id: PANE, title: 'flow' })
     paneOpen = true
+    openedAt = frame
+    shown = 0
+    ticker ??= $.clock.every(FRAME_MS, () => {
+      frame++
+      const target = status?.total ? status.done / status.total : 0
+      shown = Math.abs(target - shown) < 0.005 ? target : shown + (target - shown) * 0.25
+      $.ui.invalidate('ui.render')
+    })
     void refresh($)
     return {}
   })
@@ -138,6 +166,8 @@ export const register: Register = on => {
   on('ui.close', { id: PANE }, async ($, e, next) => {
     const closed = await next(e)
     paneOpen = false
+    ticker?.cancel()
+    ticker = null
     return closed
   })
 
@@ -145,20 +175,46 @@ export const register: Register = on => {
     const { Box, Button, Text } = $.ui.resolve(e)
     if (!status) return <Text dimColor>No active flow task. Start one with /flow-stack:flow.</Text>
     const { slices = [], gates = [], leads = [] } = status
+    const age = frame - openedAt
+    const pulse = Math.floor(frame / 5) % 2 === 0
+    // row i fades in on frame i after the pane opens
+    const faded = (i: number) => age <= i
+    const verdictColor = (v: string) => (v === 'PASS' ? 'success' : v === 'FAIL' ? 'error' : 'subtle')
     return (
       <Box flexDirection="column" gap={1}>
-        <Text bold>{bandText(status)}</Text>
-        <Box flexDirection="column">
-          {slices.map(s => (
-            <Text key={`slice-${s.id}`} dimColor={s.status === 'done'}>
-              {s.id} {s.title} · {s.status}
-              {s.verdict ? ` · ${s.verdict}` : ''}
+        <Box gap={1}>
+          <Text color="claude">{spin(frame)}</Text>
+          <Text bold>{bandText(status)}</Text>
+        </Box>
+        {status.total > 0 && (
+          <Box gap={1}>
+            <Text color="claude">{bar(shown, 24)}</Text>
+            <Text dimColor>
+              {status.done}/{status.total}
             </Text>
-          ))}
+          </Box>
+        )}
+        <Box flexDirection="column">
+          {slices.map((s, i) => {
+            const active = s.id === status?.slice?.id && s.status !== 'done'
+            const icon = s.status === 'done' ? '✓' : active ? spin(frame + i) : '○'
+            const iconColor = faded(i) ? 'subtle' : s.status === 'done' ? 'success' : active ? 'claude' : 'subtle'
+            return (
+              <Box key={`slice-${s.id}`} gap={1}>
+                <Text color={iconColor}>{icon}</Text>
+                <Text dimColor={faded(i) || s.status === 'done'} bold={active && !faded(i)}>
+                  {s.id} {s.title} · {s.status}
+                </Text>
+                {s.verdict !== '' && <Text color={faded(i) ? 'subtle' : verdictColor(s.verdict)}>{s.verdict}</Text>}
+              </Box>
+            )
+          })}
         </Box>
         {gates.length > 0 && (
           <Box flexDirection="column">
-            <Text bold>GATES</Text>
+            <Text bold color={pulse ? 'warning' : 'subtle'}>
+              {pulse ? '◆' : '◇'} GATES · {gates.length} waiting on you
+            </Text>
             {gates.map(g => (
               <Box key={`gate-${g.n}`} flexDirection="column">
                 <Text>{g.question}</Text>
@@ -166,6 +222,7 @@ export const register: Register = on => {
                 <Box gap={1}>
                   <Button key={`approve-${g.n}`} label="Approve" onPress={() => decide($, g.n, g.question, 'approve')} />
                   <Button key={`reject-${g.n}`} label="Reject" onPress={() => decide($, g.n, g.question, 'reject')} />
+                  {deciding.has(g.n) && <Text color="claude">{spin(frame)} recording…</Text>}
                 </Box>
               </Box>
             ))}
@@ -174,12 +231,15 @@ export const register: Register = on => {
         {leads.length > 0 && (
           <Box flexDirection="column">
             <Text bold>LEADS</Text>
-            {leads.map(l => (
-              <Text key={`lead-${l.id}`} dimColor>
-                {l.id} · {l.repo} · {l.branch}
-                {l.task ? ` · ${l.task}` : ''}
-                {l.slice ? ` ${l.slice}` : ''}
-              </Text>
+            {leads.map((l, i) => (
+              <Box key={`lead-${l.id}`} gap={1}>
+                <Text color={Math.floor((frame + i * 3) / 4) % 2 === 0 ? 'success' : 'subtle'}>●</Text>
+                <Text dimColor>
+                  {l.id} · {l.repo} · {l.branch}
+                  {l.task ? ` · ${l.task}` : ''}
+                  {l.slice ? ` ${l.slice}` : ''}
+                </Text>
+              </Box>
             ))}
           </Box>
         )}
