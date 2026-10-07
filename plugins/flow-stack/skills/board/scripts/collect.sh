@@ -138,6 +138,44 @@ for r in "${repos[@]}"; do
   j="$(repo_json "$r")"; [ -n "$j" ] && rj+=("$j")
 done
 [ -n "$current" ] && current="$(cd "$current" && pwd -P)"
-printf '%s\n' "${rj[@]:-}" | jq -sc --arg at "$(date +%FT%T%z)" --argjson spend "${spend:-null}" \
+# the profile's "# Board" section: "- key: value" lines → prefs the template applies.
+# Unknown keys and panel ids become warnings, never applied.
+board_prefs() {
+  perl -0pe 's/<!--.*?-->//gs' "$profile" 2>/dev/null |
+    awk '/^# /{on = ($0 ~ /^# Board[[:space:]]*$/); next}
+      on && /^-[[:space:]]+[A-Za-z_]+:/{l=$0; sub(/^-[[:space:]]+/,"",l); k=l; sub(/:.*/,"",k); sub(/^[^:]*:[[:space:]]*/,"",l); if (k == "view") sub(/[[:space:]]+$/,"",l); else sub(/[[:space:]]+(#[[:space:]].*)?$/,"",l); print k"\t"l}' |
+    jq -Rsc '["needs","spend","tasks","features","quality","decisions","debt","shipped","estimate","repos"] as $ids
+      | reduce (split("\n")[] | select(length > 0) | split("\t") | {k: .[0], v: (.[1] // "")}) as $p
+        ({hide: [], order: [], wide: [], theme: "auto", tab: "current", accent: null, views: [], warnings: []};
+         if $p.k == "hide" or $p.k == "order" or $p.k == "wide" then
+           ($p.v | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))) as $xs
+           | .[$p.k] += ($xs | map(select(IN($ids[]))))
+           | .warnings += ($xs | map(select(IN($ids[]) | not) | "\($p.k): unknown panel \(.)"))
+         elif $p.k == "theme" then if $p.v | IN("auto", "light", "dark") then .theme = $p.v else .warnings += ["theme: \($p.v) is not auto, light, or dark"] end
+         elif $p.k == "accent" then if $p.v | test("^#[0-9a-fA-F]{6}$") then .accent = $p.v else .warnings += ["accent: \($p.v) is not #rrggbb"] end
+         elif $p.k == "tab" then .tab = $p.v
+         elif $p.k == "view" then ($p.v | split(" · ")) as $s | ($s[-1] | IN("table", "list", "count")) as $k
+           | ($s[1:(if $k and ($s | length) > 2 then -1 else null end)] | join(" · ")) as $e
+           | if ($s | length) < 2 or $e == "" then .warnings += ["view: \($p.v) needs <title> · <jq> · table|list|count"]
+             elif $e | test("(^|[;|(])\\s*(import|include)\\s") then .warnings += ["view: \($s[0]) uses import/include"]
+             else .views += [{title: $s[0], expr: $e, kind: (if $k and ($s | length) > 2 then $s[-1] else "table" end)}] end
+         else .warnings += ["unknown key: \($p.k)"] end)'
+}
+
+board="$(printf '%s\n' "${rj[@]:-}" | jq -sc --arg at "$(date +%FT%T%z)" --argjson spend "${spend:-null}" --argjson prefs "$(board_prefs)" \
   --argjson budget "$(sed -n 's/^[[:space:]]*review_minutes_per_day:[[:space:]]*\([0-9]*\).*/\1/p' "$profile" 2>/dev/null | head -n1 | grep . || echo null)" \
-  '{generated:$at, review_minutes_per_day:$budget, spend:$spend, repos:map(select(. != null))}'
+  '{generated:$at, review_minutes_per_day:$budget, spend:$spend, repos:map(select(. != null))}
+  | .prefs = ([.repos[].name] as $names | $prefs | if .tab | IN(("current", "all", $names[])) then . else .warnings += ["tab: no repo named \(.tab)"] | .tab = null end)')"
+
+# each view is jq over the board: empty environment (no secrets), 5 s, 50 rows. Its stderr is
+# kept apart, so a debug or a parse error can only fail that one view.
+err="$(mktemp)"; trap 'rm -f "$err"' EXIT
+bin="$(dirname "$(command -v jq)"):$(dirname "$(command -v perl)")"
+views="$(jq -c '.prefs.views[]' <<<"$board" | while IFS= read -r v; do
+  if rows="$(env -i PATH="$bin" perl -e 'alarm 5; exec @ARGV' jq -c "[limit(51; ($(jq -r .expr <<<"$v")))] | if length == 1 and (.[0] | type) == \"array\" then .[0] else . end | .[:50]" <<<"$board" 2>"$err")" && [ -n "$rows" ]; then
+    jq -c --argjson r "$rows" 'del(.expr) + {rows: $r}' <<<"$v"
+  else
+    jq -c --arg e "$(head -n1 "$err" | grep . || echo "timed out after 5 s")" 'del(.expr) + {error: $e}' <<<"$v"
+  fi
+done | jq -sc .)"
+jq -c --argjson v "$views" '.prefs.views = $v' <<<"$board"
