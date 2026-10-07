@@ -28,12 +28,14 @@ const ROLE: Record<string, Budget> = {
 // The profile's frontmatter `budget:` block: "  build_model: sonnet   # comment".
 // A value that isn't a model alias or id is dropped and named in `rejected`, so a typo
 // leaves the spawn on Claude Code's own choice instead of refusing it.
-const MODEL = /^(haiku|sonnet|opus|fable|claude-[a-z0-9.-]+)(\[1m\])?$/
+// Aliases, and full ids from the API, Bedrock (us.anthropic.claude-…, ARNs), and Vertex (claude-…@date).
+const MODEL = /^(haiku|sonnet|opus|fable|inherit|[\w.:@\/-]*claude[\w.:@\/-]*)(\[1m\])?$/
 
 export function parseBudget(profile: string) {
   const models: Partial<Record<Budget, string>> = {}
   const rejected: string[] = []
-  for (const m of profile.matchAll(/^\s+(subagent_model|build_model|design_model):\s*([^\s#]+)/gm)) {
+  const front = /^---\n([\s\S]*?)\n---/.exec(profile)?.[1] ?? ''
+  for (const m of front.matchAll(/^[ \t]+(subagent_model|build_model|design_model):[ \t]*([^\s#]+)/gm)) {
     const [, key, value] = m as unknown as [string, Budget, string]
     if (MODEL.test(value)) models[key] = value
     else rejected.push(`${key}: ${value}`)
@@ -56,6 +58,7 @@ let status: Status | null = null
 let models: Partial<Record<Budget, string>> = {}
 let running = false
 let again = false
+const toasted = new Set<string>()
 
 // Re-read the task's state; calls that land while one runs fold into one more pass.
 async function refresh($: EngineInterface) {
@@ -64,19 +67,18 @@ async function refresh($: EngineInterface) {
     return
   }
   running = true
-  try {
-    do {
-      again = false
+  do {
+    again = false
+    try {
       const { stdout } = await $.process.run([`${$.plugin.root}/skills/flow/scripts/status.sh`, await $.session.cwd()])
       const next = JSON.parse(stdout || '{}') as Status
       status = next.task ? next : null
-      $.ui.invalidate('ui.render')
-    } while (again)
-  } catch {
-    status = null
-  } finally {
-    running = false
-  }
+    } catch {
+      status = null
+    }
+    $.ui.invalidate('ui.render')
+  } while (again)
+  running = false
 }
 
 export const register: Register = on => {
@@ -87,7 +89,7 @@ export const register: Register = on => {
     if (budget.rejected.length) {
       $.ui.toast(`flow-stack: ignoring budget ${budget.rejected.join(', ')} (not a model name)`, { timeoutMs: 10000 })
     }
-    await refresh($)
+    void refresh($)
     return next(e)
   })
 
@@ -96,7 +98,7 @@ export const register: Register = on => {
     const ran = await next(e)
     if (/^(Bash|Edit|Write|MultiEdit)$/.test(e.tool)) void refresh($)
     return ran
-  }).catch(($, e, next) => next(e))
+  })
 
   on('turn.complete', async ($, e, next) => {
     void refresh($)
@@ -107,9 +109,12 @@ export const register: Register = on => {
     const role = ROLE[e.subagentType]
     const model = role && models[role]
     if (e.model || !model) return next(e)
-    $.ui.toast(`${e.subagentType.replace('flow-stack:', '')} → ${model}`)
+    if (!toasted.has(e.subagentType)) {
+      toasted.add(e.subagentType)
+      $.ui.toast(`${e.subagentType.replace('flow-stack:', '')} → ${model}`)
+    }
     return next({ ...e, model })
-  }).catch(($, e, next) => next(e))
+  })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (!status || e.props.hasSurvey) return next(e)

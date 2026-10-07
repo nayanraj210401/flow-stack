@@ -77,6 +77,19 @@ test('agent.spawn keeps a model the Agent call named', async ($, on) => {
   expect(await spawnWith($, on, { subagentType: 'flow-stack:worker', model: 'opus' })).toBe('opus')
 })
 
+test('parseBudget takes Bedrock and Vertex ids and ignores keys outside the frontmatter', () => {
+  const ids = PROFILE.replace('build_model: sonnet', 'build_model: us.anthropic.claude-sonnet-4-5-20250929-v1:0')
+    .replace('design_model: opus', 'design_model: claude-opus-4-1@20250805') + '\n# Notes\n  subagent_model: sonet\n'
+  expect(parseBudget(ids)).toEqual({
+    models: {
+      subagent_model: 'haiku',
+      build_model: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0',
+      design_model: 'claude-opus-4-1@20250805',
+    },
+    rejected: [],
+  })
+})
+
 test('agent.spawn leaves a worker on the default when build_model is a typo', async ($, on) => {
   const typo = PROFILE.replace('build_model: sonnet', 'build_model: sonet')
   expect(await spawnWith($, on, { subagentType: 'flow-stack:worker' }, typo)).toBe(undefined)
@@ -91,7 +104,14 @@ for (const type of ['general-purpose', 'Explore']) {
 const BAND = { component: 'AbovePrompt', props: { hasSurvey: false, isWorking: false, maxRows: 4, bodyColumns: 100 } } as const
 
 test('the band shows the active task on every surface', async ($, on) => {
+  let ran!: () => void
+  const refreshed = new Promise<void>(r => (ran = r))
+  on('ui.invalidate', async () => {
+    ran()
+    return { value: undefined }
+  })
   await start($, on, STATUS)
+  await refreshed
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ plugin: 'flow-stack', surface, ...BAND } as any)
     expect(await ui.find({ type: 'Text', text: /flow · rate-limit · S2 token bucket/ })).toBeDefined()
