@@ -296,6 +296,10 @@ Check your own spend with `/flow-stack:budget` (uses ccusage) and the estimate-v
 | **claims** (Stop) | "Done", "works", or "fixed" with no passing evidence since the last edit → sent back once to verify or say `~ assumed`. |
 | **anchor** (UserPromptSubmit) | A 3-line goal and slice reminder on every prompt while a task is active. |
 | **session-start / pre-compact / notify** | Profile and toolchain context; a handoff snapshot before compaction; a notification when the agent is blocked on you. |
+| **flow band** (mod) | A dim line above the prompt with the active task, the current slice, slices done, the TDD phase, and the last evidence (flagged `edited since` when it's stale); the slice id beside the spinner. Terminal and Desktop only. |
+| **model per role** (mod) | An Agent call that names no model gets one from your profile's `budget:`: `design_model` for advocate and reviewer, `build_model` for worker, checker, and flow-agent, `subagent_model` for Explore. A model the call names wins. |
+
+The two mod rows are `hooks/register.tsx`, a [mod](https://code.claude.com/docs/en/plugins/mods/overview) (Claude Code 2.1.287+). It changes no guard; the band reads `skills/flow/scripts/status.sh`.
 
 Hooks fail open: if `jq` is missing or a script errors, the action is allowed and a warning goes to `~/.flow-stack/hooks.log`. Turn any hook off in `.flow/config.json` (repo) or `~/.flow-stack/config.json` (global): `{"hooks": {"fence": false}}`.
 
@@ -461,6 +465,7 @@ Every generated skill has a `## Self-test` and a `source-commit`. `tend` re-runs
 
 ```bash
 claude plugin validate --strict plugins/flow-stack
+claude plugin test plugins/flow-stack       # the mod's tests (hooks/*.test.ts), no session needed
 cd plugins/flow-stack
 # behavior + cost evals against a no-plugin baseline (see evals/README.md)
 claude plugin eval . --tag routing hooks define quality context forge design \

@@ -113,7 +113,7 @@ Base the forecast on the change size and the profile's `# Calibration`. If the h
 Spawn one when it saves the human's attention or the main context: bulk reading (> ~5 files), independent slices, reviews, the advocate, blind checks.
 - **Pick the agent.** Use `advocate`, `checker`, `reviewer`, or `worker` for their named jobs, and `flow-agent` for any other delegate. It loads flow itself, so the rules follow it.
 - **Brief with pointers**: the task folder path, `file:line` references, and the exact question or scope. Don't paste context. Say what to return and in what shape.
-- **Choose the model per role** from the profile's `budget:` and pass it as the Agent call's `model`: `design_model` for reviewer, advocate, and a contested design; `build_model` for workers, checker, and flow-agent; `subagent_model` for exploration. The agents pin no model, so without one the subagent inherits the session's model (or your router picks).
+- **Choose the model per role** from the profile's `budget:` and pass it as the Agent call's `model`: `design_model` for reviewer, advocate, and a contested design; `build_model` for workers, checker, and flow-agent; `subagent_model` for exploration. The agents pin no model; when the call names none, flow-stack's mod fills it from `budget:` for these roles (and `subagent_model` for Explore).
 - **Isolate writers.** Every file-writing delegate gets its own worktree. Never run the suite in a worktree a delegate still holds.
 - **Run independent agents in the background**, and do unblocked work meanwhile.
 - **You own the result.** Review the diff yourself and re-run its check through `evidence.sh`. A delegate's "done" is a claim (principle-untrusted-until-proven). When you abandon a delegate, stop it and confirm it stopped.
