@@ -27,7 +27,7 @@ check_re='(evidence|features|ready)\.sh'
 events="$(tail -n 3000 "$transcript" | jq -nrR --argjson roots "$roots" --arg check_re "$check_re" '
   def txt: if type == "string" then . elif type == "array" then map(.text? // "") | join("\n") else "" end;
   def scratch: . as $p | ($roots | any(. as $r | $p | startswith($r)) | not) or test("\\.(md|txt)$|/\\.flow/");
-  def shell_write: gsub("(>>?|\\btee( -a)?)[[:space:]]*[^[:space:];|&]*(\\.flow/|/tmp/|TMPDIR|scratchpad|\\.md|\\.txt)[^[:space:];|&]*"; "")
+  def shell_write: gsub("(>>?|\\btee( -a)?)[[:space:]]*[^[:space:];|&]*(\\.flow/|/tmp/|\\$\\{?TMPDIR\\b|scratchpad|\\.md|\\.txt)[^[:space:];|&]*"; "")
     | gsub("\"[^\"]*\"|'"'"'[^'"'"']*'"'"'"; "")
     | gsub("[0-9]*>>?[[:space:]]*(/dev/null|&[0-9]-?)"; "")
     | test("\\bsed -[a-zA-Z]*i|\\bperl -[a-z]*i|\\btee\\b|>>?[[:space:]]*[^[:space:]=>&]"
@@ -35,8 +35,8 @@ events="$(tail -n 3000 "$transcript" | jq -nrR --argjson roots "$roots" --arg ch
       + " (?![^;&|[:space:]]*(/tmp/|scratchpad|\\.flow/))[^-;&|[:space:]][^;&|[:space:]]*[[:space:]]*($|[;&|])"
       + "|(^|[;&|][[:space:]]*)patch[[:space:]]"
       + "|git apply[[:space:]]+(?!--(check|stat|numstat|summary))");
-  def elsewhere: ([capture("^[[:space:]]*cd[[:space:]]+[\"'"'"']?(?<d>/[^[:space:]\"'"'"';&|]+)")] | first | .d // null) as $d
-    | $d != null and ($roots | any(. as $r | ($d + "/") | startswith($r)) | not);
+  def elsewhere: . as $c | ([capture("^[[:space:]]*cd[[:space:]]+[\"'"'"']?(?<d>/[^[:space:]\"'"'"';&|]+)")] | first | .d // null) as $d
+    | $d != null and ($roots | any(. as $r | (($d + "/") | startswith($r)) or ($c | split($r[:-1]) | .[1:] | any(test("^($|[/[:space:]\"'"'"';&|)])")))) | not);
   # The harness can append its own line (e.g. "Shell cwd was reset to …") after the output of the command.
   def verdict: txt | split("\n") | map(select(test("\\S") and (test("^Shell cwd was reset to ") | not))) | (last // "")
     | test("^flow-evidence: PASS|^ready for review: [0-9a-f]+ stamped");
