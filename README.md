@@ -302,14 +302,14 @@ Hooks fail open: if `jq` is missing or a script errors, the action is allowed an
 
 ## Mods (UI inside Claude Code)
 
-`hooks/register.tsx` is a [mod](https://code.claude.com/docs/en/plugins/mods/overview): code that runs inside Claude Code (2.1.287+), next to the bash hooks. The mod adds these features. None of them changes a guard. They draw only in the terminal and the Desktop app; in VS Code chat and `claude -p` nothing draws, but model per role still applies.
+`hooks/register.tsx` is a [mod](https://code.claude.com/docs/en/plugins/mods/overview): code that runs inside Claude Code (2.1.287+), next to the bash hooks. It changes no guard. It draws only in the terminal and the Desktop app; in VS Code chat and `claude -p` nothing draws, but model per role still applies.
 
 | Mod | What you get | Reads |
 |---|---|---|
 | **Flow band** | A dim line above the prompt: `flow · <task> · <slice> · n/m slices · tdd red · C1 PASS · edited since`. Empty when no task is active. | `status.sh` |
 | **Spinner** | While Claude works, the spinner shows the slice: `Thinking · S2 · red…` | `status.sh` |
 | **`/flow-pane`** | A pane with slices, open gates with **Approve / Reject**, and your other leads. It is a command, so it runs instantly with no Claude turn and no tokens. | `status.sh --full` |
-| **Model per role** | A flow-stack agent started with no model gets one from your profile's `budget:`. advocate and reviewer get `design_model`; worker, checker and flow-agent get `build_model`. A model the call names wins, including one set by another router. Built-ins such as Explore are left alone. A toast names each pick. | `~/.flow-stack/profile.md` |
+| **Model per role** | A flow-stack agent started with no model gets one from your profile's `budget:`. advocate and reviewer get `design_model`; worker, checker and flow-agent get `build_model`. A model the call names wins. Built-ins such as Explore are left alone. A toast names the model the first time each role spawns; a budget value that isn't a model name is ignored with a warning. | `~/.flow-stack/profile.md` |
 
 ```
  ╭ flow ─────────────────────────────────────────────╮
@@ -340,15 +340,16 @@ How a gate press works:
                                                  [ Approve ]
                                                     │
                                                     ▼
-          task.sh gate 3 approve "merge PR #3"   (refused if gate 3 no longer
-            ├─ GATES.md:  + decided: human approve <ts>   reads "merge PR #3")
+          task.sh gate 3 approve "merge PR #3"
+            │  (refused if gate 3 changed or is already decided)
+            ├─ GATES.md:  + decided: human approve <ts>
             └─ DECISIONS.tsv: who=human · approve: merge PR #3
                                                     │
                                                     ▼
   Claude reads "The human approved gate 3 in the /flow-pane"  ──▶  acts on it
 ```
 
-All the data comes from bash. `status.sh` turns the task's files into one JSON line and strips control characters from repo text. It runs after each Bash or Edit call and at the end of each turn, one run at a time. `--full` is added only while the pane is open. The guard denies the agent running `task.sh gate`, so only your press decides a gate.
+All the data comes from bash. `status.sh` turns the task's files into one JSON line and strips control characters from repo text. It runs at session start, after each Bash, Edit, or Write call, at the end of each turn, and after a gate press, one run at a time. `--full` is added only while the pane is open. The guard denies the agent `task.sh gate`, so gates wait for your press (an agent could still edit GATES.md by hand).
 
 ## How it works
 
