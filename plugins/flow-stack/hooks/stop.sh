@@ -27,15 +27,16 @@ check_re='(evidence|features|ready)\.sh'
 events="$(tail -n 3000 "$transcript" | jq -nrR --argjson roots "$roots" --arg check_re "$check_re" '
   def txt: if type == "string" then . elif type == "array" then map(.text? // "") | join("\n") else "" end;
   def scratch: . as $p | ($roots | any(. as $r | $p | startswith($r)) | not) or test("\\.(md|txt)$|/\\.flow/");
-  def shell_write: gsub("\"[^\"]*\"|'"'"'[^'"'"']*'"'"'"; "")
+  def shell_write: gsub("(>>?|\\btee( -a)?)[[:space:]]*(?![^[:space:];|&]*\\.\\.)[^[:space:];|&]*(\\.flow/|/tmp/|\\$\\{?TMPDIR\\b|scratchpad|\\.md|\\.txt)[^[:space:];|&]*"; "")
+    | gsub("\"[^\"]*\"|'"'"'[^'"'"']*'"'"'"; "")
     | gsub("[0-9]*>>?[[:space:]]*(/dev/null|&[0-9]-?)"; "")
-    | gsub("(>>?|\\btee( -a)?)[[:space:]]*[^[:space:];|&]*(\\.flow/|/tmp/|scratchpad|\\.md|\\.txt)[^[:space:];|&]*"; "")
     | test("\\bsed -[a-zA-Z]*i|\\bperl -[a-z]*i|\\btee\\b|>>?[[:space:]]*[^[:space:]=>&]"
       + "|(^|[;&|][[:space:]]*)(cp|mv)( -[A-Za-z]+)*( [^-;&|[:space:]][^;&|[:space:]]*)+"
-      + " (?![^;&|[:space:]]*(/tmp/|scratchpad|\\.flow/))[^-;&|[:space:]][^;&|[:space:]]*[[:space:]]*($|[;&|])"
+      + " (?![^;&|[:space:]]*(/tmp/|scratchpad|\\.flow/)(?![^;&|[:space:]]*\\.\\.))[^-;&|[:space:]][^;&|[:space:]]*[[:space:]]*($|[;&|])"
       + "|(^|[;&|][[:space:]]*)patch[[:space:]]"
       + "|git apply[[:space:]]+(?!--(check|stat|numstat|summary))");
-  def verdict: txt | split("\n") | map(select(test("\\S"))) | (last // "")
+  # The harness can append its own line (e.g. "Shell cwd was reset to …") after the output of the command.
+  def verdict: txt | split("\n") | map(select(test("\\S") and (test("^Shell cwd was reset to ") | not))) | (last // "")
     | test("^flow-evidence: PASS|^ready for review: [0-9a-f]+ stamped");
   reduce (inputs | fromjson? | .message.content? // [] | if type == "array" then .[] else empty end) as $c
     ({checks: {}, s: ""};
@@ -52,7 +53,12 @@ last_msg="$(tail -n 200 "$transcript" | jq -nrR '
 
 claims='\b(done|fixed|works|working now|all (tests|checks) pass(ing)?|passes|complete[d]?|ready to (merge|ship|review))\b'
 if [[ "$events" =~ E[^P]*$ ]] && grep -Eiq "$claims" <<<"$last_msg" && ! grep -q '~ assumed' <<<"$last_msg"; then
-  jq -n --arg r "flow claims check: your reply claims success, but no check passed after your last code edit. Run the check through verify's scripts/evidence.sh (\`evidence.sh C<n>\` in a task, \`evidence.sh smoke '<cmd>'\` otherwise) as the last command in the call, so its flow-evidence line ends the output, and cite it, or rewrite the claim as '~ assumed: <what was not verified>'." \
+  if [ -n "$FLOW_TASK_DIR" ]; then
+    run="task $FLOW_TASK's own check: \`evidence.sh C<n>\` or \`S<n>\`, \`features.sh run --impacted\`, or \`ready.sh\` (in a task, a free-label evidence.sh run doesn't count)"
+  else
+    run="the check through verify's scripts/evidence.sh: \`evidence.sh smoke '<cmd>'\`"
+  fi
+  jq -n --arg r "flow claims check: your reply claims success, but no check passed after your last code edit. Run $run as the last command in the call, so its result line ends the output, and cite it, or rewrite the claim as '~ assumed: <what was not verified>'." \
     '{decision:"block", reason:$r}'
   exit 0
 fi
