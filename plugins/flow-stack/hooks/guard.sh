@@ -67,7 +67,8 @@ if [ -n "$FLOW_TASK_DIR" ] && [ -f "$FLOW_TASK_DIR/SEALS" ]; then
 fi
 
 # 3a. TDD green: tests are locked against shell writes too. Write targets are redirects, tee's
-# files, in-place sed/perl files, rm/truncate arguments, and cp/mv's destination, per command segment.
+# files, in-place sed/perl files, rm/truncate and git checkout/restore/rm paths, and cp/mv's
+# destination, per command segment.
 if [ -n "$FLOW_TASK_DIR" ] && flow_tdd && [ "$TDD_PHASE" = green ] && flow_enabled tdd; then
   targets="$(grep -Eo '>>?[[:space:]]*[^[:space:];&|<>]+' <<<"$cmd" | sed -E 's/^>>?[[:space:]]*//' || true)"
   while IFS= read -r seg; do
@@ -76,9 +77,19 @@ if [ -n "$FLOW_TASK_DIR" ] && flow_tdd && [ "$TDD_PHASE" = green ] && flow_enabl
     case "${1:-}" in
       tee|rm|truncate) shift; targets="$targets"$'\n'"$(printf '%s\n' "$@")" ;;
       cp|mv) [ $# -lt 3 ] || targets="$targets"$'\n'"${@: -1}" ;;
-      sed|perl) if printf '%s\n' "$@" | grep -Eq '^-[a-z]*i'; then shift; targets="$targets"$'\n'"$(printf '%s\n' "$@")"; fi ;;
+      sed|perl) # the files, not the script: skip flags and the first operand (or -e's argument)
+        printf '%s\n' "$@" | grep -Eq '^-[a-z]*i' || continue
+        shift; script=""
+        for a in "$@"; do
+          case "$a" in
+            -e|-[a-z]*e) script=next ;;
+            -*|"''"|'""') ;;
+            *) if [ "$script" = next ] || [ -z "$script" ]; then script=done; else targets="$targets"$'\n'"$a"; fi ;;
+          esac
+        done ;;
+      git) case "${2:-}" in checkout|restore|rm) shift 2; targets="$targets"$'\n'"$(printf '%s\n' "$@")" ;; esac ;;
     esac
-  done < <(tr ';&|' '\n' <<<"$cmd")
+  done < <(tr ';&|(){}' '\n' <<<"$cmd")
   while IFS= read -r t; do
     t="${t//[\"\']/}"; [ -n "$t" ] || continue
     t="$(flow_rel "$t")"; case "$t" in /*|.flow/*|-*) continue ;; esac
