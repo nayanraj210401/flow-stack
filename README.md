@@ -297,6 +297,7 @@ Check your own spend with `/flow-stack:budget` (uses ccusage) and the estimate-v
 | **anchor** (UserPromptSubmit) | A 3-line goal and slice reminder on every prompt while a task is active. |
 | **session-start / pre-compact / notify** | Profile and toolchain context; a handoff snapshot before compaction; a notification when the agent is blocked on you. |
 | **flow band** (mod) | A dim line above the prompt with the active task, the current slice, slices done, the TDD phase, and the last evidence (flagged `edited since` when it's stale); the slice id beside the spinner. Terminal and Desktop only. |
+| **/flow-pane** (mod) | A pane with the task's slices (status and last verdict), the open gates from `GATES.md` with Approve/Reject buttons, and the other leads. A button runs `task.sh gate <n> approve\|reject`, which logs the decision, then tells Claude. Terminal and Desktop only. |
 | **model per role** (mod) | A flow-stack agent spawned with no model gets one from your profile's `budget:`: `design_model` for advocate and reviewer, `build_model` for worker, checker, and flow-agent. Built-in agents such as Explore keep Claude Code's choice. A model the call names wins; a toast names the model picked, and a budget value that isn't a model name is ignored with a warning. |
 
 The two mod rows are `hooks/register.tsx`, a [mod](https://code.claude.com/docs/en/plugins/mods/overview) (Claude Code 2.1.287+). It changes no guard; the band reads `skills/flow/scripts/status.sh`.

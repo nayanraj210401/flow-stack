@@ -55,6 +55,7 @@ The single source of truth for file locations and formats. Skills and hooks both
 | `.circuit` | circuit hook | counters, internal |
 | `REPOS` | `task.sh new --workspace/--repos` | multi-repo tasks only: `name<TAB>path` per repo; names are the profile's `# Repos` names |
 | `TICKET` | `task.sh ticket <ref>` | the ticket id or URL the task works on, first line; shown by `leads.sh` |
+| `GATES.md` | the agent (auto mode, gate skill) | open human gates, see below; `task.sh gate <n>` decides one |
 | `TDD` | `task.sh tdd` | opt-in TDD lock: `<slice> <red\|green> <red-FAIL count at the switch>`; per lane in a worktree |
 | `lanes/<lane>/` | a worker in a linked git worktree | its own `EVIDENCE.md`, `trail.jsonl`, `.circuit`, `HANDOFF.auto.md`; imported with `task.sh accept <lane>` |
 
@@ -93,6 +94,17 @@ Exactly one slice is `doing` at a time in a single-agent run. Fence globs are re
 ```
 
 Only the evidence script writes these blocks. A hand-written evidence block is not evidence.
+
+### GATES.md block
+
+```
+GATE · <what needs deciding, one line>
+  options: A) ...  B) ...   (recommend: A, because ...)
+  evidence: <file:line or EVIDENCE entry>
+  decided: <who> <approve|reject> <ISO time>     # written by task.sh gate; the gate is closed
+```
+
+Gates are numbered 1, 2, … in file order. A gate with no `decided:` line is open; the `/flow-pane` lists the open ones.
 
 ### DECISIONS.tsv
 

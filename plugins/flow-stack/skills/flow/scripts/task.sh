@@ -27,6 +27,8 @@
 #   task.sh accept <lane>             import a worker lane's EVIDENCE.md into the task
 #                                     (delegate, main checkout, after reviewing its branch)
 #   task.sh decide <who> <reversible yes|no> <decision> <why> [evidence]
+#   task.sh gate <n> approve|reject   decide open gate <n> of GATES.md (1-based, file order):
+#                                     add its decided: line and log it to DECISIONS.tsv
 #
 # Inside a linked git worktree (a delegate worker's lane) the task folder is the
 # main checkout's, read-only: new, switch, close, slice, and accept are refused,
@@ -293,6 +295,21 @@ $out"
     fi
     { printf '<!-- accepted from lane %s at %s -->\n' "$lane" "$(date -u +%FT%TZ)"; cat "$lev"; } >>"$(active_dir)/EVIDENCE.md"
     echo "accepted: $(grep -c '^### ' "$lev") evidence block(s) from lane $lane"
+    ;;
+  gate)
+    n="${1:-}"; verdict="${2:-}"; g="$(active_dir)/GATES.md"
+    case "$verdict" in approve|reject) ;; *) die "usage: task.sh gate <n> approve|reject" ;; esac
+    q="$(awk -v n="$n" '/^GATE · /{k++} k == n && /^GATE · /{sub(/^GATE · /,""); print; exit}' "$g" 2>/dev/null)"
+    [ -n "$q" ] || die "no gate $n in $g"
+    awk -v n="$n" '/^GATE · /{k++; on=(k==n)} on && /^  decided: /{d=1} END{exit d}' "$g" || die "gate $n is already decided"
+    ts="$(date -u +%FT%TZ)"
+    awk -v n="$n" -v line="  decided: human $verdict $ts" '
+      /^GATE · /{ if (on) { print line; on=0 } k++; if (k==n) on=1 }
+      on && /^[[:space:]]*$/ { print line; on=0 }
+      { print }
+      END { if (on) print line }' "$g" >"$g.tmp" && mv "$g.tmp" "$g"
+    "$0" decide human no "$verdict: $q" "decided in the /flow-pane" >/dev/null
+    echo "gate $n ${verdict%e}ed: $q"
     ;;
   decide)
     [ $# -ge 4 ] || die "usage: task.sh decide <who> <yes|no> <decision> <why> [evidence]"

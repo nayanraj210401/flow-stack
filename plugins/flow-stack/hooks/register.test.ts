@@ -47,6 +47,7 @@ async function start($: any, on: any, status: object = {}, profile = PROFILE) {
   on('env.get', async () => ({ value: '/home/me' }))
   on('session.cwd', async () => ({ value: '/tmp' }))
   on('session.start', async (_$: unknown, e: unknown) => e)
+  on('command.register', async () => ({ value: undefined }))
   await $.session.start({ cwd: '/tmp', surface: null, isInteractive: false })
 }
 
@@ -119,6 +120,62 @@ test('the band shows the active task on every surface', async ($, on) => {
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ plugin: 'flow-stack', surface, ...BAND } as any)
     expect(await ui.find({ type: 'Text', text: /flow · rate-limit · S2 token bucket/ })).toBeDefined()
+    await ui.unmount()
+  }
+})
+
+const FULL = {
+  ...STATUS,
+  slices: [
+    { id: 'S1', title: 'bucket', status: 'done', verdict: 'PASS' },
+    { id: 'S2', title: 'token bucket', status: 'doing', verdict: 'FAIL' },
+  ],
+  gates: [{ n: 2, question: 'merge PR #3', detail: 'options: A) merge  B) wait' }],
+  leads: [],
+}
+const PANE = { component: 'Pane', requestId: 'flow-pane', props: { title: 'flow', isFocused: true, bodyColumns: 80, placement: 'dock' } } as const
+
+test('/flow-pane opens a pane with slices and gates; Approve records the gate and tells Claude', async ($, hooks) => {
+  const on = hooks as any
+  const runs: (readonly string[])[] = []
+  const said: string[] = []
+  let ran!: () => void
+  let refreshed = new Promise<void>(r => (ran = r))
+  on('fs.read', async () => ({ value: PROFILE }))
+  on('process.run', async (_$: unknown, e: { argv: readonly string[] }) => {
+    runs.push(e.argv)
+    const out = e.argv[1] === 'gate' ? 'gate 2 approved: merge PR #3' : JSON.stringify(e.argv.includes('--full') ? FULL : STATUS)
+    return { value: { exitCode: 0, stdout: out, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  on('env.get', async () => ({ value: '/home/me' }))
+  on('session.cwd', async () => ({ value: '/tmp' }))
+  on('session.start', async (_$: unknown, e: unknown) => e)
+  on('command.register', async () => ({ value: undefined }))
+  on('ui.open', async () => ({ value: { id: 'flow-pane' } }))
+  on('ui.invalidate', async () => {
+    ran()
+    return { value: undefined }
+  })
+  on('prompt.submit', async (_$: unknown, e: { text: string }) => {
+    said.push(e.text)
+    return { text: e.text }
+  })
+  await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+  await refreshed
+  refreshed = new Promise<void>(r => (ran = r))
+  await ($ as any).command.run({ command: 'flow-pane' })
+  await refreshed
+  expect(runs.at(-1)).toContain('--full')
+
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({ plugin: 'flow-stack', surface, ...PANE } as any)
+    expect(await ui.find({ type: 'Text', text: /S2 token bucket · doing · FAIL/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: 'merge PR #3' })).toBeDefined()
+    if (surface === 'terminal') {
+      await ui.press({ key: 'approve-2' })
+      expect(runs.find(a => a[1] === 'gate')?.slice(1)).toEqual(['gate', '2', 'approve'])
+      expect(said[0]).toContain('approved gate 2')
+    }
     await ui.unmount()
   }
 })
