@@ -489,7 +489,7 @@ The band appears only while a flow task is active (`task.sh new …` or `switch`
 One: `hooks/register.tsx`. It holds several features: the band, the spinner suffix, and model per role.
 
 **A flow-stack agent ran on a different model than my `budget:` says.**
-A model already on the Agent call wins. That covers a model Claude passed and one another router set before the spawn, such as a PreToolUse hook that picks models. The mod fills in `budget:` only when nothing else chose. A toast names each model the mod picks.
+A model already on the Agent call wins. That covers a model Claude passed and one another router set before the spawn, such as a PreToolUse hook that picks models. The mod fills in `budget:` only when nothing else chose. A toast names the model the first time each role spawns.
 
 **Does model per role touch Explore or other built-in agents?**
 No. It covers only advocate and reviewer (`design_model`) and worker, checker and flow-agent (`build_model`). Built-ins keep Claude Code's choice.
