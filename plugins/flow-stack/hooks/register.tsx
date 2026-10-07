@@ -99,6 +99,12 @@ export function laneText(l: Lane, now: number): string {
 
 const LANE_LINGER_MS = 8000
 
+// Drops lanes that ended more than LANE_LINGER_MS ago; called wherever the clock is read.
+function prune(t: number) {
+  now = t
+  for (const [id, l] of lanes) if (l.end !== undefined && t - l.end > LANE_LINGER_MS) lanes.delete(id)
+}
+
 // The pane's animation: a frame count, the bar easing toward done/total, rows fading in after open.
 let frame = 0
 let openedAt = 0
@@ -185,9 +191,8 @@ export const register: Register = on => {
       frame++
       const target = status?.total ? status.done / status.total : 0
       shown = Math.abs(target - shown) < 0.005 ? target : shown + (target - shown) * 0.25
-      void $.clock.now().then(t => (now = t))
+      void $.clock.now().then(prune)
       if (frame % 10 === 1) void $.session.usage().then(u => (usage = u), () => {})
-      for (const [id, l] of lanes) if (l.end !== undefined && now - l.end > LANE_LINGER_MS) lanes.delete(id)
       $.ui.invalidate('ui.render')
     })
     void refresh($)
@@ -212,7 +217,6 @@ export const register: Register = on => {
     const verdictColor = (v: string) => (v === 'PASS' ? 'success' : v === 'FAIL' ? 'error' : 'subtle')
     const ctx = usage?.context.percent
     const usd = usage?.cost?.usd
-    const heat = (f: number) => (f >= 0.8 ? 'error' : f >= 0.6 ? 'warning' : 'success')
     const agents = [...lanes.entries()]
     const busy = agents.filter(([, l]) => l.end === undefined).length
     return (
@@ -267,19 +271,14 @@ export const register: Register = on => {
           <Box flexDirection="column">
             {ctx !== undefined && (
               <Box gap={1}>
-                <Text color={heat(ctx / 100)}>{bar(ctx / 100, 24)}</Text>
+                <Text color={ctx >= 80 ? 'error' : ctx >= 60 ? 'warning' : 'success'}>{bar(ctx / 100, 24)}</Text>
                 <Text dimColor>context {Math.round(ctx)}%</Text>
               </Box>
             )}
-            {usd !== undefined && est_usd ? (
-              <Box gap={1}>
-                <Text color={heat(usd / est_usd)}>{bar(usd / est_usd, 24)}</Text>
-                <Text dimColor>
-                  ${usd.toFixed(2)} of ${est_usd.toFixed(2)} estimate
-                </Text>
-              </Box>
-            ) : (
-              usd !== undefined && <Text dimColor>${usd.toFixed(2)} this session</Text>
+            {usd !== undefined && (
+              <Text dimColor>
+                ${usd.toFixed(2)} this session{est_usd ? ` · task est $${est_usd.toFixed(2)}` : ''}
+              </Text>
             )}
           </Box>
         )}
@@ -349,6 +348,7 @@ export const register: Register = on => {
     if (lane) {
       lane.end = await $.clock.now()
       lane.ok = e.reason === 'answer'
+      prune(lane.end)
     }
     void refresh($)
     return next(e)
@@ -364,7 +364,9 @@ export const register: Register = on => {
     const started = await next(model ? { ...e, model } : e)
     if (started.agentId) {
       const what = e.description || e.subagentType
-      lanes.set(started.agentId, { role: e.subagentType.replace('flow-stack:', ''), model: started.model, what, start: await $.clock.now(), tools: 0 })
+      const start = await $.clock.now()
+      prune(start)
+      lanes.set(started.agentId, { role: e.subagentType.replace('flow-stack:', ''), model: started.model, what, start, tools: 0 })
     }
     return started
   })

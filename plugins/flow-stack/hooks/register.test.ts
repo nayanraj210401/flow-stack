@@ -271,7 +271,7 @@ test('the pane shows each subagent live, the evidence strip, and context and cos
   expect(await live.find({ type: 'Text', text: '■■' })).toBeDefined()
   expect(await live.find({ type: 'Text', text: 'last 3 checks · 2 pass' })).toBeDefined()
   expect(await live.find({ type: 'Text', text: 'context 72%' })).toBeDefined()
-  expect(await live.find({ type: 'Text', text: '$1.00 of $4.00 estimate' })).toBeDefined()
+  expect(await live.find({ type: 'Text', text: '$1.00 this session · task est $4.00' })).toBeDefined()
   await live.unmount()
 
   await ($ as any).turn.complete({ answer: 'ok', durationMs: 1, isAborted: false, turnId: 't', agentId: 'a1', reason: 'answer', text: 'ok', category: null, explanation: null })

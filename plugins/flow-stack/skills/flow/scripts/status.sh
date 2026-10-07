@@ -2,7 +2,7 @@
 # status.sh [--full] [dir]: the active task's state as one JSON line, for the flow band (hooks/register.tsx).
 # --full adds what the /flow-pane shows: slices [{id,title,status,verdict}], the open gates in
 #   GATES.md [{n,question,detail}], leads [{id,repo,branch,task,slice}], runs (the last 40
-#   evidence verdicts, oldest first), and est_usd (ESTIMATE's forecast, null when none).
+#   evidence verdicts, oldest first, without the planned <id>:before reds and probe: rows), and est_usd (ESTIMATE's forecast, null when none).
 #   {"task":"","slice":{"id":"","title":""},"done":0,"total":0,"tdd":"",
 #    "evidence":{"label":"","verdict":"","ts":""},"stale":false}
 # The slice is this lane's TDD slice when the lock is on, else the first `doing` one.
@@ -39,7 +39,7 @@ if [ -n "$full" ]; then
     END{if(q!="" && !dec)print n "\t" q "\t" det}' "$d/GATES.md" 2>/dev/null)"
   # the other leads: every session's record but this checkout's
   leads="$({ cat "${FLOW_STACK_HOME:-$HOME/.flow-stack}"/leads/*.json 2>/dev/null || true; } | jq -sc --arg root "$FLOW_ROOT" '[sort_by(.ts) | reverse[] | select(.root != $root) | {id, repo: (.repo | split("/") | last), branch, task, slice}]' 2>/dev/null)"
-  runs="$(grep -E '^### [^ ]+ · [^ ]+ · [A-Z]+ · exit=' "$st/EVIDENCE.md" 2>/dev/null | tail -n40 | awk -F' · ' '{print $3}')"
+  runs="$(grep -E '^### [^ ]+ · [^ ]+ · [A-Z]+ · exit=' "$st/EVIDENCE.md" 2>/dev/null | awk -F' · ' '$2 !~ /:before$|^probe:/ {print $3}' | tail -n40)"
   est="$(sed -n 's/.*usd=\([0-9.]*\).*/\1/p' "$d/ESTIMATE" 2>/dev/null | head -n1)"
   extra="$(jq -nc --arg slices "$slices" --arg gates "$gates" --argjson leads "${leads:-[]}" --arg runs "$runs" --arg est "$est" '
     def clean: if type == "string" then gsub("[\u0001-\u001f\u007f-\u009f]"; "") else . end;
