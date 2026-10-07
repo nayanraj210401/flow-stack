@@ -30,7 +30,10 @@ task_json() { # task_json <task-dir> <active-slug>
   local slices gates est trace_usd
   slices="$(awk '/^## /{if(id!="")print id"\t"t"\t"s; id=$2; t=$0; sub(/^## [^ ]+ · /,"",t); s="todo"} /^status:/{s=$2} END{if(id!="")print id"\t"t"\t"s}' "$d/SLICES.md" 2>/dev/null |
     jq -Rsc 'split("\n") | map(select(length>0) | split("\t") | {id:.[0], title:.[1], status:.[2]}) | map(select(.id | test("^S[0-9]")))')"
-  gates="$(grep -E '^(GATE · |- \[ \] )' "$d/GATES.md" 2>/dev/null | sed -E 's/^(GATE · |- \[ \] )//' | jq -Rsc 'split("\n") | map(select(length>0))')"
+  # open gates only: a GATE block with a decided: line is closed (conventions.md, Human gates)
+  gates="$(awk '/^GATE · /{if(q!="" && !d)print q; q=$0; sub(/^GATE · /,"",q); d=0; next}
+    /^- \[ \] /{l=$0; sub(/^- \[ \] /,"",l); print l} q!="" && /^  decided: /{d=1}
+    END{if(q!="" && !d)print q}' "$d/GATES.md" 2>/dev/null | tr -d '\000-\010\013-\037\177' | jq -Rsc 'split("\n") | map(select(length>0))')"
   est="$(sed -n 's/.*usd=\([0-9.]*\).*/\1/p' "$d/ESTIMATE" 2>/dev/null | head -n1)"
   trace_usd="$(awk -F'|' '$2 ~ /^ *\$ *$/ {gsub(/[ $]/,"",$4); print $4; exit}' "$d/TRACE.md" 2>/dev/null)"
   jq -nc --arg slug "$slug" --arg goal "$(md_first "$d/INTENT.md" Goal)" --arg playbook "$(cat "$d/PLAYBOOK" 2>/dev/null)" \

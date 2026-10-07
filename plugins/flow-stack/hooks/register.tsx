@@ -1,6 +1,7 @@
 // flow-stack's mod: what bash hooks can't do.
 //   - the flow band above the prompt, and the slice beside the spinner (state from skills/flow/scripts/status.sh)
 //   - each flow-stack agent spawns on the model its role gets in the profile's budget:
+//   - /flow-pane: the task's slices, open gates with Approve/Reject, and the other leads
 import type { EngineInterface, Register } from 'claude-code'
 
 type Status = {
@@ -11,7 +12,13 @@ type Status = {
   tdd: string
   evidence: { label: string; verdict: string; ts: string } | null
   stale: boolean
+  // with status.sh --full, while the pane is open
+  slices?: { id: string; title: string; status: string; verdict: string }[]
+  gates?: { n: number; question: string; detail: string }[]
+  leads?: { id: string; repo: string; branch: string; task: string; slice: string }[]
 }
+
+const PANE = 'flow-pane'
 
 type Budget = 'subagent_model' | 'build_model' | 'design_model'
 
@@ -55,6 +62,8 @@ export function bandText(s: Status): string {
 
 let status: Status | null = null
 let models: Partial<Record<Budget, string>> = {}
+let paneOpen = false
+const deciding = new Set<number>()
 let running = false
 let again = false
 const toasted = new Set<string>()
@@ -70,7 +79,8 @@ async function refresh($: EngineInterface) {
     do {
       again = false
       try {
-        const { stdout } = await $.process.run([`${$.plugin.root}/skills/flow/scripts/status.sh`, await $.session.cwd()])
+        const args = [...(paneOpen ? ['--full'] : []), await $.session.cwd()]
+        const { stdout } = await $.process.run([`${$.plugin.root}/skills/flow/scripts/status.sh`, ...args])
         const next = JSON.parse(stdout || '{}') as Status
         status = next.task ? next : null
       } catch {
@@ -83,6 +93,28 @@ async function refresh($: EngineInterface) {
   }
 }
 
+// A gate button: record the decision (only if gate n still reads as shown), then tell Claude.
+// The question stays out of the prompt: GATES.md is repo text, the decision is the human's.
+async function decide($: EngineInterface, n: number, question: string, verdict: 'approve' | 'reject') {
+  if (deciding.has(n)) return
+  deciding.add(n)
+  try {
+    const ran = await $.process.run(
+      [`${$.plugin.root}/skills/flow/scripts/task.sh`, 'gate', String(n), verdict, question],
+      { cwd: await $.session.cwd() },
+    )
+    if (ran.exitCode !== 0) {
+      $.ui.toast(`flow-stack: ${(ran.stderr || ran.stdout).trim()}`)
+    } else {
+      const past = verdict === 'approve' ? 'approved' : 'rejected'
+      await $.prompt.submit({ text: `The human ${past} gate ${n} in the /flow-pane; see GATES.md and DECISIONS.tsv.` })
+    }
+  } finally {
+    deciding.delete(n)
+    await refresh($)
+  }
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const home = (await $.env.get('FLOW_STACK_HOME')) ?? `${await $.env.get('HOME')}/.flow-stack`
@@ -91,8 +123,68 @@ export const register: Register = on => {
     if (budget.rejected.length) {
       $.ui.toast(`flow-stack: ignoring budget ${budget.rejected.join(', ')} (not a model name)`, { timeoutMs: 10000 })
     }
+    await $.command.register({ name: 'flow-pane', description: "Open flow-stack's pane: slices, gates to approve, leads" })
     void refresh($)
     return next(e)
+  })
+
+  on('command.run', { command: 'flow-pane' }, async $ => {
+    await $.ui.open({ id: PANE, title: 'flow' })
+    paneOpen = true
+    void refresh($)
+    return {}
+  })
+
+  on('ui.close', { id: PANE }, async ($, e, next) => {
+    const closed = await next(e)
+    paneOpen = false
+    return closed
+  })
+
+  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
+    const { Box, Button, Text } = $.ui.resolve(e)
+    if (!status) return <Text dimColor>No active flow task. Start one with /flow-stack:flow.</Text>
+    const { slices = [], gates = [], leads = [] } = status
+    return (
+      <Box flexDirection="column" gap={1}>
+        <Text bold>{bandText(status)}</Text>
+        <Box flexDirection="column">
+          {slices.map(s => (
+            <Text key={`slice-${s.id}`} dimColor={s.status === 'done'}>
+              {s.id} {s.title} · {s.status}
+              {s.verdict ? ` · ${s.verdict}` : ''}
+            </Text>
+          ))}
+        </Box>
+        {gates.length > 0 && (
+          <Box flexDirection="column">
+            <Text bold>GATES</Text>
+            {gates.map(g => (
+              <Box key={`gate-${g.n}`} flexDirection="column">
+                <Text>{g.question}</Text>
+                {g.detail !== '' && <Text dimColor>{g.detail}</Text>}
+                <Box gap={1}>
+                  <Button key={`approve-${g.n}`} label="Approve" onPress={() => decide($, g.n, g.question, 'approve')} />
+                  <Button key={`reject-${g.n}`} label="Reject" onPress={() => decide($, g.n, g.question, 'reject')} />
+                </Box>
+              </Box>
+            ))}
+          </Box>
+        )}
+        {leads.length > 0 && (
+          <Box flexDirection="column">
+            <Text bold>LEADS</Text>
+            {leads.map(l => (
+              <Text key={`lead-${l.id}`} dimColor>
+                {l.id} · {l.repo} · {l.branch}
+                {l.task ? ` · ${l.task}` : ''}
+                {l.slice ? ` ${l.slice}` : ''}
+              </Text>
+            ))}
+          </Box>
+        )}
+      </Box>
+    )
   })
 
   // evidence.sh, task.sh, and edits all change what the band shows

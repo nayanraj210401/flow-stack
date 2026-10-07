@@ -35,6 +35,12 @@ if has '(^|[;&|[:space:]])(cat|less|more|head|tail|bat|strings|xxd)[[:space:]][^
   pre_decide deny "flow guard: reading .env files puts secrets in the transcript. Read .env.example or ask the user which variable matters."
 fi
 
+# Gates are the human's: the /flow-pane decides them through task.sh gate, never the agent.
+# A speed bump, not a boundary: an agent could still edit GATES.md by hand.
+if has 'task\.sh[[:space:]]+gate([[:space:]]|$)'; then
+  pre_decide deny "flow guard: gates are the human's to decide (the /flow-pane's buttons). Ask, or leave it in GATES.md."
+fi
+
 # 2. Blind checks: only blind-run.sh may touch them.
 if has '\.flow/tasks/[^/[:space:]]+/blind' && ! has 'blind-run\.sh'; then
   pre_decide deny "flow guard: blind checks are held out from the builder. Run them only via verify's scripts/blind-run.sh."
