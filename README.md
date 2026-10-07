@@ -14,7 +14,7 @@ It is built from skills, bash + jq hooks, and existing tools. There is no new ru
 - [Mods (UI inside Claude Code)](#mods-ui-inside-claude-code)
 - [How it works](#how-it-works)
 - [Feature map](#feature-map) · [Your profile](#your-profile) · [Adapting to your setup](#adapting-to-your-setup) · [Forge](#forge-skills-specific-to-your-repo)
-- [Files](#files) · [Limits](#limits) · [Development](#development)
+- [Files](#files) · [Limits](#limits) · [Development](#development) · [FAQ](#faq)
 
 ## Quick start
 
@@ -521,5 +521,45 @@ claude plugin eval . --tag routing hooks define quality context forge design \
 ```
 
 26 eval cases cover routing, hooks, intent, challenge, least-code, the feature map, quality, handoff, forge, and setup adaptation. Cases tagged `needs-bash` require a machine where Bash-granting evals are allowed.
+
+## FAQ
+
+**Do I have to run `/flow-stack:setup` in every repo?**
+No. The profile in `~/.flow-stack/` is global. `.flow/` appears the first time a task starts in a repo: `task.sh new <slug>` creates `.flow/tasks/`, copies `.flow/config.json` from the template, and adds `.flow/ACTIVE`, `.flow/tasks/` and `.flow/trail.jsonl` to `.gitignore`. Setup's repo step adds verified `commands` and `ready` gates to that config, and offers the missing forge skills (map, feature map, verify driver, gates).
+
+**My repo already has unit and e2e tests. What does `make-verifier` add?**
+A driver: `.claude/skills/verify-<repo>/`, with one scenario per feature in `.flow/features/`. Each feature file's `scenario:` points at its scenario, so `features.sh run --impacted` runs only what a diff touches. The driver also tells a cold agent how to launch, reset and log in, records evidence for each run, is rejected if it can't catch a deliberately broken core feature, and is refreshed rather than rewritten. Unit tests stay your fast red-green loop. It doesn't reuse existing e2e specs yet, but `scenario:` is just a command, so you can point a feature at an existing spec by hand.
+
+**What is a "driver"?**
+Code that runs the app the way a user does: the CLI, HTTP calls, or a browser through Playwright. It has three parts: a fixture that starts, waits for and stops the app, one scenario per feature that fails on wrong behavior, and a SKILL.md an agent can follow cold. A unit test asks whether a function returns X; a driver asks whether the feature works when someone uses it.
+
+**Does the verifier update itself?**
+No. Run `/flow-stack:make-verifier` again: it finds the existing driver, checks for drift (self-test, stale features, features without a scenario, missing scripts), and fixes only what drifted, keeping hand edits. `/flow-stack:tend` does the same for every generated skill. Re-run it when the app changes on purpose: a new feature, route, or launch step. A failing scenario usually means the app regressed, so fix the code first.
+
+**Where is evidence saved?**
+In the active task's `EVIDENCE.md` (`.flow/tasks/<slug>/`, or `lanes/[<repo>_]<lane>/` inside it for a parallel worktree lane). Each entry has the time, label, PASS or FAIL, the command, HEAD, whether the tree was dirty, how long it took, and the last 40 lines of output. Artifacts are recorded by path, not copied. With no active task, nothing is written. `.flow/tasks/` is gitignored, so evidence stays local.
+
+**What does `budget: 80` on a slice mean?**
+80 changed lines: added plus removed, in the slice's `fence:` files, measured as uncommitted changes against HEAD. It isn't tokens. `task.sh slice <id> done` refuses a slice over budget unless you split it or pass `--force` with a reason. A slice forced through more than 50% over triggers `challenge` before the next one. It is unrelated to the profile's `budget:` (model per role) and to `/flow-stack:budget` (token, dollar and context spend).
+
+**What is the `PLAYBOOK` file in a task folder?**
+The route `flow` picked for the task: `feature`, `bug`, `investigate`, `refactor`, `optimize`, `spike`, `compose`, `multi-session`, or a repo playbook from `.flow/playbooks/`. The built-in recipes are in `skills/flow/playbooks/`. The file is read only by `task.sh list` and `/flow-stack:board`.
+
+**What does "teeth" mean?**
+A check has teeth if it fails without your change. `probe.sh` reverts uncommitted source changes (tests, sealed files and `.flow/` stay), runs the check, restores everything, and records `TEETH` or `TOOTHLESS`. `slice done` needs a TEETH result newer than the last edit, unless the slice says `teeth: n/a` with a reason. Red-first is the same idea in the other order: the check fails before you build.
+
+**What is dojo?**
+Practice mode for the skills you list under `# Keep-sharp` in the profile. `dojo: light` asks one explain-back question before the merge gate. `dojo: on` also leaves a 5 to 30 line piece as `// TODO(you)` with two hints and a failing check. It only applies when a change touches a keep-sharp skill, and is skipped for hotfixes.
+
+**What are the sections of `~/.flow-stack/profile.md`?**
+See [Your profile](#your-profile).
+
+**How do the hooks work?**
+`hooks/hooks.json` wires bash scripts to Claude Code events and loads one mod, `hooks/register.tsx`. Each script reads the event JSON on stdin and either adds context or returns allow, deny or ask. What each one guards is in [Guardrails](#guardrails-hooks).
+
+**What is `.flow/debt.md`?**
+A ledger of shortcuts, written when one is taken: what was cut, where, the cost if ignored, and an event that should trigger the fix ("before a second tenant", "next time this file changes"). `/flow-stack:debt` lists open items and flags fired triggers; `trace` and `/flow-stack:board` report them. Repaid items are ticked and kept.
+
+---
 
 License: MIT.
