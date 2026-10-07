@@ -34,14 +34,16 @@ if [ -n "$full" ]; then
     done)"
   # open gates: "<n>\t<question>\t<detail lines joined by ' · '>"
   gates="$(awk '/^GATE · /{if(q!="" && !dec)print n "\t" q "\t" det; n++; q=$0; sub(/^GATE · /,"",q); det=""; dec=0; next}
-    q!="" && /^  decided: /{dec=1} q!="" && /^  [a-z]+: /{l=$0; sub(/^  /,"",l); det=det (det==""?"":" · ") l}
+    q!="" && /^  decided: /{dec=1; next} q!="" && /^  [^[:space:]]/{l=$0; sub(/^  /,"",l); det=det (det==""?"":" · ") l}
     END{if(q!="" && !dec)print n "\t" q "\t" det}' "$d/GATES.md" 2>/dev/null)"
-  leads="$({ cat "${FLOW_STACK_HOME:-$HOME/.flow-stack}"/leads/*.json 2>/dev/null || true; } | jq -sc '[sort_by(.ts) | reverse[] | {id, repo: (.repo | split("/") | last), branch, task, slice}]' 2>/dev/null)"
+  # the other leads: every session's record but this checkout's
+  leads="$({ cat "${FLOW_STACK_HOME:-$HOME/.flow-stack}"/leads/*.json 2>/dev/null || true; } | jq -sc --arg root "$FLOW_ROOT" '[sort_by(.ts) | reverse[] | select(.root != $root) | {id, repo: (.repo | split("/") | last), branch, task, slice}]' 2>/dev/null)"
   extra="$(jq -nc --arg slices "$slices" --arg gates "$gates" --argjson leads "${leads:-[]}" '
-    def rows: split("\n") | map(select(length > 0) | split("\t"));
+    def clean: if type == "string" then gsub("[\u0001-\u001f\u007f-\u009f]"; "") else . end;
+    def rows: split("\n") | map(select(length > 0) | split("\t") | map(clean));
     {slices: ($slices | rows | map({id: .[0], title: .[1], status: .[2], verdict: (.[3] // "")})),
      gates: ($gates | rows | map({n: (.[0] | tonumber), question: .[1], detail: (.[2] // "")})),
-     leads: $leads}')"
+     leads: ($leads | map(map_values(clean)))}')"
 fi
 
 jq -nc --argjson extra "$extra" --arg task "$FLOW_TASK" --arg slice "$slice" \
@@ -53,4 +55,4 @@ jq -nc --argjson extra "$extra" --arg task "$FLOW_TASK" --arg slice "$slice" \
    slice: ($slice | if . == "" then null else {id: (split(" · ")[0] | clean), title: (split(" · ")[1:] | join(" · ") | clean)} end),
    done: ($done | tonumber), total: ($total | tonumber), tdd: ($tdd | clean),
    evidence: (if $ts == "" then null else {label: ($label | clean), verdict: ($verdict | clean), ts: ($ts | clean)} end),
-   stale: $stale} + ($extra | walk(if type == "string" then clean else . end))'
+   stale: $stale} + $extra'

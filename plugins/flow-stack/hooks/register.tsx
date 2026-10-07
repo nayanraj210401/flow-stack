@@ -63,6 +63,7 @@ export function bandText(s: Status): string {
 let status: Status | null = null
 let models: Partial<Record<Budget, string>> = {}
 let paneOpen = false
+const deciding = new Set<number>()
 let running = false
 let again = false
 const toasted = new Set<string>()
@@ -92,17 +93,26 @@ async function refresh($: EngineInterface) {
   }
 }
 
-// A gate button: record the decision, then tell Claude so it acts on it.
+// A gate button: record the decision (only if gate n still reads as shown), then tell Claude.
+// The question stays out of the prompt: GATES.md is repo text, the decision is the human's.
 async function decide($: EngineInterface, n: number, question: string, verdict: 'approve' | 'reject') {
-  const ran = await $.process.run([`${$.plugin.root}/skills/flow/scripts/task.sh`, 'gate', String(n), verdict], {
-    cwd: await $.session.cwd(),
-  })
-  if (ran.exitCode !== 0) {
-    $.ui.toast(`flow-stack: ${(ran.stderr || ran.stdout).trim()}`)
-  } else {
-    await $.prompt.submit({ text: `The human ${verdict}d gate ${n} in the /flow-pane: "${question}". Act on it.` })
+  if (deciding.has(n)) return
+  deciding.add(n)
+  try {
+    const ran = await $.process.run(
+      [`${$.plugin.root}/skills/flow/scripts/task.sh`, 'gate', String(n), verdict, question],
+      { cwd: await $.session.cwd() },
+    )
+    if (ran.exitCode !== 0) {
+      $.ui.toast(`flow-stack: ${(ran.stderr || ran.stdout).trim()}`)
+    } else {
+      const past = verdict === 'approve' ? 'approved' : 'rejected'
+      await $.prompt.submit({ text: `The human ${past} gate ${n} in the /flow-pane; see GATES.md and DECISIONS.tsv.` })
+    }
+  } finally {
+    deciding.delete(n)
+    await refresh($)
   }
-  await refresh($)
 }
 
 export const register: Register = on => {
@@ -119,15 +129,16 @@ export const register: Register = on => {
   })
 
   on('command.run', { command: 'flow-pane' }, async $ => {
-    paneOpen = true
     await $.ui.open({ id: PANE, title: 'flow' })
+    paneOpen = true
     void refresh($)
     return {}
   })
 
   on('ui.close', { id: PANE }, async ($, e, next) => {
+    const closed = await next(e)
     paneOpen = false
-    return next(e)
+    return closed
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
@@ -139,7 +150,7 @@ export const register: Register = on => {
         <Text bold>{bandText(status)}</Text>
         <Box flexDirection="column">
           {slices.map(s => (
-            <Text dimColor={s.status === 'done'}>
+            <Text key={`slice-${s.id}`} dimColor={s.status === 'done'}>
               {s.id} {s.title} · {s.status}
               {s.verdict ? ` · ${s.verdict}` : ''}
             </Text>
@@ -160,11 +171,11 @@ export const register: Register = on => {
             ))}
           </Box>
         )}
-        {leads.length > 1 && (
+        {leads.length > 0 && (
           <Box flexDirection="column">
             <Text bold>LEADS</Text>
             {leads.map(l => (
-              <Text dimColor>
+              <Text key={`lead-${l.id}`} dimColor>
                 {l.id} · {l.repo} · {l.branch}
                 {l.task ? ` · ${l.task}` : ''}
                 {l.slice ? ` ${l.slice}` : ''}

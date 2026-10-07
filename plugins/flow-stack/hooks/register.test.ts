@@ -173,8 +173,10 @@ test('/flow-pane opens a pane with slices and gates; Approve records the gate an
     expect(await ui.find({ type: 'Text', text: 'merge PR #3' })).toBeDefined()
     if (surface === 'terminal') {
       await ui.press({ key: 'approve-2' })
-      expect(runs.find(a => a[1] === 'gate')?.slice(1)).toEqual(['gate', '2', 'approve'])
-      expect(said[0]).toContain('approved gate 2')
+      expect(runs.find(a => a[1] === 'gate')?.slice(1)).toEqual(['gate', '2', 'approve', 'merge PR #3'])
+      expect(said[0]).toBe('The human approved gate 2 in the /flow-pane; see GATES.md and DECISIONS.tsv.')
+      await ui.press({ key: 'reject-2' })
+      expect(said[1]).toContain('rejected gate 2')
     }
     await ui.unmount()
   }

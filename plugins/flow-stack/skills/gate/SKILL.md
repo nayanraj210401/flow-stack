@@ -24,7 +24,7 @@ Repo-specific irreversible actions live in `.flow/gates.md`. `make-gates` genera
 One message, with every open gate in it:
 ```
 GATE · <decision, one line>
-  A) … (recommended: <why, one line>)   B) …
+  options: A) …  B) …   (recommend: A, because <why, one line>)
   evidence: <file:line / EVIDENCE label>
 ```
 Use `AskUserQuestion` when available, with the recommended option first. Never ask a question you would answer "it depends" to. Resolve the dependency first.
