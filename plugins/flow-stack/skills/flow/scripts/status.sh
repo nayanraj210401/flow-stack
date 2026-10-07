@@ -24,8 +24,10 @@ stale=false
 jq -nc --arg task "$FLOW_TASK" --arg slice "$slice" \
   --arg done "${done_n:-0}" --arg total "${total:-0}" --arg tdd "$tdd" \
   --arg ts "${ev_ts:-}" --arg label "${ev_label:-}" --arg verdict "${ev_verdict:-}" --argjson stale "$stale" '
-  {task: $task,
-   slice: ($slice | if . == "" then null else {id: (split(" · ")[0]), title: (split(" · ")[1:] | join(" · "))} end),
-   done: ($done | tonumber), total: ($total | tonumber), tdd: $tdd,
-   evidence: (if $ts == "" then null else {label: $label, verdict: $verdict, ts: $ts} end),
+  # repo files are untrusted: no control characters (terminal escapes) reach the band or spinner
+  def clean: gsub("[\u0001-\u001f\u007f-\u009f]"; "");
+  {task: ($task | clean),
+   slice: ($slice | if . == "" then null else {id: (split(" · ")[0] | clean), title: (split(" · ")[1:] | join(" · ") | clean)} end),
+   done: ($done | tonumber), total: ($total | tonumber), tdd: ($tdd | clean),
+   evidence: (if $ts == "" then null else {label: ($label | clean), verdict: ($verdict | clean), ts: ($ts | clean)} end),
    stale: $stale}'
