@@ -476,35 +476,41 @@ claude plugin eval . --tag routing hooks define quality context forge design \
 
 ## FAQ
 
-**I updated flow-stack, but `/plugin` still says "already at the latest version". Why?**
-With a local marketplace (`/plugin marketplace add ~/Project/flow-stack`), Claude Code reads whatever branch that checkout is on. If it's on a feature branch with an older `version`, the update finds nothing newer. Check out `main` there (or merge `main` into your branch), run `claude plugin update flow-stack@flow-stack`, then restart or `/reload-plugins`. Edits only reach the installed copy when `plugin.json`'s `version` changes.
+**Do I have to run `/flow-stack:setup` in every repo?**
+No. The profile in `~/.flow-stack/` is global. `.flow/` appears the first time a task starts in a repo: `task.sh new <slug>` creates `.flow/tasks/`, copies `.flow/config.json` from the template, and adds `.flow/ACTIVE`, `.flow/tasks/` and `.flow/trail.jsonl` to `.gitignore`. Setup's repo step adds verified `commands` and `ready` gates to that config, and offers the missing forge skills (map, feature map, verify driver, gates).
 
-**How do I get the mod (band, model per role) after updating?**
-There is nothing to configure. On Claude Code 2.1.287+ mods are on by default. After the update and a restart, `/plugin` shows `1 mod active · flow-stack`.
+**My repo already has unit and e2e tests. What does `make-verifier` add?**
+A driver: `.claude/skills/verify-<repo>/`, with one scenario per feature in `.flow/features/`. Each feature file's `scenario:` points at its scenario, so `features.sh run --impacted` runs only what a diff touches. The driver also tells a cold agent how to launch, reset and log in, records evidence for each run, is rejected if it can't catch a deliberately broken core feature, and is refreshed rather than rewritten. Unit tests stay your fast red-green loop. It doesn't reuse existing e2e specs yet, but `scenario:` is just a command, so you can point a feature at an existing spec by hand.
 
-**I don't see the band above the prompt.**
-The band appears only while a flow task is active (`task.sh new …` or `switch`). It draws in the terminal and the Desktop app, not in the VS Code chat panel or `claude -p`. If `/plugin` doesn't list the mod, check `claude --version` and whether `disableAllHooks` or `--safe-mode` is on.
+**What is a "driver"?**
+Code that runs the app the way a user does: the CLI, HTTP calls, or a browser through Playwright. It has three parts: a fixture that starts, waits for and stops the app, one scenario per feature that fails on wrong behavior, and a SKILL.md an agent can follow cold. A unit test asks whether a function returns X; a driver asks whether the feature works when someone uses it.
 
-**How many mods are there?**
-One: `hooks/register.tsx`. It holds several features: the band, the spinner suffix, and model per role.
+**Does the verifier update itself?**
+No. Run `/flow-stack:make-verifier` again: it finds the existing driver, checks for drift (self-test, stale features, features without a scenario, missing scripts), and fixes only what drifted, keeping hand edits. `/flow-stack:tend` does the same for every generated skill. Re-run it when the app changes on purpose: a new feature, route, or launch step. A failing scenario usually means the app regressed, so fix the code first.
 
-**A flow-stack agent ran on a different model than my `budget:` says.**
-A model already on the Agent call wins. That covers a model Claude passed and one another router set before the spawn, such as a PreToolUse hook that picks models. The mod fills in `budget:` only when nothing else chose. When it fills one in, a toast names the model the first time each agent spawns.
+**Where is evidence saved?**
+In the active task's `EVIDENCE.md` (`.flow/tasks/<slug>/`, or `lanes/[<repo>_]<lane>/` inside it for a parallel worktree lane). Each entry has the time, label, PASS or FAIL, the command, HEAD, whether the tree was dirty, how long it took, and the last 40 lines of output. Artifacts are recorded by path, not copied. With no active task, nothing is written. `.flow/tasks/` is gitignored, so evidence stays local.
 
-**Does model per role touch Explore or other built-in agents?**
-No. It covers only advocate and reviewer (`design_model`) and worker, checker and flow-agent (`build_model`). Built-ins keep Claude Code's choice.
+**What does `budget: 80` on a slice mean?**
+80 changed lines: added plus removed, in the slice's `fence:` files, measured as uncommitted changes against HEAD. It isn't tokens. `task.sh slice <id> done` refuses a slice over budget unless you split it or pass `--force` with a reason. A slice forced through more than 50% over triggers `challenge` before the next one. It is unrelated to the profile's `budget:` (model per role) and to `/flow-stack:budget` (token, dollar and context spend).
 
-**I put a typo in `budget:` (e.g. `sonet`).**
-The value is ignored with a warning toast at session start, so the agent runs on Claude Code's default instead of failing to start. Model aliases (`haiku`, `sonnet`, `opus`, `fable`, `inherit`) and full API, Bedrock and Vertex ids (containing `claude`) are accepted.
+**What is the `PLAYBOOK` file in a task folder?**
+The route `flow` picked for the task: `feature`, `bug`, `investigate`, `refactor`, `optimize`, `spike`, `compose`, `multi-session`, or a repo playbook from `.flow/playbooks/`. The built-in recipes are in `skills/flow/playbooks/`. The file is read only by `task.sh list` and `/flow-stack:board`.
 
-**The Stop hook keeps saying "no check passed after your last code edit".**
-Inside a task, only the task's own checks count: `evidence.sh C<n>` or `S<n>`, `features.sh run --impacted` or `--all`, or `ready.sh`, as the last command in the call. A free-label run such as `evidence.sh smoke` counts only when no task is active. If you are on 0.8.0, update: it missed a check whenever Claude Code appended a "Shell cwd was reset" line after its output.
+**What does "teeth" mean?**
+A check has teeth if it fails without your change. `probe.sh` reverts uncommitted source changes (tests, sealed files and `.flow/` stay), runs the check, restores everything, and records `TEETH` or `TOOTHLESS`. `slice done` needs a TEETH result newer than the last edit, unless the slice says `teeth: n/a` with a reason. Red-first is the same idea in the other order: the check fails before you build.
 
-**A push or PR is refused with "the human is away".**
-You're in auto mode (`--auto` in a prompt). Irreversible actions wait in `GATES.md`. Send `--no-auto`, run the command yourself with `! git push`, or use `--auto ship` to let a push or PR through once `ready.sh` has stamped HEAD.
+**What is dojo?**
+Practice mode for the skills you list under `# Keep-sharp` in the profile. `dojo: light` asks one explain-back question before the merge gate. `dojo: on` also leaves a 5 to 30 line piece as `// TODO(you)` with two hints and a failing check. It only applies when a change touches a keep-sharp skill, and is skipped for hotfixes.
 
-**Can I turn the mod off without removing flow-stack?**
-No, not on its own. `--safe-mode` or `"disableAllHooks": true` stops all mods and hooks. Disabling flow-stack in `/plugin` also turns off its skills and guards.
+**What are the sections of `~/.flow-stack/profile.md`?**
+See [Your profile](#your-profile).
+
+**How do the hooks work?**
+`hooks/hooks.json` wires bash scripts to Claude Code events and loads one mod, `hooks/register.tsx`. Each script reads the event JSON on stdin and either adds context or returns allow, deny or ask. What each one guards is in [Guardrails](#guardrails-hooks).
+
+**What is `.flow/debt.md`?**
+A ledger of shortcuts, written when one is taken: what was cut, where, the cost if ignored, and an event that should trigger the fix ("before a second tenant", "next time this file changes"). `/flow-stack:debt` lists open items and flags fired triggers; `trace` and `/flow-stack:board` report them. Repaid items are ticked and kept.
 
 ---
 
