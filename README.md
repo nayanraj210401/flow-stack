@@ -489,21 +489,23 @@ The band appears only while a flow task is active (`task.sh new …` or `switch`
 One: `hooks/register.tsx`. It holds several features: the band, the spinner suffix, and model per role.
 
 **A flow-stack agent ran on a different model than my `budget:` says.**
-A model already on the Agent call wins. That covers a model Claude passed and one another router set before the spawn, such as a PreToolUse hook that picks models. The mod fills in `budget:` only when nothing else chose. A toast names the model the first time each role spawns.
+A model already on the Agent call wins. That covers a model Claude passed and one another router set before the spawn, such as a PreToolUse hook that picks models. The mod fills in `budget:` only when nothing else chose. When it fills one in, a toast names the model the first time each agent spawns.
 
 **Does model per role touch Explore or other built-in agents?**
 No. It covers only advocate and reviewer (`design_model`) and worker, checker and flow-agent (`build_model`). Built-ins keep Claude Code's choice.
 
 **I put a typo in `budget:` (e.g. `sonet`).**
-The value is ignored with a warning toast at session start, so the agent runs on Claude Code's default instead of failing to start. Aliases (`haiku`, `sonnet`, `opus`) and full API, Bedrock and Vertex ids are accepted.
+The value is ignored with a warning toast at session start, so the agent runs on Claude Code's default instead of failing to start. Model aliases (`haiku`, `sonnet`, `opus`, `fable`, `inherit`) and full API, Bedrock and Vertex ids (containing `claude`) are accepted.
 
 **The Stop hook keeps saying "no check passed after your last code edit".**
-Inside a task, only the task's own checks count: `evidence.sh C<n>` or `S<n>`, `features.sh run --impacted`, or `ready.sh`, as the last command in the call. A free-label run such as `evidence.sh smoke` counts only when no task is active. If you are on 0.8.0, update: that version missed every check, because Claude Code appends a "Shell cwd was reset" line after Bash output.
+Inside a task, only the task's own checks count: `evidence.sh C<n>` or `S<n>`, `features.sh run --impacted` or `--all`, or `ready.sh`, as the last command in the call. A free-label run such as `evidence.sh smoke` counts only when no task is active. If you are on 0.8.0, update: it missed a check whenever Claude Code appended a "Shell cwd was reset" line after its output.
 
 **A push or PR is refused with "the human is away".**
-You're in auto mode (`--auto` in a prompt). Irreversible actions wait in `GATES.md`. Send `--no-auto`, or run the command yourself with `! git push`.
+You're in auto mode (`--auto` in a prompt). Irreversible actions wait in `GATES.md`. Send `--no-auto`, run the command yourself with `! git push`, or use `--auto ship` to let a push or PR through once `ready.sh` has stamped HEAD.
 
 **Can I turn the mod off without removing flow-stack?**
-To stop all mods and hooks, start with `--safe-mode` or set `"disableAllHooks": true`. Disabling flow-stack in `/plugin` turns off its skills and guards too.
+No, not on its own. `--safe-mode` or `"disableAllHooks": true` stops all mods and hooks. Disabling flow-stack in `/plugin` also turns off its skills and guards.
+
+---
 
 License: MIT.
