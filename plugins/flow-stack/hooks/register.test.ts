@@ -170,6 +170,7 @@ test('/flow-pane opens a pane with slices and gates; Approve records the gate an
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ plugin: 'flow-stack', surface, ...PANE } as any)
     expect(await ui.find({ type: 'Text', text: /S2 token bucket · doing/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: 'FAIL' })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: 'merge PR #3' })).toBeDefined()
     if (surface === 'terminal') {
       await ui.press({ key: 'approve-2' })
@@ -217,12 +218,14 @@ test('the open pane animates: spinner turns, progress bar eases in, gates pulse'
   await clock.advance(100)
   const turned = await $.ui.mount({ plugin: 'flow-stack', surface: 'terminal', ...PANE } as any)
   expect(await turned.find({ type: 'Text', text: spin(2) })).toBeDefined()
+  expect(await turned.find({ type: 'Text', text: /^◆ GATES/ })).toBeDefined()
   await turned.unmount()
 
-  await clock.advance(3000)
+  await clock.advance(3500)
   const settled = await $.ui.mount({ plugin: 'flow-stack', surface: 'terminal', ...PANE } as any)
   expect(await settled.find({ type: 'Text', text: bar(1 / 3, 24) })).toBeDefined()
-  expect(await settled.find({ type: 'Text', text: /GATES · 1 waiting on you/ })).toBeDefined()
+  // frame 36: the gates line is in its dim half of the pulse; frame 1 was in its lit half
+  expect(await settled.find({ type: 'Text', text: /^◇ GATES · 1 waiting on you/ })).toBeDefined()
   await settled.unmount()
   expect(redraws).toBeGreaterThan(30)
 })
