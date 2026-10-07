@@ -56,7 +56,6 @@ for (const [type, want] of [
   ['flow-stack:flow-agent', 'sonnet'],
   ['flow-stack:reviewer', 'opus'],
   ['flow-stack:advocate', 'opus'],
-  ['Explore', 'haiku'],
 ] as const) {
   test(`agent.spawn puts ${type} on ${want}`, async ($, on) => {
     expect(await spawnWith($, on, { subagentType: type })).toBe(want)
@@ -67,9 +66,11 @@ test('agent.spawn keeps a model the Agent call named', async ($, on) => {
   expect(await spawnWith($, on, { subagentType: 'flow-stack:worker', model: 'opus' })).toBe('opus')
 })
 
-test('agent.spawn leaves other agents alone', async ($, on) => {
-  expect(await spawnWith($, on, { subagentType: 'general-purpose' })).toBe(undefined)
-})
+for (const type of ['general-purpose', 'Explore']) {
+  test(`agent.spawn leaves ${type} alone`, async ($, on) => {
+    expect(await spawnWith($, on, { subagentType: type })).toBe(undefined)
+  })
+}
 
 const BAND = { component: 'AbovePrompt', props: { hasSurvey: false, isWorking: false, maxRows: 4, bodyColumns: 100 } } as const
 

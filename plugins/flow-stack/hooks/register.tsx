@@ -15,14 +15,14 @@ type Status = {
 
 type Budget = 'subagent_model' | 'build_model' | 'design_model'
 
-// An agent the Agent call names without a model runs on the model its role gets.
+// A flow-stack agent the Agent call names without a model runs on the model its role gets.
+// Only flow-stack's own agents: built-ins like Explore keep Claude Code's choice.
 const ROLE: Record<string, Budget> = {
   'flow-stack:advocate': 'design_model',
   'flow-stack:reviewer': 'design_model',
   'flow-stack:worker': 'build_model',
   'flow-stack:checker': 'build_model',
   'flow-stack:flow-agent': 'build_model',
-  Explore: 'subagent_model',
 }
 
 // The profile's frontmatter `budget:` block: "  build_model: sonnet   # comment"
