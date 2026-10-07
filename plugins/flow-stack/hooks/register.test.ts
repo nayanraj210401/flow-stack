@@ -1,6 +1,6 @@
-import { expect, test } from 'claude-code/testing'
+import { expect, mock, test } from 'claude-code/testing'
 
-import { bandText, parseBudget } from './register'
+import { bandText, bar, parseBudget, spin, strip } from './register'
 
 const PROFILE = `---
 budget:
@@ -169,7 +169,8 @@ test('/flow-pane opens a pane with slices and gates; Approve records the gate an
 
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ plugin: 'flow-stack', surface, ...PANE } as any)
-    expect(await ui.find({ type: 'Text', text: /S2 token bucket · doing · FAIL/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /S2 token bucket · doing/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: 'FAIL' })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: 'merge PR #3' })).toBeDefined()
     if (surface === 'terminal') {
       await ui.press({ key: 'approve-2' })
@@ -180,4 +181,109 @@ test('/flow-pane opens a pane with slices and gates; Approve records the gate an
     }
     await ui.unmount()
   }
+})
+
+test('bar fills in eighths of a cell and clamps', () => {
+  expect(bar(0, 4)).toBe('░░░░')
+  expect(bar(0.5, 4)).toBe('██░░')
+  expect(bar(1 / 32, 4)).toBe('▏░░░')
+  expect(bar(2, 4)).toBe('████')
+})
+
+test('the open pane animates: spinner turns, progress bar eases in, gates pulse', async ($, hooks) => {
+  const on = hooks as any
+  const clock = mock.clock(on)
+  on('fs.read', async () => ({ value: PROFILE }))
+  on('process.run', async (_$: unknown, e: { argv: readonly string[] }) => ({
+    value: { exitCode: 0, stdout: JSON.stringify(e.argv.includes('--full') ? FULL : STATUS), stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
+  }))
+  on('env.get', async () => ({ value: '/home/me' }))
+  on('session.cwd', async () => ({ value: '/tmp' }))
+  on('session.start', async (_$: unknown, e: unknown) => e)
+  on('command.register', async () => ({ value: undefined }))
+  on('ui.open', async () => ({ value: { id: 'flow-pane' } }))
+  let redraws = 0
+  on('ui.invalidate', async () => {
+    redraws++
+    return { value: undefined }
+  })
+  await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+  await ($ as any).command.run({ command: 'flow-pane' })
+
+  const ui = await $.ui.mount({ plugin: 'flow-stack', surface: 'terminal', ...PANE } as any)
+  expect(await ui.find({ type: 'Text', text: bar(0, 24) })).toBeDefined()
+  await ui.unmount()
+
+  // frame 1: the header shows spin(1), the active slice S2 (row 1) spin(2)
+  await clock.advance(100)
+  const turned = await $.ui.mount({ plugin: 'flow-stack', surface: 'terminal', ...PANE } as any)
+  expect(await turned.find({ type: 'Text', text: spin(2) })).toBeDefined()
+  expect(await turned.find({ type: 'Text', text: /^◆ GATES/ })).toBeDefined()
+  await turned.unmount()
+
+  await clock.advance(3500)
+  const settled = await $.ui.mount({ plugin: 'flow-stack', surface: 'terminal', ...PANE } as any)
+  expect(await settled.find({ type: 'Text', text: bar(1 / 3, 24) })).toBeDefined()
+  // frame 36: the gates line is in its dim half of the pulse; frame 1 was in its lit half
+  expect(await settled.find({ type: 'Text', text: /^◇ GATES · 1 waiting on you/ })).toBeDefined()
+  await settled.unmount()
+  expect(redraws).toBeGreaterThan(30)
+})
+
+test('strip groups consecutive verdicts', () => {
+  expect(strip(['FAIL', 'FAIL', 'PASS', 'FAIL'])).toEqual([
+    { verdict: 'FAIL', cells: '■■' },
+    { verdict: 'PASS', cells: '■' },
+    { verdict: 'FAIL', cells: '■' },
+  ])
+})
+
+test('the pane shows each subagent live, the evidence strip, and context and cost gauges', async ($, hooks) => {
+  const on = hooks as any
+  const clock = mock.clock(on)
+  const full = { ...FULL, runs: ['FAIL', 'PASS', 'PASS'], est_usd: 4 }
+  on('fs.read', async () => ({ value: PROFILE }))
+  on('process.run', async (_$: unknown, e: { argv: readonly string[] }) => ({
+    value: { exitCode: 0, stdout: JSON.stringify(e.argv.includes('--full') ? full : STATUS), stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
+  }))
+  on('env.get', async () => ({ value: '/home/me' }))
+  on('session.cwd', async () => ({ value: '/tmp' }))
+  on('session.start', async (_$: unknown, e: unknown) => e)
+  on('command.register', async () => ({ value: undefined }))
+  on('ui.open', async () => ({ value: { id: 'flow-pane' } }))
+  on('ui.invalidate', async () => ({ value: undefined }))
+  on('session.usage', async () => ({ value: { startedAt: 0, context: { window: 200000, percent: 72 }, rateLimits: [], cost: { usd: 1 } } }))
+  on('agent.spawn', async (_$: unknown, e: { model?: string }) => ({ model: e.model ?? 'inherit', agentId: 'a1' }))
+  on('tool.call', async () => ({ result: { type: 'text', text: '' } }))
+  on('turn.complete', async (_$: unknown, e: unknown) => e)
+  await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+  await ($ as any).command.run({ command: 'flow-pane' })
+
+  await ($ as any).agent.spawn({ prompt: 'review it', description: 'Review the diff', subagentType: 'flow-stack:reviewer' })
+  await ($ as any).tool.call({ tool: 'Read', input: { file_path: '/tmp/x' }, agentId: 'a1' })
+  await ($ as any).tool.call({ tool: 'Read', input: { file_path: '/tmp/y' }, agentId: 'a1' })
+  await clock.advance(3000)
+
+  const live = await $.ui.mount({ plugin: 'flow-stack', surface: 'terminal', ...PANE } as any)
+  expect(await live.find({ type: 'Text', text: /AGENTS · 1 running/ })).toBeDefined()
+  expect(await live.find({ type: 'Text', text: /^reviewer\s+opus\s+Review the diff {2}3s · 2 tools$/ })).toBeDefined()
+  expect(await live.find({ type: 'Text', text: '■' })).toBeDefined()
+  expect(await live.find({ type: 'Text', text: '■■' })).toBeDefined()
+  expect(await live.find({ type: 'Text', text: 'last 3 checks · 2 pass' })).toBeDefined()
+  expect(await live.find({ type: 'Text', text: 'context 72%' })).toBeDefined()
+  expect(await live.find({ type: 'Text', text: '$1.00 this session · task est $4.00' })).toBeDefined()
+  await live.unmount()
+
+  await ($ as any).turn.complete({ answer: 'ok', durationMs: 1, isAborted: false, turnId: 't', agentId: 'a1', reason: 'answer', text: 'ok', category: null, explanation: null })
+  await clock.advance(200)
+  const ended = await $.ui.mount({ plugin: 'flow-stack', surface: 'terminal', ...PANE } as any)
+  expect(await ended.find({ type: 'Text', text: /AGENTS · 0 running/ })).toBeDefined()
+  // one ✓ for the done slice S1, one for the agent
+  expect(await ended.findAll({ type: 'Text', text: '✓' })).toHaveLength(2)
+  await ended.unmount()
+
+  await clock.advance(9000)
+  const gone = await $.ui.mount({ plugin: 'flow-stack', surface: 'terminal', ...PANE } as any)
+  expect(await gone.find({ type: 'Text', text: /AGENTS/ })).toBeUndefined()
+  await gone.unmount()
 })
