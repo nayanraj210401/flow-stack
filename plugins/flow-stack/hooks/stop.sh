@@ -32,7 +32,7 @@ events="$(tail -n 3000 "$transcript" | jq -nrR --argjson roots "$roots" --arg ch
     | gsub("[0-9]*>>?[[:space:]]*(/dev/null|&[0-9]-?)"; "")
     | test("\\bsed -[a-zA-Z]*i|\\bperl -[a-z]*i|\\btee\\b|>>?[[:space:]]*[^[:space:]=>&]"
       + "|(^|[;&|][[:space:]]*)(cp|mv)( -[A-Za-z]+)*( [^-;&|[:space:]][^;&|[:space:]]*)+"
-      + " (?![^;&|[:space:]]*(/tmp/|scratchpad|\\.flow/))[^-;&|[:space:]][^;&|[:space:]]*[[:space:]]*($|[;&|])"
+      + " (?![^;&|[:space:]]*(/tmp/|scratchpad|\\.flow/)(?![^;&|[:space:]]*\\.\\.))[^-;&|[:space:]][^;&|[:space:]]*[[:space:]]*($|[;&|])"
       + "|(^|[;&|][[:space:]]*)patch[[:space:]]"
       + "|git apply[[:space:]]+(?!--(check|stat|numstat|summary))");
   # The harness can append its own line (e.g. "Shell cwd was reset to …") after the output of the command.
@@ -58,7 +58,7 @@ if [[ "$events" =~ E[^P]*$ ]] && grep -Eiq "$claims" <<<"$last_msg" && ! grep -q
   else
     run="the check through verify's scripts/evidence.sh: \`evidence.sh smoke '<cmd>'\`"
   fi
-  jq -n --arg r "flow claims check: your reply claims success, but no check passed after your last code edit in this repo. Run $run as the last command in the call, so its result line ends the output, and cite it, or rewrite the claim as '~ assumed: <what was not verified>'." \
+  jq -n --arg r "flow claims check: your reply claims success, but no check passed after your last code edit. Run $run as the last command in the call, so its result line ends the output, and cite it, or rewrite the claim as '~ assumed: <what was not verified>'." \
     '{decision:"block", reason:$r}'
   exit 0
 fi
