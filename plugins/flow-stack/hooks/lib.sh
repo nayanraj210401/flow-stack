@@ -24,7 +24,7 @@ flow_init() {
     flow_warn "jq not found; hook disabled"
     exit 0
   fi
-  FLOW_INPUT="$(cat)"
+  [ -n "${FLOW_INPUT:-}" ] || FLOW_INPUT="$(cat)"   # a hook may read stdin first for a fast exit
   FLOW_CWD="$(jq -r '.cwd // empty' <<<"$FLOW_INPUT")"
   [ -n "$FLOW_CWD" ] || FLOW_CWD="$PWD"
   flow_roots "$FLOW_CWD"
@@ -67,6 +67,27 @@ glob_match() {
   local path="$1" glob="${2//\*\*/*}"
   # shellcheck disable=SC2053
   [[ "$path" == $glob ]]
+}
+
+# TDD lock (task.sh tdd <id> red|green): $FLOW_STATE_DIR/TDD holds "<id> <phase> <red-FAIL count>".
+# flow_tdd sets TDD_ID, TDD_PHASE, and TDD_TESTS (the slice's tests: globs, empty = default patterns).
+flow_tdd() {
+  local f="$FLOW_STATE_DIR/TDD"
+  [ -n "$FLOW_STATE_DIR" ] && [ -s "$f" ] || return 1
+  read -r TDD_ID TDD_PHASE _ <"$f" || true
+  TDD_TESTS="$(awk -v id="$TDD_ID" '/^## /{cur=$2} cur==id && /^tests:/{sub(/^tests:[[:space:]]*/,""); sub(/[[:space:]]+#.*/,""); print; exit}' "$FLOW_TASK_DIR/SLICES.md" 2>/dev/null || true)"
+  [ -n "$TDD_PHASE" ]
+}
+
+# flow_is_test <repo-relative path> [globs]: the globs when given, else common test locations and names.
+flow_is_test() {
+  local g b="${1##*/}"
+  if [ -n "${2:-}" ]; then
+    set -f; for g in $2; do glob_match "$1" "$g" && { set +f; return 0; }; done; set +f; return 1
+  fi
+  case "/$1" in */test/*|*/tests/*|*/__tests__/*|*/spec/*) return 0 ;; esac
+  case "$b" in test_*|*_test.*|*.test.*|*-test.*|*.spec.*|*_spec.*|*Test.*|*Tests.*) return 0 ;; esac
+  return 1
 }
 
 # Auto mode (--auto in a prompt): the human is away for this session. Flag: $FLOW_HOME/auto/<session_id>.

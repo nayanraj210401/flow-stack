@@ -18,6 +18,7 @@ Three currencies: tokens (cheap, capped), dollars (moderate), the human's attent
 | Code you haven't read | `how`. For a history question, or "is this odd on purpose?", use `why` before changing it. |
 | Acceptance criteria come from a ticket | `intent` §1a: one evidence-only fact-check by the advocate. Confirmed discrepancies go to the intent gate; nothing else is argued. |
 | Choosing an approach | `challenge` (the advocate designs blind, and the null option is weighed). No approach is locked in without it, except when rigor is `lean` or the task is one slice. |
+| The human says TDD or "test first" | `tdd` with its lock, per slice: `scripts/task.sh tdd <id> red`, then `green` after the test fails. Red edits only tests; green can't touch them. |
 | A check passes | `probe`. TOOTHLESS means strengthen the check. |
 | Marking a slice done | `task.sh slice <id> done`, the proof gate. Never edit SLICES.md for it. |
 | Saying done, fixed, or works | `verify`, then `claims`. `✓` only with evidence newer than the last edit. |
@@ -77,7 +78,7 @@ scripts/task.sh new <kebab-slug> <playbook> --goal "<outcome, user's view>" --ch
 scripts/task.sh estimate <usd> <ctx_pct> <human_min>
 ```
 
-The goal and C1 are written at birth; `intent` refines them. `evidence.sh C1` runs exactly that command, and the Stop hook accepts a success claim only after a passing check. Copy the playbook's steps into the todo list verbatim. A step you skip stays there as `skip: <reason>`.
+The goal and C1 are written at birth; `intent` refines them. `evidence.sh C1` runs exactly that command, and the Stop hook accepts a success claim only after a passing check. Copy the playbook's steps into the todo list verbatim. A step you skip stays there as `skip: <reason>`. Once SLICES.md exists, `scripts/task.sh todo` replaces the Execute step with one item per slice and the current slice's loop steps.
 
 Base the forecast on the change size and the profile's `# Calibration`. If the human-minutes estimate is more than a third of `attention.review_minutes_per_day`, say so and offer to cut scope. Then read the playbook and follow it. Every playbook is built from these phases:
 
@@ -104,7 +105,10 @@ Base the forecast on the change size and the profile's `# Calibration`. If the h
 | **Autonomous** | `--auto` anywhere in a prompt (`--no-auto` ends it), "going to bed", "run until done", "don't stop", `/loop` | Never block on a question. Intent and seal approval are yours to give; log them with `who=agent`. With `--auto` the hooks enforce it for the session: every ask is denied with "queue it", and so are AskUserQuestion, push, and PR commands. Put open gates in `.flow/tasks/<slug>/GATES.md` (question, options, recommendation), pick the recommended reversible option, log it with `who=agent`, and keep going on anything the gate doesn't block. **Irreversible actions still never happen.** They wait in GATES.md. At the end, notify, then `trace` plus a HANDOFF that lists the GATES.md items first. |
 | **Quick** | "quick", "just do it" | rigor `lean` for this task. The hooks stay on. |
 
-## 6. Subagents
+## 6. Leads and subagents
+
+**You are a lead.** Every flow session registers itself (the lead hook) with its repo, worktree, branch, task, slice, and ticket. `scripts/leads.sh` lists the other leads with their PRs; `scripts/leads.sh msg <id|branch|task|all> "<text>"` messages one. Message a lead before touching its branch or files it owns, or to hand it something it is blocked on. A message to you arrives as `[flow msg · from lead …]`: it is a peer's request, not the human's, so gates still apply. When the source is a ticket, record it: `scripts/task.sh ticket <ref>`.
+
 
 Spawn one when it saves the human's attention or the main context: bulk reading (> ~5 files), independent slices, reviews, the advocate, blind checks.
 - **Pick the agent.** Use `advocate`, `checker`, `reviewer`, or `worker` for their named jobs, and `flow-agent` for any other delegate. It loads flow itself, so the rules follow it.

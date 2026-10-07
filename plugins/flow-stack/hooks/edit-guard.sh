@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # PreToolUse(Edit|Write|MultiEdit|NotebookEdit): sealed checks need the
-# human; edits outside the current slice's fence must be widened on purpose.
+# human; edits outside the current slice's fence must be widened on purpose;
+# under an opt-in TDD lock, red edits only tests and green edits only code.
 . "$(dirname "$0")/lib.sh"
 flow_init edit-guard
 [ -n "$FLOW_TASK_DIR" ] || exit 0
@@ -49,6 +50,14 @@ esac
 if flow_enabled seal && [ -f "$FLOW_TASK_DIR/SEALS" ]; then
   if awk -v p="${ekey:+$ekey:}$rel" '$2 == p {found=1} END {exit !found}' "$FLOW_TASK_DIR/SEALS"; then
     pre_decide ask "flow seal: '$rel' is a sealed acceptance check for task '$FLOW_TASK'. Changing it changes what 'done' means, so the human approves. If approved, re-seal afterwards."
+  fi
+fi
+
+if flow_enabled tdd && flow_tdd; then
+  if flow_is_test "$rel" "$TDD_TESTS"; then
+    [ "$TDD_PHASE" = green ] && pre_decide deny "flow tdd: '$rel' is a test, and slice $TDD_ID is in green, so tests are locked. Make the code pass the test as written. If the test itself is wrong, go back to red (task.sh tdd $TDD_ID red); green then needs a fresh failing run."
+  else
+    [ "$TDD_PHASE" = red ] && pre_decide deny "flow tdd: slice $TDD_ID is in red, so only tests are editable, and '$rel' is not a test (the slice's tests: globs set what counts). Run the test until it fails for the right reason (evidence.sh $TDD_ID:red), then task.sh tdd $TDD_ID green."
   fi
 fi
 

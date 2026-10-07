@@ -9,7 +9,7 @@ One slice at a time. Paths are relative to this skill's base directory. `T` belo
 
 ## Start
 
-1. `T slice <id> doing`. The fence hook now enforces the slice's `fence:` globs.
+1. `T slice <id> doing`. The fence hook now enforces the slice's `fence:` globs. Then `T todo`, and put its lines in the todo list: this slice's steps become the open items.
 2. Read the slice's `check:` and `budget:`. If the check is empty, write it now, in the slice block, before any code (principle-intent-before-code). If it is a new test file, seal it: `../seal/scripts/seal.sh add <path>`.
 3. Run the check once **before** building: `../verify/scripts/evidence.sh <id>:before` (it runs the slice's declared check). It should fail. If it already passes, the check does not test this slice. Fix the check, not the code.
 
