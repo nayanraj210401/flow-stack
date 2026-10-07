@@ -34,7 +34,7 @@ const MODEL = /^(haiku|sonnet|opus|fable|inherit|[\w.:@\/-]*claude[\w.:@\/-]*)(\
 export function parseBudget(profile: string) {
   const models: Partial<Record<Budget, string>> = {}
   const rejected: string[] = []
-  const front = /^---\n([\s\S]*?)\n---/.exec(profile)?.[1] ?? ''
+  const front = /^---\r?\n([\s\S]*?)\r?\n---/.exec(profile)?.[1] ?? ''
   for (const m of front.matchAll(/^[ \t]+(subagent_model|build_model|design_model):[ \t]*([^\s#]+)/gm)) {
     const [, key, value] = m as unknown as [string, Budget, string]
     if (MODEL.test(value)) models[key] = value
@@ -67,18 +67,21 @@ async function refresh($: EngineInterface) {
     return
   }
   running = true
-  do {
-    again = false
-    try {
-      const { stdout } = await $.process.run([`${$.plugin.root}/skills/flow/scripts/status.sh`, await $.session.cwd()])
-      const next = JSON.parse(stdout || '{}') as Status
-      status = next.task ? next : null
-    } catch {
-      status = null
-    }
-    $.ui.invalidate('ui.render')
-  } while (again)
-  running = false
+  try {
+    do {
+      again = false
+      try {
+        const { stdout } = await $.process.run([`${$.plugin.root}/skills/flow/scripts/status.sh`, await $.session.cwd()])
+        const next = JSON.parse(stdout || '{}') as Status
+        status = next.task ? next : null
+      } catch {
+        status = null
+      }
+      $.ui.invalidate('ui.render')
+    } while (again)
+  } finally {
+    running = false
+  }
 }
 
 export const register: Register = on => {

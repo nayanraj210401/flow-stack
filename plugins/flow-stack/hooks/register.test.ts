@@ -90,6 +90,10 @@ test('parseBudget takes Bedrock and Vertex ids and ignores keys outside the fron
   })
 })
 
+test('parseBudget reads a CRLF profile', () => {
+  expect(parseBudget(PROFILE.replace(/\n/g, '\r\n')).models.build_model).toBe('sonnet')
+})
+
 test('agent.spawn leaves a worker on the default when build_model is a typo', async ($, on) => {
   const typo = PROFILE.replace('build_model: sonnet', 'build_model: sonet')
   expect(await spawnWith($, on, { subagentType: 'flow-stack:worker' }, typo)).toBe(undefined)
