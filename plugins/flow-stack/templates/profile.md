@@ -47,8 +47,8 @@ rigor: standard                   # lean | standard | strict: how much ceremony 
 # Board
 <!-- Read by: board/collect.sh on every /flow-stack:board run, from any session. Bad lines show as warnings
      on the board. Panels: needs spend tasks features quality decisions debt shipped estimate repos.
-- theme: auto                 (auto | light | dark)
-- tab: current                (current | all | <repo name>)
+- theme: auto                 # auto | light | dark
+- tab: current                # current | all | <repo name>
 - hide: spend
 - order: tasks, quality
 - wide: debt

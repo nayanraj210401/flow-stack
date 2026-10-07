@@ -143,7 +143,7 @@ done
 board_prefs() {
   perl -0pe 's/<!--.*?-->//gs' "$profile" 2>/dev/null |
     awk '/^# /{on = ($0 ~ /^# Board[[:space:]]*$/); next}
-      on && /^-[[:space:]]+[A-Za-z_]+:/{l=$0; sub(/^-[[:space:]]+/,"",l); k=l; sub(/:.*/,"",k); sub(/^[^:]*:[[:space:]]*/,"",l); if (k == "view") sub(/[[:space:]]+$/,"",l); else sub(/[[:space:]]+(#[[:space:]].*)?$/,"",l); print k"\t"l}' |
+      on && /^-[[:space:]]+[A-Za-z_]+:/{l=$0; sub(/^-[[:space:]]+/,"",l); k=l; sub(/:.*/,"",k); sub(/^[^:]*:[[:space:]]*/,"",l); if (k == "view") { sub(/[[:space:]]+$/,"",l); if (match(l, / · (table|list|count)[[:space:]]+#[[:space:]].*$/)) { t = substr(l, RSTART); sub(/[[:space:]]+#.*$/,"",t); l = substr(l, 1, RSTART - 1) t } } else sub(/[[:space:]]+(#[[:space:]].*)?$/,"",l); print k"\t"l}' |
     jq -Rsc '["needs","spend","tasks","features","quality","decisions","debt","shipped","estimate","repos"] as $ids
       | reduce (split("\n")[] | select(length > 0) | split("\t") | {k: .[0], v: (.[1] // "")}) as $p
         ({hide: [], order: [], wide: [], theme: "auto", tab: "current", accent: null, views: [], warnings: []};
@@ -172,10 +172,11 @@ board="$(printf '%s\n' "${rj[@]:-}" | jq -sc --arg at "$(date +%FT%T%z)" --argjs
 err="$(mktemp)"; trap 'rm -f "$err"' EXIT
 bin="$(dirname "$(command -v jq)"):$(dirname "$(command -v perl)")"
 views="$(jq -c '.prefs.views[]' <<<"$board" | while IFS= read -r v; do
-  if rows="$(env -i PATH="$bin" perl -e 'alarm 5; exec @ARGV' jq -c "[limit(51; ($(jq -r .expr <<<"$v")))] | if length == 1 and (.[0] | type) == \"array\" then .[0] else . end | .[:50]" <<<"$board" 2>"$err")" && [ -n "$rows" ]; then
+  rows="$(env -i PATH="$bin" perl -e 'alarm 5; exec @ARGV' jq -c "[limit(51; ($(jq -r .expr <<<"$v")))] | if length == 1 and (.[0] | type) == \"array\" then .[0] else . end | .[:50]" <<<"$board" 2>"$err")"; rc=$?
+  if [ "$rc" -eq 0 ] && [ -n "$rows" ]; then
     jq -c --argjson r "$rows" 'del(.expr) + {rows: $r}' <<<"$v"
   else
-    jq -c --arg e "$(head -n1 "$err" | grep . || echo "timed out after 5 s")" 'del(.expr) + {error: $e}' <<<"$v"
+    jq -c --arg e "$(head -n1 "$err" | grep . || { [ "$rc" -eq 142 ] && echo "timed out after 5 s"; } || echo "jq exited $rc")" 'del(.expr) + {error: $e}' <<<"$v"
   fi
 done | jq -sc .)"
 jq -c --argjson v "$views" '.prefs.views = $v' <<<"$board"
