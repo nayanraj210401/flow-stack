@@ -24,6 +24,8 @@ Principle: `principle-smallest-verifiable-unit`.
 
 Write SLICES.md (format in `../flow/references/conventions.md`). Show the human a numbered list, one line per slice: `S1 · tracer: POST /login → 429 at limit · check: rate-limit.spec · ~80 lines`. No gate is needed unless the slicing reveals a scope question. In that case, raise that question alone.
 
+Then mirror the plan into the todo list: `../flow/scripts/task.sh todo` prints one line per slice, with the `doing` slice expanded into its loop steps. Replace the todo list with those lines, and re-run it each time a slice changes status. A slice too big for its steps to fit on one screen is too big: split it (rule 4).
+
 ## Checks per slice
 
 When a slice needs a narrower check than an acceptance check, write that check file first and seal it along with the others.

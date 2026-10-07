@@ -3,12 +3,14 @@
     "SessionStart": [
       {
         "matcher": "startup|resume|clear|compact",
-        "hooks": [{ "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh\"", "timeout": 10 }]
+        "hooks": [{ "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh\"", "timeout": 10 },
+                  { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/lead.sh\"", "timeout": 5 }]
       }
     ],
     "UserPromptSubmit": [
       {
-        "hooks": [{ "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/anchor.sh\"", "timeout": 5 }]
+        "hooks": [{ "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/anchor.sh\"", "timeout": 5 },
+                  { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/lead.sh\"", "timeout": 5 }]
       }
     ],
     "PreToolUse": [
@@ -27,12 +29,18 @@
     ],
     "PostToolUse": [
       {
-        "hooks": [{ "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/post-tool.sh\"", "timeout": 5 }]
+        "hooks": [{ "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/post-tool.sh\"", "timeout": 5 },
+                  { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/lead.sh\"", "timeout": 5 }]
       }
     ],
     "PreCompact": [
       {
         "hooks": [{ "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/pre-compact.sh\"", "timeout": 10 }]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [{ "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/lead.sh\"", "timeout": 5 }]
       }
     ],
     "Stop": [

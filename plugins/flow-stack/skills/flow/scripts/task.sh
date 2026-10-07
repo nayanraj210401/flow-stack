@@ -13,11 +13,17 @@
 #   task.sh switch <slug>             make another task active
 #   task.sh close                     clear ACTIVE (folder is kept)
 #   task.sh list                      tasks with slice progress
+#   task.sh ticket [<ref>]            record (or print) the ticket this task works on; leads.sh shows it
 #   task.sh slice <id> <status>       set a slice status (todo|doing|done|blocked)
 #                                     "done" is gated: red-first, green after the last edit,
 #                                     probe TEETH, diff budget (see proofs). Override with
 #                                     --force "<reason>" (logged to DECISIONS.tsv).
 #   task.sh proofs <id>               show which done-proofs a slice has and lacks
+#   task.sh todo                      SLICES.md as todo-list lines: one per slice, the doing
+#                                     slice expanded into its loop steps (copy into the todo list)
+#   task.sh tdd <id> red|green [--force "<reason>"]   opt-in TDD lock: red edits only tests,
+#                                     green only code (tests locked); green needs a new <id>:red
+#                                     FAIL since red began. task.sh tdd off [reason] ends it (logged)
 #   task.sh accept <lane>             import a worker lane's EVIDENCE.md into the task
 #                                     (delegate, main checkout, after reviewing its branch)
 #   task.sh decide <who> <reversible yes|no> <decision> <why> [evidence]
@@ -123,7 +129,7 @@ proofs() {
 
 cmd="${1:-}"; shift || true
 case "$cmd" in
-  new|switch|close|slice|accept)
+  new|switch|close|slice|accept|ticket)
     [ -z "$FLOW_LANE" ] || die "'$cmd' is refused in worktree lane '$FLOW_LANE': the task plan is shared. Return your evidence; the delegate accepts it and marks the slice." ;;
 esac
 case "$cmd" in
@@ -198,6 +204,52 @@ case "$cmd" in
     ;;
   proofs)
     proofs "${1:-}" ;;
+  tdd)
+    st="$(flow_state_dir "$(active_dir)")"; pf="$st/TDD"
+    if [ "${1:-}" = off ]; then
+      [ -f "$pf" ] || die "the TDD lock is not on"
+      rm -f "$pf"; "$0" decide agent yes "TDD lock off" "${2:-no reason given}" >/dev/null; echo "tdd: off"; exit 0
+    fi
+    id="${1:-}"; ph="${2:-}"
+    [[ "$ph" =~ ^(red|green)$ ]] || die "usage: task.sh tdd <id> red|green [--force \"<reason>\"] | task.sh tdd off [reason]"
+    grep -q "^## $id " "$(active_dir)/SLICES.md" || die "no slice $id"
+    reds="$(grep -cE "^### [^ ]+ · $id:(red|before) · FAIL " "$st/EVIDENCE.md" 2>/dev/null || true)"; reds="${reds:-0}"
+    if [ "$ph" = green ]; then
+      read -r pid pph pn _ <"$pf" 2>/dev/null || true
+      [ "${pid:-}" = "$id" ] && [ "${pph:-}" = red ] || die "slice $id is not in red; start with: task.sh tdd $id red"
+      if [ "$reds" -le "${pn:-0}" ]; then
+        if [ "${3:-}" = --force ] && [ -n "${4:-}" ]; then
+          "$0" decide agent yes "tdd green without a fresh red FAIL for $id" "$4" >/dev/null; echo "forced: logged to DECISIONS.tsv"
+        else
+          die "no failing '$id:red' run since red began. Run evidence.sh $id:red and watch it fail for the right reason, or: task.sh tdd $id green --force \"<reason>\""
+        fi
+      fi
+    fi
+    mkdir -p "$st"; printf '%s %s %s\n' "$id" "$ph" "$reds" >"$pf"; echo "$id → $ph" ;;
+  ticket)
+    if [ -n "${1:-}" ]; then printf '%s\n' "$1" >"$(active_dir)/TICKET"; echo "ticket: $1"; else cat "$(active_dir)/TICKET" 2>/dev/null || true; fi ;;
+  todo)
+    f="$(active_dir)/SLICES.md"
+    grep -q '^status:' "$f" 2>/dev/null || die "no slices in $f yet (run the slice skill)"
+    awk '
+      function out() {
+        if (id == "") return
+        mark = (st == "done" ? "[x]" : st == "doing" ? "[>]" : st == "blocked" ? "[!]" : "[ ]")
+        printf "%s %s · %s\n", mark, id, title
+        if (st != "doing") return
+        if (red !~ /^n\/a/) printf "    - red: evidence.sh %s:before fails for the right reason\n", id
+        printf "    - subtract scan, one line in DECISIONS.tsv\n"
+        printf "    - build inside the fence: %s\n", fence
+        printf "    - green: evidence.sh %s passes\n", id
+        if (teeth !~ /^n\/a/) printf "    - teeth: probe.sh %s says TEETH\n", id
+        printf "    - task.sh slice %s done\n", id
+      }
+      /^## / { out(); id = $2; title = $0; sub(/^## [^ ]+ · ?/, "", title); st = ""; red = ""; teeth = ""; fence = "" }
+      /^status:/ { st = $2 }
+      /^fence:/ { fence = $0; sub(/^fence:[[:space:]]*/, "", fence) }
+      /^red:/ { red = $0; sub(/^red:[[:space:]]*/, "", red) }
+      /^teeth:/ { teeth = $0; sub(/^teeth:[[:space:]]*/, "", teeth) }
+      END { out() }' "$f" ;;
   slice)
     id="${1:-}"; st="${2:-}"
     [[ "$st" =~ ^(todo|doing|done|blocked)$ ]] || die "usage: task.sh slice <id> <todo|doing|done|blocked> [--force \"<reason>\"]"
@@ -254,6 +306,6 @@ $out"
     printf 'usd=%s ctx_pct=%s human_min=%s at=%s\n' "$1" "$2" "$3" "$(date -u +%FT%TZ)" >"$(active_dir)/ESTIMATE"
     echo "estimate saved"
     ;;
-  -h|--help|"") sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//' ;;
+  -h|--help|"") sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//' ;;
   *) die "unknown command: $cmd (try -h)" ;;
 esac
