@@ -25,12 +25,11 @@ const ROLE: Record<string, Budget> = {
   'flow-stack:flow-agent': 'build_model',
 }
 
-// The profile's frontmatter `budget:` block: "  build_model: sonnet   # comment".
-// A value that isn't a model alias or id is dropped and named in `rejected`, so a typo
-// leaves the spawn on Claude Code's own choice instead of refusing it.
-// Aliases, and full ids from the API, Bedrock (us.anthropic.claude-…, ARNs), and Vertex (claude-…@date).
+// A model alias, or a full id from the API, Bedrock (us.anthropic.claude-…, ARNs), or Vertex (claude-…@date).
 const MODEL = /^(haiku|sonnet|opus|fable|inherit|[\w.:@\/-]*claude[\w.:@\/-]*)(\[1m\])?$/
 
+// The profile's frontmatter `budget:` block ("  build_model: sonnet   # comment"). A value that
+// isn't a model is dropped into `rejected`, so a typo leaves the spawn on Claude Code's choice.
 export function parseBudget(profile: string) {
   const models: Partial<Record<Budget, string>> = {}
   const rejected: string[] = []
