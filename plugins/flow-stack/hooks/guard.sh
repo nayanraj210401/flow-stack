@@ -36,6 +36,7 @@ if has '(^|[;&|[:space:]])(cat|less|more|head|tail|bat|strings|xxd)[[:space:]][^
 fi
 
 # Gates are the human's: the /flow-pane decides them through task.sh gate, never the agent.
+# A speed bump, not a boundary: an agent could still edit GATES.md by hand.
 if has 'task\.sh[[:space:]]+gate([[:space:]]|$)'; then
   pre_decide deny "flow guard: gates are the human's to decide (the /flow-pane's buttons). Ask, or leave it in GATES.md."
 fi

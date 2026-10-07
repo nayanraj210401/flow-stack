@@ -301,7 +301,8 @@ $out"
   gate)
     n="${1:-}"; verdict="${2:-}"; want="${3:-}"; g="$(active_dir)/GATES.md"
     case "$verdict" in approve|reject) ;; *) die "usage: task.sh gate <n> approve|reject \"<question>\"" ;; esac
-    q="$(awk -v n="$n" '/^GATE · /{k++} k == n && /^GATE · /{sub(/^GATE · /,""); print; exit}' "$g" 2>/dev/null | tr -d '\000-\037\177')"
+    q="$(awk -v n="$n" '/^GATE · /{k++} k == n && /^GATE · /{sub(/^GATE · /,""); print; exit}' "$g" 2>/dev/null |
+      jq -Rr 'gsub("[\u0001-\u001f\u007f-\u009f]"; "")')"  # the same text status.sh shows the pane
     [ -n "$q" ] || die "no gate $n in $g"
     [ "$q" = "$want" ] || die "gate $n is now \"$q\", not \"$want\" (GATES.md changed; reload the pane)"
     awk -v n="$n" '/^GATE · /{k++; on=(k==n)} on && /^  decided: /{d=1} END{exit d}' "$g" || die "gate $n is already decided"
@@ -310,7 +311,7 @@ $out"
       /^GATE · /{ if (on) { print line; on=0 } k++; if (k==n) on=1 }
       on && /^[[:space:]]*$/ { print line; on=0 }
       { print }
-      END { if (on) print line }' "$g" >"$tmp" && mv "$tmp" "$g"
+      END { if (on) print line }' "$g" >"$tmp" && chmod 644 "$tmp" && mv "$tmp" "$g"
     "$0" decide human no "$verdict: $q" "decided in the /flow-pane" >/dev/null
     echo "gate $n ${verdict%e}ed: $q"
     ;;
