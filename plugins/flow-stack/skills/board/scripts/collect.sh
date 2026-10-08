@@ -88,7 +88,7 @@ repo_json() {
   active="$(head -n1 "$fd/ACTIVE" 2>/dev/null | tr -d '[:space:]')"
   local linked="null"
   case "$active" in @*) linked="$(jq -nc --arg h "$(basename "${active%:*}")" --arg s "${active##*:}" '{home:$h, slug:$s}')" ;; esac
-  local owners; owners="$(flow_owners "$r")"  # tasks led from the main checkout or a lead worktree
+  local owners; owners="$(flow_owners "$r")"
   local tj=()
   for d in "$fd"/tasks/*/; do [ -d "$d" ] && tj+=("$(task_json "${d%/}" "$owners")"); done
   [ "${#tj[@]}" -gt 0 ] && tasks="$(printf '%s\n' "${tj[@]}" | jq -sc .)"

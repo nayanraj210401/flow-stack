@@ -7,8 +7,9 @@
 #              worktree has none of its own)
 #   FLOW_ACTIVE the file naming the active task: $FLOW_DIR/ACTIVE, or a lead worktree's own
 #              <git-dir>/flow-active (a worktree with one is a lead of its own task, not a lane)
-#   FLOW_LANE  "" in the main checkout and in a lead worktree; in a worktree, its branch (/ → _). Each lane writes
-#              its own evidence, trail, and circuit state, so parallel workers never share a file.
+#   FLOW_LANE  "" in the main checkout and in a lead worktree; in any other worktree, its branch
+#              (/ → _). Each lane writes its own evidence, trail, and circuit state, so
+#              parallel workers never share a file.
 #
 # flow_task then resolves the active task. .flow/ACTIVE holds "<slug>" (the task lives here) or
 # "@<home-repo-path>:<slug>" (a multi-repo task whose folder lives in its home repo):
@@ -28,7 +29,6 @@ flow_roots() {
   FLOW_ACTIVE="$FLOW_DIR/ACTIVE"
   FLOW_LANE=""
   if [ "$FLOW_MAIN" != "$FLOW_ROOT" ]; then
-    # A worktree with its own pointer is a lead of that task, not a lane of the main checkout's.
     gd="$(git -C "$d" rev-parse --absolute-git-dir 2>/dev/null)"
     FLOW_ACTIVE="$gd/flow-active"
     [ -s "$FLOW_ACTIVE" ] && return 0
