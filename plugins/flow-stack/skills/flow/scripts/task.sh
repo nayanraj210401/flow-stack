@@ -202,6 +202,9 @@ case "$cmd" in
     point_repos "$d" "$slug"
     echo "$d"
     ;;
+  join) # join <slug>: make this worktree a worker lane of <slug> (the hook auto-joins workers of a lead)
+    [ -n "$gd" ] && [ -d "$flow/tasks/${1:-}" ] || die "usage: task.sh join <slug> (in a worktree; the task must exist)"
+    printf '%s\n' "$1" >"$gd/flow-lane"; echo "joined: $1" ;;
   active) active ;;
   dir) active_dir ;;
   repos)
@@ -306,6 +309,7 @@ case "$cmd" in
     ;;
   accept)
     lane="${1:-}"; [ -n "$lane" ] || die "usage: task.sh accept <lane>"
+    root="$FLOW_ROOT"  # merge and feature checks run on this checkout's tree (a lead worktree's, not main's)
     lev="$(active_dir)/lanes/$lane/EVIDENCE.md"
     [ -f "$lev" ] || die "no evidence in lane '$lane' ($lev)"
     if [ -d "$flow/features" ]; then

@@ -19,7 +19,7 @@
 #                             ("<repo>:<path>") and evidence so repos never collide
 
 flow_roots() {
-  local d="${1:-$PWD}" common
+  local d="${1:-$PWD}" common gd
   FLOW_ROOT="$(git -C "$d" rev-parse --show-toplevel 2>/dev/null || printf '%s' "$d")"
   common="$(git -C "$d" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
   FLOW_MAIN="$FLOW_ROOT"
@@ -29,9 +29,12 @@ flow_roots() {
   FLOW_LANE=""
   if [ "$FLOW_MAIN" != "$FLOW_ROOT" ]; then
     # A worktree with its own pointer is a lead of that task, not a lane of the main checkout's.
-    FLOW_ACTIVE="$(git -C "$d" rev-parse --absolute-git-dir 2>/dev/null)/flow-active"
+    gd="$(git -C "$d" rev-parse --absolute-git-dir 2>/dev/null)"
+    FLOW_ACTIVE="$gd/flow-active"
     [ -s "$FLOW_ACTIVE" ] && return 0
     FLOW_ACTIVE="$FLOW_DIR/ACTIVE"
+    # flow-lane (slug, then the lead's root) makes this a worker lane of that lead's task
+    [ -s "$gd/flow-lane" ] && FLOW_ACTIVE="$gd/flow-lane"
     FLOW_LANE="$(git -C "$d" rev-parse --abbrev-ref HEAD 2>/dev/null | tr '/' '_' || true)"
     if [ -z "$FLOW_LANE" ] || [ "$FLOW_LANE" = HEAD ]; then FLOW_LANE="$(basename "$FLOW_ROOT")"; fi
   fi
