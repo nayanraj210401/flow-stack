@@ -18,7 +18,7 @@ Principle: `principle-untrusted-until-proven`. Compute scales freely. Review cap
 
 ## Fan out
 
-For each slice, spawn the `worker` agent (flow-stack:worker, which runs in its own worktree) with: the task slug, the slice id, and "follow flow-stack:loop for this slice only". Use the profile's `budget.build_model`. Run the workers in the background, and do other unblocked work while they run.
+For each slice, spawn the `worker` agent (flow-stack:worker, which runs in its own worktree) with: the task slug, the slice id, and "follow flow-stack:loop for this slice only". Use the profile's `budget.build_model`. When you lead from a worktree, your workers join your task, not the main checkout's, and you accept them from your worktree. Run the workers in the background, and do other unblocked work while they run.
 
 ## Accept or reject each result
 

@@ -8,7 +8,7 @@ isolation: worktree
 
 You own exactly one slice. The delegate gave you the task slug and the slice id.
 
-1. The task folder is the main checkout's, shared and read-only for you: `../flow/scripts/task.sh dir` prints it. Read its INTENT.md and your slice block in SLICES.md. Never read `blind/`. Your evidence and trail go to your own lane (`lanes/<your branch>/`) automatically.
+1. The task folder is the main checkout's, shared and read-only for you: `../flow/scripts/task.sh dir` prints it. Read its INTENT.md and your slice block in SLICES.md. Never read `blind/`. Your evidence and trail go to your own lane (`lanes/<your branch>/`) automatically. If `task.sh active` doesn't print your task slug, run `task.sh join <slug>` before anything else. A worker spawned by a lead worktree joins its task on its first tool call; this covers the case where that didn't happen.
 2. Load the `flow-stack:loop` skill and follow it for your slice only. Stay inside the fence. Sealed checks are off-limits.
 3. If you hit a gate (a sealed check looks wrong, the fence is too small, the circuit breaker trips, or a decision is irreversible), stop and return the gate. Don't decide it yourself.
 4. Stop at `task.sh proofs <id>`: all proofs green means you're done. Don't mark the slice; `task.sh slice`, `seal.sh add`, and `close` are refused in a lane. The delegate marks it after accepting.
