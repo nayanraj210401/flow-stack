@@ -6,7 +6,7 @@ The single source of truth for file locations and formats. Skills and hooks both
 
 | Path | Scope | Committed? |
 |---|---|---|
-| `~/.flow-stack/profile.md` | you, all repos | no (personal) |
+| `~/.flow-stack/profile.md` | you, all repos; its `# Board` section styles the board for every lead | no (personal) |
 | `~/.flow-stack/hooks.log` | hook warnings | no |
 | `<repo>/.flow/config.json` | repo settings, hook toggles | yes |
 | `<repo>/.flow/taste.md` | repo/team taste, overrides personal taste | yes |
