@@ -43,7 +43,8 @@ if [ -n "$FLOW_TASK_DIR" ]; then
   # A lane records its branch and fork point once, so task.sh accept knows exactly what it merges.
   if [ -n "$FLOW_LANE" ] && [ ! -s "$(dirname "$ev")/BASE" ]; then
     git -C "$root" rev-parse --abbrev-ref HEAD >"$(dirname "$ev")/BRANCH" 2>/dev/null
-    git -C "$root" merge-base HEAD "$(git -C "$FLOW_MAIN" rev-parse HEAD)" >"$(dirname "$ev")/BASE" 2>/dev/null
+    lead="$(sed -n 2p "$(git -C "$root" rev-parse --absolute-git-dir)/flow-lane" 2>/dev/null || true)"  # a worker of a lead worktree forks from that lead
+    git -C "$root" merge-base HEAD "$(git -C "${lead:-$FLOW_MAIN}" rev-parse HEAD)" >"$(dirname "$ev")/BASE" 2>/dev/null
   fi
 fi
 
