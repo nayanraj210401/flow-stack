@@ -32,9 +32,13 @@
 #                                     decided: line, log it to DECISIONS.tsv. The /flow-pane's
 #                                     buttons call this; the guard hook keeps the agent off it.
 #
-# Inside a linked git worktree (a delegate worker's lane) the task folder is the
-# main checkout's, read-only: new, switch, close, slice, and accept are refused,
-# and proofs read the lane's own evidence and trail (.flow/tasks/<slug>/lanes/<lane>/).
+#   task.sh join <slug>               in a worktree: become a worker lane of <slug> (workers of a
+#                                     lead worktree join on their first hook; this is the fallback)
+#
+# A linked git worktree is a lane of the main checkout's task (a delegate worker): the task
+# folder is read-only there, close, slice, and accept are refused, and proofs read the lane's
+# own evidence and trail (.flow/tasks/<slug>/lanes/<lane>/). new or switch in a worktree makes
+# it a lead of its own task instead (<git-dir>/flow-active); one checkout leads a task at a time.
 #   task.sh estimate <usd> <ctx_pct> <human_min>
 set -euo pipefail
 
@@ -61,16 +65,11 @@ ws_repos() {
   awk -v n="## $1" '/^# /{on=($0=="# Workspaces")} on && /^## /{cur=$0}
     on && cur==n && /^- repos:/ {sub(/^- repos:[[:space:]]*/,""); gsub(/[[:space:]]*,[[:space:]]*/,"\n"); print; exit}' "$profile" 2>/dev/null || true
 }
-# claim <slug>: refuse a slug another checkout owns (main's ACTIVE or a worktree's flow-active, not our own pointer)
+# claim <slug>: refuse a slug another checkout already leads
 claim() {
-  local f v
-  for f in "$FLOW_DIR/ACTIVE" "$FLOW_MAIN"/.git/worktrees/*/flow-active; do
-    [ -s "$f" ] && [ "$f" != "$FLOW_ACTIVE" ] || continue
-    v="$(head -n1 "$f" | tr -d '[:space:]')"
-    [ "${v##*:}" = "$1" ] || continue
-    [ "$f" != "$FLOW_DIR/ACTIVE" ] || die "task '$1' is already active in the main checkout"
-    die "task '$1' is already active in worktree $(dirname "$(cat "$(dirname "$f")/gitdir")")"
-  done
+  local o; o="$(flow_owners | awk -F'\t' -v s="$1" -v me="$FLOW_ROOT" '$1 == s && $2 != me && !n++ { print $2 }')"
+  [ -z "$o" ] || [ "$o" != "$FLOW_MAIN" ] || die "task '$1' is already active in the main checkout"
+  [ -z "$o" ] || die "task '$1' is already active in worktree $o"
 }
 # point_repos <task-dir> <slug>: this checkout's pointer (FLOW_ACTIVE), the home repo's, and one in every other repo.
 # Another repo's pointer is written only when empty or on this task (or the one we leave); otherwise refuse.
@@ -150,7 +149,8 @@ cmd="${1:-}"; shift || true
 gd=""; [ "$FLOW_MAIN" = "$FLOW_ROOT" ] || gd="$(git -C "$FLOW_ROOT" rev-parse --absolute-git-dir)"
 case "$cmd" in
   new|switch) # an unpointed worktree (not a joined worker) becomes a lead
-    if [ -n "$FLOW_LANE" ] && [ ! -s "$gd/flow-lane" ]; then FLOW_ACTIVE="$gd/flow-active"; FLOW_LANE=""; fi ;;
+    [ -z "$FLOW_LANE" ] || [ ! -s "$gd/flow-lane" ] || die "this worktree is a worker lane of '$(head -n1 "$gd/flow-lane")' ($gd/flow-lane); remove that file to lead a task here"
+    if [ -n "$FLOW_LANE" ]; then FLOW_ACTIVE="$gd/flow-active"; FLOW_LANE=""; FLOW_TASK=""; fi ;;
 esac
 case "$cmd" in
   new|switch|close|slice|accept|ticket)
@@ -203,8 +203,9 @@ case "$cmd" in
     echo "$d"
     ;;
   join) # join <slug>: make this worktree a worker lane of <slug> (the hook auto-joins workers of a lead)
-    [ -n "$gd" ] && [ -d "$flow/tasks/${1:-}" ] || die "usage: task.sh join <slug> (in a worktree; the task must exist)"
-    printf '%s\n' "$1" >"$gd/flow-lane"; echo "joined: $1" ;;
+    s="${1:-}"; [[ "$s" =~ ^[a-z0-9][a-z0-9-]*$ ]] && [ -n "$gd" ] && [ -d "$flow/tasks/$s" ] || die "usage: task.sh join <slug> (in a worktree; the task must exist)"
+    [ ! -s "$gd/flow-active" ] || die "this worktree leads '$(head -n1 "$gd/flow-active")'; close it before joining another task"
+    printf '%s\n' "$s" >"$gd/flow-lane"; echo "joined: $s" ;;
   active) active ;;
   dir) active_dir ;;
   repos)
@@ -215,24 +216,27 @@ case "$cmd" in
     claim "$1"; point_repos "$flow/tasks/$1" "$1"; echo "active: $1"
     ;;
   close)
-    if [ "$FLOW_ACTIVE" != "$FLOW_DIR/ACTIVE" ]; then rm -f "$FLOW_ACTIVE"; echo "no active task"; exit 0; fi
+    if [ "$FLOW_ACTIVE" != "$FLOW_DIR/ACTIVE" ]; then # a lead worktree: its pointer, and the other repos' pointers to its task
+      if [ -f "$FLOW_TASK_DIR/REPOS" ]; then
+        while IFS=$'\t' read -r _ path; do
+          if [ "$(head -n1 "$path/.flow/ACTIVE" 2>/dev/null)" = "@$FLOW_TASK_HOME:$FLOW_TASK" ]; then rm -f "$path/.flow/ACTIVE"; fi
+        done <"$FLOW_TASK_DIR/REPOS"
+      fi
+      rm -f "$FLOW_ACTIVE"; echo "no active task"; exit 0
+    fi
     if [ -n "$FLOW_TASK_DIR" ] && [ -f "$FLOW_TASK_DIR/REPOS" ]; then
       while IFS=$'\t' read -r _ path; do rm -f "$path/.flow/ACTIVE"; done <"$FLOW_TASK_DIR/REPOS"
     fi
     rm -f "$flow/ACTIVE" "${FLOW_TASK_HOME:-$root}/.flow/ACTIVE"; echo "no active task" ;;
   list)
-    a="$(active)"; own=""
-    for f in "$FLOW_DIR/ACTIVE" "$FLOW_MAIN"/.git/worktrees/*/flow-active; do
-      [ -s "$f" ] && [ "$f" != "$FLOW_DIR/ACTIVE" ] || continue
-      own="$own$(head -n1 "$f" | tr -d '[:space:]' | sed 's/.*://')	(worktree $(dirname "$(cat "$(dirname "$f")/gitdir")"))"$'\n'
-    done
+    a="$(active)"; own="$(flow_owners)"
     for d in "$flow"/tasks/*/; do
       [ -d "$d" ] || continue
       s="$(basename "$d")"
       total="$(grep -c '^status:' "$d/SLICES.md" 2>/dev/null || true)"
       done_n="$(grep -c '^status: done' "$d/SLICES.md" 2>/dev/null || true)"
-      w="$(awk -F'\t' -v s="$s" '$1 == s { print " " $2; exit }' <<<"$own")"
-      printf '%s %s  %s/%s slices  %s%s\n' "$([ "$s" = "$a" ] || [ -n "$w" ] && echo '*' || echo ' ')" "$s" "${done_n:-0}" "${total:-0}" "$(cat "$d/PLAYBOOK" 2>/dev/null || echo '?')" "$w"
+      w="$(awk -F'\t' -v s="$s" -v m="$FLOW_MAIN" '$1 == s { print ($2 == m ? "" : " (worktree " $2 ")"); exit }' <<<"$own")"
+      printf '%s %s  %s/%s slices  %s%s\n' "$([ "$s" = "$a" ] || grep -q "^$s"$'\t' <<<"$own" && echo '*' || echo ' ')" "$s" "${done_n:-0}" "${total:-0}" "$(cat "$d/PLAYBOOK" 2>/dev/null || echo '?')" "$w"
     done
     ;;
   proofs)

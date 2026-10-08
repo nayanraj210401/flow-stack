@@ -28,6 +28,7 @@ flow_join() {
   [ -s "$gd/flow-lane" ] && return 0
   lroot="$(jq -r '.root // empty' "$FLOW_HOME/leads/${sid//\//_}.json" 2>/dev/null || true)"
   [ -n "$lroot" ] && [ "$lroot" != "$FLOW_MAIN" ] && [ "$lroot" != "$FLOW_ROOT" ] || return 0
+  [ "$(git -C "$lroot" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" = "$FLOW_MAIN/.git" ] || return 0
   lgd="$(git -C "$lroot" rev-parse --absolute-git-dir 2>/dev/null)" || return 0
   slug="$(head -n1 "$lgd/flow-active" 2>/dev/null | tr -d '[:space:]')"
   [ -n "$slug" ] || return 0

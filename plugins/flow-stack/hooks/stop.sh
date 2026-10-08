@@ -27,9 +27,13 @@ check_re='(evidence|features|ready)\.sh'
 events="$(tail -n 3000 "$transcript" | jq -nrR --argjson roots "$roots" --arg check_re "$check_re" '
   def txt: if type == "string" then . elif type == "array" then map(.text? // "") | join("\n") else "" end;
   def scratch: . as $p | ($roots | any(. as $r | $p | startswith($r)) | not) or test("\\.(md|txt)$|/\\.flow/");
-  def unheredoc: gsub("(?<h>(?<!<)<<-?[[:space:]]*[\"'"'"']?(?<t>[A-Za-z_][A-Za-z0-9_]*)[\"'"'"']?[^\n]*)\n(?s:.*?)\n[[:space:]]*\\k<t>[[:space:]]*(?=\n|$)"; "\(.h)");
-  def expand: reduce ([match("(?:^|[;&|\n])[[:space:]]*(?<n>[A-Za-z_][A-Za-z0-9_]*)=(?<v>[^[:space:];&|\"'"'"'$]+)"; "g").captures | {n: .[0].string, v: .[1].string}][]) as $a
-    (.; gsub("\\$(\\{" + $a.n + "\\}|" + $a.n + "\\b)"; $a.v));
+  # a heredoc body is data, unless a shell runs it (bash <<EOF, ssh host <<EOF)
+  def unheredoc: gsub("(?<c>(?<![^\n])[^\n]*?)(?<h>(?<!<)<<-?[[:space:]]*[\"'"'"']?(?<t>[A-Za-z_][A-Za-z0-9_]*)[\"'"'"']?[^\n]*)\n(?<b>(?s:.*?))\n(?<e>[[:space:]]*\\k<t>[[:space:]]*)(?=\n|$)";
+    if (.c | test("(^|[;&|(\\s])(bash|sh|zsh|ksh|dash|ssh)(\\s|$)")) then .c + .h + "\n" + .b + "\n" + .e else .c + .h end);
+  # $NAME → its value, for names assigned exactly once in the command
+  def expand: . as $cmd | [match("(?:^|[;&|\n])[[:space:]]*(?<n>[A-Za-z_][A-Za-z0-9_]*)=(?<v>[^[:space:];&|\"'"'"'$]*)"; "g").captures | {n: .[0].string, v: .[1].string}]
+    | (group_by(.n) | map(select(length == 1) | .[0])) as $once | reduce $once[] as $a
+    ($cmd; gsub("\\$(\\{" + $a.n + "\\}|" + $a.n + "\\b)"; $a.v));
   def shell_write: unheredoc | expand | gsub("(>>?|\\btee( -a)?)[[:space:]]*(?![^[:space:];|&]*\\.\\.)[^[:space:];|&]*(\\.flow/|/tmp/|\\$\\{?TMPDIR\\b|scratchpad|\\.md|\\.txt)[^[:space:];|&]*"; "")
     | gsub("\"[^\"]*\"|'"'"'[^'"'"']*'"'"'"; "")
     | gsub("[0-9]*>>?[[:space:]]*(/dev/null|&[0-9]-?)"; "")

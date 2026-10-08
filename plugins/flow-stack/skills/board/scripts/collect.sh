@@ -88,15 +88,7 @@ repo_json() {
   active="$(head -n1 "$fd/ACTIVE" 2>/dev/null | tr -d '[:space:]')"
   local linked="null"
   case "$active" in @*) linked="$(jq -nc --arg h "$(basename "${active%:*}")" --arg s "${active##*:}" '{home:$h, slug:$s}')" ;; esac
-  # active = ACTIVE in the main checkout, or flow-active in a linked worktree leading that task
-  local owners="" g w a
-  [ -n "$active" ] && owners="$active"$'\t'"$r"
-  for g in "$r"/.git/worktrees/*/; do
-    a="$(head -n1 "$g/flow-active" 2>/dev/null | tr -d '[:space:]')"
-    case "$a" in ""|@*) continue ;; esac
-    w="$(sed 's|/\.git$||' "$g/gitdir" 2>/dev/null)"
-    owners="${owners:+$owners$'\n'}$a"$'\t'"${w:-$g}"
-  done
+  local owners; owners="$(flow_owners "$r")"  # tasks led from the main checkout or a lead worktree
   local tj=()
   for d in "$fd"/tasks/*/; do [ -d "$d" ] && tj+=("$(task_json "${d%/}" "$owners")"); done
   [ "${#tj[@]}" -gt 0 ] && tasks="$(printf '%s\n' "${tj[@]}" | jq -sc .)"

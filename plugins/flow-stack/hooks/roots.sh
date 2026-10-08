@@ -74,6 +74,17 @@ flow_repo_path() {
   awk -F'\t' -v n="$1" '$1 == n { print $2; exit }' "$FLOW_TASK_DIR/REPOS" 2>/dev/null || true
 }
 
+# flow_owners [main]: "slug<TAB>checkout" for every local task some checkout leads: the main checkout's
+# ACTIVE, then each lead worktree's flow-active. Multi-repo pointers (@home:slug) belong to their home repo.
+flow_owners() {
+  local m="${1:-$FLOW_MAIN}" f v
+  for f in "$m/.flow/ACTIVE" "$m"/.git/worktrees/*/flow-active; do
+    v="$(head -n1 "$f" 2>/dev/null | tr -d '[:space:]')"
+    case "$v" in ""|@*) continue ;; esac
+    if [ "$f" = "$m/.flow/ACTIVE" ]; then printf '%s\t%s\n' "$v" "$m"; else printf '%s\t%s\n' "$v" "$(dirname "$(cat "${f%/*}/gitdir")")"; fi
+  done
+}
+
 # flow_state_dir <task-dir>: where this checkout writes EVIDENCE.md, trail.jsonl, .circuit, HANDOFF.auto.md.
 flow_state_dir() {
   if [ -n "$FLOW_LANE" ]; then printf '%s/lanes/%s%s' "$1" "${FLOW_REPO_KEY:+${FLOW_REPO_KEY}_}" "$FLOW_LANE"; else printf '%s' "$1"; fi

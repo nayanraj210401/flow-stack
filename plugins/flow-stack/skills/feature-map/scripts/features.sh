@@ -137,7 +137,7 @@ case "$cmd" in
       if "$evidence" "feat:$id" "$sc" >/tmp/feat.$$ 2>&1; then res=PASS; else res=FAIL; rc=1; fi
       at="$(date +%F) $(git rev-parse --short HEAD)"
       if [ "$FLOW_ROOT" != "$FLOW_MAIN" ]; then # any linked worktree, lead or lane
-        mkdir -p "$dir/lanes"; printf '%s\t%s\t%s\n' "$id" "$res" "$at" >>"$dir/lanes/${FLOW_LANE:-$(git rev-parse --abbrev-ref HEAD | tr / _)}.tsv"
+        mkdir -p "$dir/lanes"; printf '%s\t%s\t%s\n' "$id" "$res" "$at" >>"$dir/lanes/${FLOW_LANE:-$(basename "$FLOW_ROOT")}.tsv"
       elif [ "$res" = PASS ]; then set_fm "$f" status verified verified "$at"
       else set_fm "$f" status broken
       fi
