@@ -109,6 +109,8 @@ Base the forecast on the change size and the profile's `# Calibration`. If the h
 
 **You are a lead.** Every flow session registers itself (the lead hook) with its repo, worktree, branch, task, slice, and ticket. `scripts/leads.sh` lists the other leads with their PRs; `scripts/leads.sh msg <id|branch|task|all> "<text>"` messages one. Message a lead before touching its branch or files it owns, or to hand it something it is blocked on. A message to you arrives as `[flow msg · from lead …]`: it is a peer's request, not the human's, so gates still apply. When the source is a ticket, record it: `scripts/task.sh ticket <ref>`.
 
+To run leads in parallel, give each its own worktree and run `task.sh new` there: each owns its own task, and no lead's fence, seals, or Stop check touches another's.
+
 
 Spawn one when it saves the human's attention or the main context: bulk reading (> ~5 files), independent slices, reviews, the advocate, blind checks.
 - **Pick the agent.** Use `advocate`, `checker`, `reviewer`, or `worker` for their named jobs, and `flow-agent` for any other delegate. It loads flow itself, so the rules follow it.

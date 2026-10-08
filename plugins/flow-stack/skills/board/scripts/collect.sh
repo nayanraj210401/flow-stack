@@ -25,7 +25,7 @@ current=""; git rev-parse --show-toplevel >/dev/null 2>&1 && { flow_roots; curre
 # first non-comment line under "## <heading>" in a markdown file
 md_first() { awk -v h="## $2" '/<!--/{c=1} c{if(/-->/)c=0; next} $0==h{on=1;next} on&&/^## /{exit} on&&NF&&$0!="- "{print;exit}' "$1" 2>/dev/null; }
 
-task_json() { # task_json <task-dir> <active-slug>
+task_json() { # task_json <task-dir> <owners: "slug<TAB>checkout" lines for tasks active anywhere>
   local d="$1" slug; slug="$(basename "$d")"
   local slices gates est trace_usd
   slices="$(awk '/^## /{if(id!="")print id"\t"t"\t"s; id=$2; t=$0; sub(/^## [^ ]+ · /,"",t); s="todo"} /^status:/{s=$2} END{if(id!="")print id"\t"t"\t"s}' "$d/SLICES.md" 2>/dev/null |
@@ -39,12 +39,12 @@ task_json() { # task_json <task-dir> <active-slug>
   jq -nc --arg slug "$slug" --arg goal "$(md_first "$d/INTENT.md" Goal)" --arg playbook "$(cat "$d/PLAYBOOK" 2>/dev/null)" \
     --argjson slices "${slices:-[]}" --argjson gates "${gates:-[]}" \
     --arg est "$est" --arg actual "$trace_usd" \
-    --argjson active "$([ "$slug" = "$2" ] && echo true || echo false)" \
+    --arg owner "$(awk -F'\t' -v s="$slug" '$1 == s {print $2; exit}' <<<"$2")" \
     --argjson closed "$([ -f "$d/TRACE.md" ] && grep -qv '^<!--' "$d/TRACE.md" && [ -n "$(md_first "$d/TRACE.md" Outcome)" ] && echo true || echo false)" \
     --argjson handoff "$(ls "$d"/HANDOFF*.md >/dev/null 2>&1 && echo true || echo false)" \
     --argjson lanes "$(ls -d "$d"/lanes/*/ 2>/dev/null | wc -l | tr -d ' ')" \
     --argjson repos "$(cut -f1 "$d/REPOS" 2>/dev/null | jq -Rsc 'split("\n") | map(select(length>0))')" \
-    '{slug:$slug, goal:$goal, playbook:$playbook, active:$active, closed:$closed, handoff:$handoff, lanes:$lanes, repos:$repos,
+    '{slug:$slug, goal:$goal, playbook:$playbook, active:($owner != ""), owner:(if $owner == "" then null else $owner end), closed:$closed, handoff:$handoff, lanes:$lanes, repos:$repos,
       slices:$slices, gates:$gates,
       estimate_usd:($est|tonumber? // null), actual_usd:($actual|tonumber? // null)}'
 }
@@ -88,8 +88,17 @@ repo_json() {
   active="$(head -n1 "$fd/ACTIVE" 2>/dev/null | tr -d '[:space:]')"
   local linked="null"
   case "$active" in @*) linked="$(jq -nc --arg h "$(basename "${active%:*}")" --arg s "${active##*:}" '{home:$h, slug:$s}')" ;; esac
+  # active = ACTIVE in the main checkout, or flow-active in a linked worktree leading that task
+  local owners="" g w a
+  [ -n "$active" ] && owners="$active"$'\t'"$r"
+  for g in "$r"/.git/worktrees/*/; do
+    a="$(head -n1 "$g/flow-active" 2>/dev/null | tr -d '[:space:]')"
+    case "$a" in ""|@*) continue ;; esac
+    w="$(sed 's|/\.git$||' "$g/gitdir" 2>/dev/null)"
+    owners="${owners:+$owners$'\n'}$a"$'\t'"${w:-$g}"
+  done
   local tj=()
-  for d in "$fd"/tasks/*/; do [ -d "$d" ] && tj+=("$(task_json "${d%/}" "$active")"); done
+  for d in "$fd"/tasks/*/; do [ -d "$d" ] && tj+=("$(task_json "${d%/}" "$owners")"); done
   [ "${#tj[@]}" -gt 0 ] && tasks="$(printf '%s\n' "${tj[@]}" | jq -sc .)"
   feats="$(for f in "$fd"/features/*.md; do [ -f "$f" ] && [ "$(basename "$f")" != README.md ] || continue
       awk 'NR==1&&$0=="---"{fm=1;next} fm&&$0=="---"{exit} fm{k=$0; sub(/:.*/,"",k); v=$0; sub(/^[^:]*:[[:space:]]*/,"",v); if(k=="id"||k=="status"||k=="verified") printf "%s\t%s\n", k, v}' "$f" |

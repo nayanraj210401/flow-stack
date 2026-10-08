@@ -25,6 +25,8 @@ The single source of truth for file locations and formats. Skills and hooks both
 | `~/.flow-stack/leads/<session_id>.inbox/` | messages to that lead, one `{ts, from, label, text}` JSON file each, from `leads.sh msg`; consumed on its next prompt or tool call (never a subagent's) | no |
 | `<repo>/.flow/ready.tsv` | ready-for-review ledger: `ts\tsha\tkind\tresult\tnote`, kinds review, deslop, tour, ready, and each `do` id (from `review/scripts/ready.sh`). The repo's own pre-PR gates are `.flow/config.json` `"ready": [{"id": "e2e", "run": "<cmd>"}, {"id": "sec-scan", "do": "<step, e.g. an MCP scan>"}]`: a `run` is checked live, and a `do` needs `ready.sh record <id> done` for HEAD | no |
 | `<repo>/.flow/ACTIVE` | the active task: `<slug>`, or `@<home-repo-path>:<slug>` in a non-home repo of a multi-repo task | no |
+| `<main>/.git/worktrees/<name>/flow-active` | the task a linked worktree leads (same format as ACTIVE); written by `task.sh new/switch` run in that worktree, removed by its `close` and with the worktree | no |
+| `<main>/.git/worktrees/<name>/flow-lane` | a worker's join: the slug and the lead's root (a worktree lead, not main); written by the worker's first hook | no |
 | `<repo>/.flow/tasks/<slug>/` | task folder | no (trace can export) |
 
 `FLOW_STACK_HOME` overrides `~/.flow-stack`.
@@ -61,7 +63,7 @@ The single source of truth for file locations and formats. Skills and hooks both
 
 **Multi-repo tasks.** A profile `# Workspaces` entry (`- repos: a, b, c`) lists repos from `# Repos` (`- path:`, `- role: primary|dep|reference`, optional `- remote:`, `- run:`). `task.sh new <slug> <playbook> --workspace <name>` puts the task folder in the primary repo and points every other repo's ACTIVE at it. Each slice names its `repo:` (default: the home repo) and its fence is relative to that repo; an edit in any other repo is denied, whichever repo the session runs in. SEALS paths outside the home repo are `<repo>:<path>`, and evidence blocks run elsewhere carry `- repo: <name>`. Each repo gets its own branch, PR, and ready-for-review stamp.
 
-**Worktrees.** `.flow/` is untracked, so a linked worktree has none. Every hook and script resolves `.flow/` through `hooks/roots.sh` to the main checkout's copy: plan files (INTENT, SLICES, SEALS, blind/) are shared and read-only from a lane, and per-agent writes go to `lanes/<branch>/` so parallel workers never write the same file.
+**Worktrees.** `.flow/` is untracked, so a linked worktree has none. Every hook and script resolves `.flow/` through `hooks/roots.sh` to the main checkout's copy. A worktree with no `flow-active` is a lane of main's task: plan files (INTENT, SLICES, SEALS, blind/) are read-only there, and its writes go to `lanes/<branch>/` so parallel workers never share a file. `task.sh new` or `switch` run in a worktree writes its `flow-active`, making it a lead of its own task: it keeps the main-checkout role (plan files writable, evidence in the task folder), and main's ACTIVE is untouched. One owner per task: a slug named by main's ACTIVE or any worktree's `flow-active` is refused elsewhere.
 
 ### SLICES.md block
 
