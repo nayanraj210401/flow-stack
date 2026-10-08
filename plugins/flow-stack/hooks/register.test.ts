@@ -37,6 +37,7 @@ test('parseBudget drops a value that is not a model name', () => {
 
 test('bandText shows task, slice, progress, tdd phase, and evidence freshness', () => {
   expect(bandText(STATUS)).toBe('flow · rate-limit · S2 token bucket · 1/3 slices · tdd red · S2:red FAIL')
+  expect(bandText({ ...STATUS, where: 'lane' })).toMatch(/^flow · lane of rate-limit · /)
   expect(bandText({ ...STATUS, stale: true })).toContain('S2:red FAIL · edited since')
 })
 

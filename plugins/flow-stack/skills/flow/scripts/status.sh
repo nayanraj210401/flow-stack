@@ -4,7 +4,7 @@
 #   GATES.md [{n,question,detail}], leads [{id,repo,branch,task,slice}], runs (the last 40
 #   evidence verdicts, oldest first, without the planned <id>:before reds and probe: rows), and est_usd (ESTIMATE's forecast, null when none).
 #   {"task":"","slice":{"id":"","title":""},"done":0,"total":0,"tdd":"",
-#    "evidence":{"label":"","verdict":"","ts":""},"stale":false}
+#    "evidence":{"label":"","verdict":"","ts":""},"stale":false,"where":"main|lead|lane"}
 # The slice is this lane's TDD slice when the lock is on, else the first `doing` one.
 # Prints {} when no task is active. Reads only; never fails the caller.
 set -uo pipefail
@@ -51,12 +51,13 @@ if [ -n "$full" ]; then
      est_usd: ($est | tonumber? // null)}')"
 fi
 
-jq -nc --argjson extra "$extra" --arg task "$FLOW_TASK" --arg slice "$slice" \
+where=main; [ "$FLOW_ROOT" != "$FLOW_MAIN" ] && { where=lead; [ -z "$FLOW_LANE" ] || where=lane; }
+jq -nc --argjson extra "$extra" --arg task "$FLOW_TASK" --arg where "$where" --arg slice "$slice" \
   --arg done "${done_n:-0}" --arg total "${total:-0}" --arg tdd "$tdd" \
   --arg ts "${ev_ts:-}" --arg label "${ev_label:-}" --arg verdict "${ev_verdict:-}" --argjson stale "$stale" '
   # repo files are untrusted: no control characters (terminal escapes) reach the band or spinner
   def clean: gsub("[\u0001-\u001f\u007f-\u009f]"; "");
-  {task: ($task | clean),
+  {task: ($task | clean), where: $where,
    slice: ($slice | if . == "" then null else {id: (split(" · ")[0] | clean), title: (split(" · ")[1:] | join(" · ") | clean)} end),
    done: ($done | tonumber), total: ($total | tonumber), tdd: ($tdd | clean),
    evidence: (if $ts == "" then null else {label: ($label | clean), verdict: ($verdict | clean), ts: ($ts | clean)} end),
