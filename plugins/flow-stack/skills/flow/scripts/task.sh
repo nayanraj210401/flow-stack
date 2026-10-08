@@ -32,9 +32,13 @@
 #                                     decided: line, log it to DECISIONS.tsv. The /flow-pane's
 #                                     buttons call this; the guard hook keeps the agent off it.
 #
-# Inside a linked git worktree (a delegate worker's lane) the task folder is the
-# main checkout's, read-only: new, switch, close, slice, and accept are refused,
-# and proofs read the lane's own evidence and trail (.flow/tasks/<slug>/lanes/<lane>/).
+#   task.sh join <slug>               in a worktree: become a worker lane of <slug> (workers of a
+#                                     lead worktree join on their first hook; this is the fallback)
+#
+# A linked git worktree is a lane of the main checkout's task (a delegate worker): the task
+# folder is read-only there, close, slice, and accept are refused, and proofs read the lane's
+# own evidence and trail (.flow/tasks/<slug>/lanes/<lane>/). new or switch in a worktree makes
+# it a lead of its own task instead (<git-dir>/flow-active); one checkout leads a task at a time.
 #   task.sh estimate <usd> <ctx_pct> <human_min>
 set -euo pipefail
 
@@ -61,20 +65,30 @@ ws_repos() {
   awk -v n="## $1" '/^# /{on=($0=="# Workspaces")} on && /^## /{cur=$0}
     on && cur==n && /^- repos:/ {sub(/^- repos:[[:space:]]*/,""); gsub(/[[:space:]]*,[[:space:]]*/,"\n"); print; exit}' "$profile" 2>/dev/null || true
 }
-# point_repos <task-dir> <slug>: ACTIVE in the home repo, pointers everywhere else
+# claim <slug>: refuse a slug another checkout already leads
+claim() {
+  local o; o="$(flow_owners | awk -F'\t' -v s="$1" -v me="$FLOW_ROOT" '$1 == s && $2 != me && !n++ { print $2 }')"
+  [ -z "$o" ] || [ "$o" != "$FLOW_MAIN" ] || die "task '$1' is already active in the main checkout"
+  [ -z "$o" ] || die "task '$1' is already active in worktree $o"
+}
+# point_repos <task-dir> <slug>: this checkout's pointer (FLOW_ACTIVE), the home repo's, and one in every other repo.
+# Another repo's pointer is written only when empty or on this task (or the one we leave); otherwise refuse.
 point_repos() {
-  local d="$1" slug="$2" home name path cur
+  local d="$1" slug="$2" home name path cur f v pass
   home="$(cd "$d/../../.." && pwd -P)"
-  printf '%s\n' "$slug" >"$home/.flow/ACTIVE"
-  [ -f "$d/REPOS" ] || return 0
-  while IFS=$'\t' read -r name path; do
-    [ "$path" = "$home" ] && continue
-    mkdir -p "$path/.flow"
-    cur="$(head -n1 "$path/.flow/ACTIVE" 2>/dev/null | tr -d '[:space:]' || true)"
-    [ -n "$cur" ] && [ "$cur" != "@$home:$slug" ] && echo "  $name: was on '$cur', now on $slug" >&2
-    printf '@%s:%s\n' "$home" "$slug" >"$path/.flow/ACTIVE"
-    git -C "$path" check-ignore -q .flow/ACTIVE 2>/dev/null || grep -qxF ".flow/ACTIVE" "$path/.gitignore" 2>/dev/null || printf '.flow/ACTIVE\n' >>"$path/.gitignore"
-  done <"$d/REPOS"
+  for pass in check write; do
+    while IFS=$'\t' read -r name path; do
+      f="$path/.flow/ACTIVE"; [ "$path" != "$FLOW_MAIN" ] || f="$FLOW_ACTIVE"
+      v="@$home:$slug"; [ "$path" != "$home" ] || v="$slug"
+      if [ "$pass" = check ]; then
+        cur="$(head -n1 "$f" 2>/dev/null | tr -d '[:space:]' || true)"; cur="${cur##*:}"
+        [ "$f" = "$FLOW_ACTIVE" ] || [ -z "$cur" ] || [ "$cur" = "$slug" ] || [ "$cur" = "$FLOW_TASK" ] || die "$name ($path) is on task '$cur'; close it there first"
+      else
+        mkdir -p "$(dirname "$f")"; printf '%s\n' "$v" >"$f"
+        [ "$f" = "$FLOW_ACTIVE" ] || [ "$path" = "$home" ] || git -C "$path" check-ignore -q .flow/ACTIVE 2>/dev/null || grep -qxF ".flow/ACTIVE" "$path/.gitignore" 2>/dev/null || printf '.flow/ACTIVE\n' >>"$path/.gitignore"
+      fi
+    done < <(cat "$d/REPOS" 2>/dev/null || printf 'home\t%s\n' "$home")
+  done
 }
 
 ensure_repo_files() {
@@ -132,6 +146,12 @@ proofs() {
 }
 
 cmd="${1:-}"; shift || true
+gd=""; [ "$FLOW_MAIN" = "$FLOW_ROOT" ] || gd="$(git -C "$FLOW_ROOT" rev-parse --absolute-git-dir)"
+case "$cmd" in
+  new|switch) # an unpointed worktree (not a joined worker) becomes a lead
+    [ -z "$FLOW_LANE" ] || [ ! -s "$gd/flow-lane" ] || die "this worktree is a worker lane of '$(head -n1 "$gd/flow-lane")' ($gd/flow-lane); remove that file to lead a task here"
+    if [ -n "$FLOW_LANE" ]; then FLOW_ACTIVE="$gd/flow-active"; FLOW_LANE=""; FLOW_TASK=""; fi ;;
+esac
 case "$cmd" in
   new|switch|close|slice|accept|ticket)
     [ -z "$FLOW_LANE" ] || die "'$cmd' is refused in worktree lane '$FLOW_LANE': the task plan is shared. Return your evidence; the delegate accepts it and marks the slice." ;;
@@ -165,7 +185,7 @@ case "$cmd" in
       done <<<"$names"
       root="${home:-$first}"; flow="$root/.flow"
     fi
-    ensure_repo_files
+    claim "$slug"; ensure_repo_files
     d="$flow/tasks/$slug"
     [ -e "$d" ] && die "task exists: $d (use: task.sh switch $slug)"
     mkdir -p "$d"
@@ -182,6 +202,10 @@ case "$cmd" in
     point_repos "$d" "$slug"
     echo "$d"
     ;;
+  join) # join <slug>: make this worktree a worker lane of <slug> (the hook auto-joins workers of a lead)
+    s="${1:-}"; [[ "$s" =~ ^[a-z0-9][a-z0-9-]*$ ]] && [ -n "$gd" ] && [ -d "$flow/tasks/$s" ] || die "usage: task.sh join <slug> (in a worktree; the task must exist)"
+    [ ! -s "$gd/flow-active" ] || die "this worktree leads '$(head -n1 "$gd/flow-active")'; close it before joining another task"
+    printf '%s\n' "$s" >"$gd/flow-lane"; echo "joined: $s" ;;
   active) active ;;
   dir) active_dir ;;
   repos)
@@ -189,21 +213,30 @@ case "$cmd" in
     if [ -f "$d/REPOS" ]; then cat "$d/REPOS"; else printf '%s\t%s\n' "$(basename "$FLOW_TASK_HOME")" "$FLOW_TASK_HOME"; fi ;;
   switch)
     [ -d "$flow/tasks/${1:-}" ] || die "no such task: ${1:-}"
-    point_repos "$flow/tasks/$1" "$1"; echo "active: $1"
+    claim "$1"; point_repos "$flow/tasks/$1" "$1"; echo "active: $1"
     ;;
   close)
+    if [ "$FLOW_ACTIVE" != "$FLOW_DIR/ACTIVE" ]; then # a lead worktree: its pointer, and the other repos' pointers to its task
+      if [ -f "$FLOW_TASK_DIR/REPOS" ]; then
+        while IFS=$'\t' read -r _ path; do
+          if [ "$(head -n1 "$path/.flow/ACTIVE" 2>/dev/null)" = "@$FLOW_TASK_HOME:$FLOW_TASK" ]; then rm -f "$path/.flow/ACTIVE"; fi
+        done <"$FLOW_TASK_DIR/REPOS"
+      fi
+      rm -f "$FLOW_ACTIVE"; echo "no active task"; exit 0
+    fi
     if [ -n "$FLOW_TASK_DIR" ] && [ -f "$FLOW_TASK_DIR/REPOS" ]; then
       while IFS=$'\t' read -r _ path; do rm -f "$path/.flow/ACTIVE"; done <"$FLOW_TASK_DIR/REPOS"
     fi
     rm -f "$flow/ACTIVE" "${FLOW_TASK_HOME:-$root}/.flow/ACTIVE"; echo "no active task" ;;
   list)
-    a="$(active)"
+    a="$(active)"; own="$(flow_owners)"
     for d in "$flow"/tasks/*/; do
       [ -d "$d" ] || continue
       s="$(basename "$d")"
       total="$(grep -c '^status:' "$d/SLICES.md" 2>/dev/null || true)"
       done_n="$(grep -c '^status: done' "$d/SLICES.md" 2>/dev/null || true)"
-      printf '%s %s  %s/%s slices  %s\n' "$([ "$s" = "$a" ] && echo '*' || echo ' ')" "$s" "${done_n:-0}" "${total:-0}" "$(cat "$d/PLAYBOOK" 2>/dev/null || echo '?')"
+      w="$(awk -F'\t' -v s="$s" -v m="$FLOW_MAIN" '$1 == s { print ($2 == m ? "" : " (worktree " $2 ")"); exit }' <<<"$own")"
+      printf '%s %s  %s/%s slices  %s%s\n' "$([ "$s" = "$a" ] || grep -q "^$s"$'\t' <<<"$own" && echo '*' || echo ' ')" "$s" "${done_n:-0}" "${total:-0}" "$(cat "$d/PLAYBOOK" 2>/dev/null || echo '?')" "$w"
     done
     ;;
   proofs)
@@ -280,6 +313,7 @@ case "$cmd" in
     ;;
   accept)
     lane="${1:-}"; [ -n "$lane" ] || die "usage: task.sh accept <lane>"
+    root="$FLOW_ROOT"  # merge and feature checks run on this checkout's tree (a lead worktree's, not main's)
     lev="$(active_dir)/lanes/$lane/EVIDENCE.md"
     [ -f "$lev" ] || die "no evidence in lane '$lane' ($lev)"
     if [ -d "$flow/features" ]; then

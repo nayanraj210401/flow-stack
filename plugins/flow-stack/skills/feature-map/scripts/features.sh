@@ -136,8 +136,8 @@ case "$cmd" in
       if [ -z "$sc" ]; then echo "feat:$id · NO SCENARIO (add one, or run /flow-stack:make-verifier)"; rc=1; continue; fi
       if "$evidence" "feat:$id" "$sc" >/tmp/feat.$$ 2>&1; then res=PASS; else res=FAIL; rc=1; fi
       at="$(date +%F) $(git rev-parse --short HEAD)"
-      if [ -n "$FLOW_LANE" ]; then
-        mkdir -p "$dir/lanes"; printf '%s\t%s\t%s\n' "$id" "$res" "$at" >>"$dir/lanes/$FLOW_LANE.tsv"
+      if [ "$FLOW_ROOT" != "$FLOW_MAIN" ]; then # any linked worktree, lead or lane
+        mkdir -p "$dir/lanes"; printf '%s\t%s\t%s\n' "$id" "$res" "$at" >>"$dir/lanes/${FLOW_LANE:-$(basename "$FLOW_ROOT")}.tsv"
       elif [ "$res" = PASS ]; then set_fm "$f" status verified verified "$at"
       else set_fm "$f" status broken
       fi

@@ -7,6 +7,7 @@ import type { EngineInterface, Register, SessionUsage, Timer } from 'claude-code
 
 type Status = {
   task?: string
+  where?: 'main' | 'lead' | 'lane'
   slice: { id: string; title: string } | null
   done: number
   total: number
@@ -57,7 +58,7 @@ export function parseBudget(profile: string) {
 }
 
 export function bandText(s: Status): string {
-  const parts = [`flow · ${s.task}`]
+  const parts = [`flow · ${s.where === 'lane' ? 'lane of ' : ''}${s.task}`]
   if (s.slice) parts.push(`${s.slice.id} ${s.slice.title}`)
   if (s.total) parts.push(`${s.done}/${s.total} slices`)
   if (s.tdd) parts.push(`tdd ${s.tdd}`)

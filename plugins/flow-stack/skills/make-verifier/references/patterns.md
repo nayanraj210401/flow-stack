@@ -1,6 +1,6 @@
 # Driver patterns
 
-Every scenario: written for the runner `scripts/ecosystem.sh` reports (`node --test`, `pytest`, `bun test`, … or `set -euo pipefail` bash), prints what it did, fails the runner on failure, and writes artifacts to `${FLOW_ARTIFACTS:-.flow/artifacts}/`.
+Every scenario: written for the runner `scripts/ecosystem.sh` reports (`node --test`, `pytest`, `bun test`, … or `set -euo pipefail` bash), prints what it did, fails the runner on failure, and writes artifacts to `${FLOW_ARTIFACTS:-<main checkout>/.flow/artifacts}/`; from a linked worktree, find the main checkout with `dirname "$(git rev-parse --path-format=absolute --git-common-dir)"`, so artifacts never land in the worktree.
 
 ## Stay inside auto mode
 The driver runs unattended, so nothing in it may look like an attack on the user's machine:

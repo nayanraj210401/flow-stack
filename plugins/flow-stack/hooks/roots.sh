@@ -5,8 +5,11 @@
 #   FLOW_MAIN  the main checkout; equals FLOW_ROOT unless this is a linked git worktree
 #   FLOW_DIR   $FLOW_MAIN/.flow, shared by every worktree (.flow/ is untracked, so a
 #              worktree has none of its own)
-#   FLOW_LANE  "" in the main checkout; in a worktree, its branch (/ → _). Each lane writes
-#              its own evidence, trail, and circuit state, so parallel workers never share a file.
+#   FLOW_ACTIVE the file naming the active task: $FLOW_DIR/ACTIVE, or a lead worktree's own
+#              <git-dir>/flow-active (a worktree with one is a lead of its own task, not a lane)
+#   FLOW_LANE  "" in the main checkout and in a lead worktree; in any other worktree, its branch
+#              (/ → _). Each lane writes its own evidence, trail, and circuit state, so
+#              parallel workers never share a file.
 #
 # flow_task then resolves the active task. .flow/ACTIVE holds "<slug>" (the task lives here) or
 # "@<home-repo-path>:<slug>" (a multi-repo task whose folder lives in its home repo):
@@ -17,14 +20,21 @@
 #                             ("<repo>:<path>") and evidence so repos never collide
 
 flow_roots() {
-  local d="${1:-$PWD}" common
+  local d="${1:-$PWD}" common gd
   FLOW_ROOT="$(git -C "$d" rev-parse --show-toplevel 2>/dev/null || printf '%s' "$d")"
   common="$(git -C "$d" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
   FLOW_MAIN="$FLOW_ROOT"
   if [ "$(basename "${common:-x}")" = .git ]; then FLOW_MAIN="$(dirname "$common")"; fi
   FLOW_DIR="$FLOW_MAIN/.flow"
+  FLOW_ACTIVE="$FLOW_DIR/ACTIVE"
   FLOW_LANE=""
   if [ "$FLOW_MAIN" != "$FLOW_ROOT" ]; then
+    gd="$(git -C "$d" rev-parse --absolute-git-dir 2>/dev/null)"
+    FLOW_ACTIVE="$gd/flow-active"
+    [ -s "$FLOW_ACTIVE" ] && return 0
+    FLOW_ACTIVE="$FLOW_DIR/ACTIVE"
+    # flow-lane (slug, then the lead's root) makes this a worker lane of that lead's task
+    [ -s "$gd/flow-lane" ] && FLOW_ACTIVE="$gd/flow-lane"
     FLOW_LANE="$(git -C "$d" rev-parse --abbrev-ref HEAD 2>/dev/null | tr '/' '_' || true)"
     if [ -z "$FLOW_LANE" ] || [ "$FLOW_LANE" = HEAD ]; then FLOW_LANE="$(basename "$FLOW_ROOT")"; fi
   fi
@@ -34,7 +44,7 @@ flow_task() {
   local a h
   FLOW_TASK=""; FLOW_TASK_DIR=""; FLOW_TASK_HOME=""
   FLOW_REPO="$(basename "$FLOW_MAIN")"; FLOW_REPO_KEY=""
-  a="$(head -n1 "$FLOW_DIR/ACTIVE" 2>/dev/null | tr -d '[:space:]' || true)"
+  a="$(head -n1 "$FLOW_ACTIVE" 2>/dev/null | tr -d '[:space:]' || true)"
   case "$a" in
     "") return 0 ;;
     @*) h="${a#@}"; h="${h%:*}"; FLOW_TASK="${a##*:}"; FLOW_TASK_HOME="${h/#\~/$HOME}" ;;
@@ -62,6 +72,17 @@ flow_qual() { if [ -n "${FLOW_REPO_KEY:-}" ]; then printf '%s:%s' "$FLOW_REPO_KE
 flow_repo_path() {
   if [ -z "$1" ] || [ "$1" = "$(flow_repo_name "${FLOW_TASK_HOME:-$FLOW_MAIN}")" ]; then printf '%s' "${FLOW_TASK_HOME:-$FLOW_MAIN}"; return; fi
   awk -F'\t' -v n="$1" '$1 == n { print $2; exit }' "$FLOW_TASK_DIR/REPOS" 2>/dev/null || true
+}
+
+# flow_owners [main]: "slug<TAB>checkout" for every local task some checkout leads: the main checkout's
+# ACTIVE, then each lead worktree's flow-active. Multi-repo pointers (@home:slug) belong to their home repo.
+flow_owners() {
+  local m="${1:-$FLOW_MAIN}" f v
+  for f in "$m/.flow/ACTIVE" "$m"/.git/worktrees/*/flow-active; do
+    v="$(head -n1 "$f" 2>/dev/null | tr -d '[:space:]')"
+    case "$v" in ""|@*) continue ;; esac
+    if [ "$f" = "$m/.flow/ACTIVE" ]; then printf '%s\t%s\n' "$v" "$m"; else printf '%s\t%s\n' "$v" "$(dirname "$(cat "${f%/*}/gitdir")")"; fi
+  done
 }
 
 # flow_state_dir <task-dir>: where this checkout writes EVIDENCE.md, trail.jsonl, .circuit, HANDOFF.auto.md.

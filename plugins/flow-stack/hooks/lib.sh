@@ -17,6 +17,25 @@ flow_fail_open() {
   exit 0
 }
 
+# flow_join: a subagent in an unpointed worktree joins the task of the lead worktree that spawned it
+# (the lead registry, by session id), writing <git-dir>/flow-lane = slug, lead root. A main-spawned one writes nothing.
+flow_join() {
+  local sid aid lroot lgd slug gd
+  [ -n "$FLOW_LANE" ] || return 0
+  aid="$(flow_field .agent_id)"; sid="$(flow_field .session_id)"
+  [ -n "$aid" ] && [ -n "$sid" ] || return 0
+  gd="$(git -C "$FLOW_ROOT" rev-parse --absolute-git-dir)"
+  [ -s "$gd/flow-lane" ] && return 0
+  lroot="$(jq -r '.root // empty' "$FLOW_HOME/leads/${sid//\//_}.json" 2>/dev/null || true)"
+  [ -n "$lroot" ] && [ "$lroot" != "$FLOW_MAIN" ] && [ "$lroot" != "$FLOW_ROOT" ] || return 0
+  [ "$(git -C "$lroot" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" = "$FLOW_MAIN/.git" ] || return 0
+  lgd="$(git -C "$lroot" rev-parse --absolute-git-dir 2>/dev/null)" || return 0
+  slug="$(head -n1 "$lgd/flow-active" 2>/dev/null | tr -d '[:space:]')"
+  [ -n "$slug" ] || return 0
+  printf '%s\n%s\n' "$slug" "$lroot" >"$gd/flow-lane"
+  flow_roots "$FLOW_CWD"
+}
+
 flow_init() {
   FLOW_HOOK="$1"
   trap 'flow_fail_open $LINENO' ERR
@@ -28,6 +47,7 @@ flow_init() {
   FLOW_CWD="$(jq -r '.cwd // empty' <<<"$FLOW_INPUT")"
   [ -n "$FLOW_CWD" ] || FLOW_CWD="$PWD"
   flow_roots "$FLOW_CWD"
+  flow_join
   flow_task
   FLOW_STATE_DIR=""
   if [ -n "$FLOW_TASK_DIR" ]; then
