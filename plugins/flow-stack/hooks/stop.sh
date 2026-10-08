@@ -29,7 +29,7 @@ events="$(tail -n 3000 "$transcript" | jq -nrR --argjson roots "$roots" --arg ch
   def scratch: . as $p | ($roots | any(. as $r | $p | startswith($r)) | not) or test("\\.(md|txt)$|/\\.flow/");
   # a heredoc body is data, unless a shell runs it (bash <<EOF, ssh host <<EOF)
   def unheredoc: gsub("(?<c>(?<![^\n])[^\n]*?)(?<h>(?<!<)<<-?[[:space:]]*[\"'"'"']?(?<t>[A-Za-z_][A-Za-z0-9_]*)[\"'"'"']?[^\n]*)\n(?<b>(?s:.*?))\n(?<e>[[:space:]]*\\k<t>[[:space:]]*)(?=\n|$)";
-    if (.c | test("(^|[;&|(\\s])(bash|sh|zsh|ksh|dash|ssh)(\\s|$)")) then .c + .h + "\n" + .b + "\n" + .e else .c + .h end);
+    if (.c + .h | test("(^|[;&|(\\s/])(bash|sh|zsh|ksh|dash|ssh)(\\s|$)")) then .c + .h + "\n" + .b + "\n" + .e else .c + .h end);
   # $NAME → its value, for names assigned exactly once in the command
   def expand: . as $cmd | [match("(?:^|[;&|\n])[[:space:]]*(?<n>[A-Za-z_][A-Za-z0-9_]*)=(?<v>[^[:space:];&|\"'"'"'$]*)"; "g").captures | {n: .[0].string, v: .[1].string}]
     | (group_by(.n) | map(select(length == 1) | .[0])) as $once | reduce $once[] as $a
