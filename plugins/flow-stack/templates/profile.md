@@ -44,6 +44,17 @@ rigor: standard                   # lean | standard | strict: how much ceremony 
 ## example
 - repos: example-repo, example-dep
 - search: ~/Project          (where to look for repos not listed) -->
+# Board
+<!-- Read by: board/collect.sh on every /flow-stack:board run, from any session. Bad lines show as warnings
+     on the board. Panels: needs spend tasks features quality decisions debt shipped estimate repos.
+- theme: auto                 # auto | light | dark
+- tab: current                # current | all | <repo name>
+- hide: spend
+- order: tasks, quality
+- wide: debt
+- accent: #2F55D4
+- view: Paused tasks · [.repos[].tasks[] | select(.active | not) | {slug, goal}] · table -->
+
 # Rules
 <!-- Hard constraints. Always injected. Keep ≤ 20 lines.
      A rule is never OK to break. A preference belongs in Taste. -->

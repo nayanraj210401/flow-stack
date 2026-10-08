@@ -126,7 +126,7 @@ Type a skill yourself when you want a specific thing: `/flow-stack:challenge`, `
 | Many independent slices | `/flow-stack:delegate` | parallel worktree workers, capped by your review budget |
 | Audit what the agent did | `/flow-stack:trace` | TRACE.md: timeline, who decided what, evidence, cost |
 | End of day | `/flow-stack:wrap` | shipped, waiting on you, and your first step tomorrow |
-| See everything at once | `/flow-stack:board` | one private artifact link, refreshed in place: what needs you, tasks, features, decisions, debt, spend |
+| See everything at once | `/flow-stack:board` | one private artifact link, refreshed in place: what needs you, tasks, features, decisions, debt, spend; your layout, theme, and custom panels persist in the profile's `# Board` section |
 | After a frustrating session | `/flow-stack:reflect` | proposed taste and lesson updates you approve |
 | New repo | `/flow-stack:setup` → `/flow-stack:feature-map` → `/flow-stack:make-verifier` | a driver that proves this app works the way a user uses it |
 | Installed a new plugin or hook | `/flow-stack:setup adapt` | flow-stack re-fits itself around your toolchain |
