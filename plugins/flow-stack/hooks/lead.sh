@@ -7,17 +7,21 @@
 . "$(dirname "$0")/lib.sh"
 trap 'exit 0' ERR
 FLOW_INPUT="$(cat)"
-IFS=$'\t' read -r event sid agent <<<"$(jq -r '[.hook_event_name // "", .session_id // "", .agent_id // "-"] | @tsv' <<<"$FLOW_INPUT")"
+IFS=$'\t' read -r event sid agent src <<<"$(jq -r '[.hook_event_name // "", .session_id // "", .agent_id // "-", .source // "-"] | @tsv' <<<"$FLOW_INPUT")"
 [ -n "$sid" ] || exit 0
 dir="$FLOW_HOME/leads"; me="$dir/${sid//\//_}"
+# Inside an agent host (its socket answers) the lead also pushes its phase to the host's sidebar.
+host=""; [ -z "${HERDR_ENV:-}${ORCA_PANE_KEY:-}${CMUX_WORKSPACE_ID:-}" ] || host="$(flow_host)"
+case "$host" in herdr|orca|cmux) ;; *) host="" ;; esac
 # Fast exit for the common tool call: a subagent's, or no mail and a fresh heartbeat.
 if [ "$event" = PostToolUse ]; then
   [ "$agent" = - ] || exit 0
-  [ -n "$(ls -A "$me.inbox" 2>/dev/null)" ] || [ -z "$(find "$me.json" -mmin -5 2>/dev/null)" ] || exit 0
+  [ -n "$(ls -A "$me.inbox" 2>/dev/null)" ] || [ -z "$(find "$me.json" -mmin -5 2>/dev/null)" ] || [ -n "$host" ] || exit 0
 fi
 flow_init lead
 flow_enabled lead || exit 0
 [ -d "$FLOW_DIR" ] || exit 0
+flow_enabled host || host=""
 tool="$(cd "$(dirname "$0")/../skills/flow/scripts" && pwd)/leads.sh"
 
 beat() {
@@ -46,20 +50,55 @@ deliver() { # print and consume this lead's messages; the rename claims each one
   done
 }
 
+# Run a host CLI in the background, output discarded, cut off after ~1s (stock macOS has no timeout).
+host_run() {
+  ( "$@" & p=$!; ( sleep 1; kill "$p" ) & k=$!; wait "$p"; kill "$k" ) >/dev/null 2>&1 </dev/null &
+}
+
+# push: show "task · slice done/total · gates" in the host's sidebar once per change. Never prints.
+# $me.host holds the last pushed text and gate count ("-" = cleared). On a tool call it is skipped
+# while that record is newer than the files that move the phase; the text compare covers the rest.
+push() {
+  local row tk="" sl="" dn="" tt="" gt=0 txt prev="" pg=0 unread=() clear=""
+  if [ "${1:-}" != clear ] && [ -f "$me.host" ] && [ "$event" = PostToolUse ] && [ -z "$(find "$FLOW_ACTIVE" "$FLOW_TASK_DIR/SLICES.md" "$FLOW_TASK_DIR/GATES.md" "${FLOW_STATE_DIR:-/dev/null}/TDD" -newer "$me.host" 2>/dev/null)" ]; then return 0; fi
+  { read -r prev; read -r pg; } <"$me.host" 2>/dev/null || true
+  if [ "${1:-}" = clear ] || [ -z "$FLOW_TASK" ]; then clear=1; txt="-"
+  else
+    row="$("$(dirname "$tool")/status.sh" --full "$FLOW_ROOT" 2>/dev/null | jq -r '[.task, (.slice.id // "-"), .done, .total, (.gates | length)] | @tsv')" || return 0
+    IFS=$'\t' read -r tk sl dn tt gt <<<"$row"
+    [ -n "$tk" ] || return 0
+    txt="$tk · $sl · $dn/$tt · $gt gate(s)"; txt="${txt//[$'\n\r']/ }"
+  fi
+  mkdir -p "$dir"; printf '%s\n%s\n' "$txt" "$gt" >"$me.host.$$" && mv "$me.host.$$" "$me.host"
+  [ "$txt" != "$prev" ] || return 0
+  [ "$gt" -le "${pg:-0}" ] || unread=(--unread)
+  case "$host" in
+    herdr)
+      if [ -n "$clear" ]; then host_run "$HERDR_BIN_PATH" pane report-metadata "$HERDR_PANE_ID" --source user:flow-stack --clear-token flow_task --clear-token flow_slice --clear-token flow_gates
+      else host_run "$HERDR_BIN_PATH" pane report-metadata "$HERDR_PANE_ID" --source user:flow-stack \
+        --token "flow_task=${tk:0:80}" --token "flow_slice=${sl:0:40} $dn/$tt" --token "flow_gates=$gt" --ttl-ms 86400000 --seq "$(date +%s)000"; fi ;;
+    orca) host_run "${ORCA_CLI_COMMAND:-orca}" worktree set --worktree "id:${ORCA_WORKTREE_ID:-}" --comment "${txt#-}" ${unread[@]+"${unread[@]}"} ;;
+    cmux) if [ -n "$clear" ]; then host_run cmux clear-status flow; else host_run cmux set-status flow "$txt"; fi ;;
+  esac
+}
+
 case "$event" in
-  SessionEnd) rm -rf "$me.json" "$me.inbox" ;;
+  SessionEnd) [ -z "$host" ] || { push clear; rm -f "$me.host"; }; rm -rf "$me.json" "$me.inbox" ;;
   PostToolUse)
     [ -n "$(find "$me.json" -mmin -5 2>/dev/null)" ] || beat
     m="$(deliver)"
-    [ -z "$m" ] || jq -n --arg c "$m" '{hookSpecificOutput:{hookEventName:"PostToolUse", additionalContext:$c}}' ;;
+    [ -z "$m" ] || jq -n --arg c "$m" '{hookSpecificOutput:{hookEventName:"PostToolUse", additionalContext:$c}}'
+    [ -z "$host" ] || push 2>/dev/null || true ;;
   SessionStart|UserPromptSubmit)
     first=""; [ -f "$me.json" ] || first=1
+    [ "$src" != clear ] || rm -f "$me.host"
     beat
     if [ -n "$first" ] || [ "$event" = SessionStart ]; then
       others="$(find "$dir" -name '*.json' ! -name "${me##*/}.json" -mtime -1 2>/dev/null | wc -l | tr -d ' ')"
       printf '[flow lead] You are lead %s (%s · %s%s). %s other lead(s) active. `%s list` shows who works on which repo, branch, worktree, task, ticket, and PR; `%s msg <id|branch|task|all> "<text>"` messages them.\n' \
         "${sid:0:8}" "$(basename "$FLOW_MAIN")" "$(git -C "$FLOW_ROOT" branch --show-current 2>/dev/null || echo detached)" "${FLOW_TASK:+ · task $FLOW_TASK}" "$others" "$tool" "$tool"
     fi
-    deliver ;;
+    deliver
+    [ -z "$host" ] || push 2>/dev/null || true ;;
 esac
 exit 0
