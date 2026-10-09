@@ -13,7 +13,7 @@ It is built from skills, bash + jq hooks, and existing tools. There is no new ru
 - [Guardrails (hooks)](#guardrails-hooks)
 - [Mods (UI inside Claude Code)](#mods-ui-inside-claude-code)
 - [How it works](#how-it-works)
-- [Feature map](#feature-map) · [Your profile](#your-profile) · [Adapting to your setup](#adapting-to-your-setup) · [Forge](#forge-skills-specific-to-your-repo)
+- [Feature map](#feature-map) · [Your profile](#your-profile) · [Adapting to your setup](#adapting-to-your-setup) · [Agent hosts](#agent-hosts-herdr-orca-cmux) · [Forge](#forge-skills-specific-to-your-repo)
 - [Files](#files) · [Limits](#limits) · [Development](#development) · [FAQ](#faq)
 
 ## Quick start
@@ -474,6 +474,19 @@ Then it fits around it:
 - **Delegation.** Capabilities you already cover go to your tool (`how → pstack:how`, `verify-driver → gstack /qa`). Seals, evidence, claims, the trail, and gates stay with flow-stack.
 - **Coexistence.** Your status line is chained, not replaced. Overlapping hooks are noted or turned off.
 - **Recorded** as `# Toolchain` lines in your profile. A fingerprint detects toolchain changes, and the next session suggests `/flow-stack:setup adapt`.
+
+## Agent hosts (herdr, Orca, cmux)
+
+[herdr](https://herdr.dev), [Orca](https://github.com/stablyai/orca) and cmux run Claude Code in panes and worktrees. flow-stack runs inside them unchanged. Inside one, it also:
+
+- **Shows flow's phase in the host's sidebar.** The host already knows whether Claude is working, blocked or done. flow adds the task, slice and open gates: herdr pane labels (`$flow_task $flow_slice $flow_gates`), an Orca worktree comment (marked unread when a gate opens), a cmux status. Pushed only when they change, by the lead only, and cleared when the task or session ends.
+- **Leaves the desktop ping to the host.** flow's macOS notification is skipped, since the host sends its own. ntfy and `notify_on: all` still fire.
+- **Runs workers where you can see them** (opt-in, `- delegate: herdr-panes`). `delegate` starts each slice's worker in its own herdr worktree and pane instead of a hidden subagent; you can watch and steer it. Each new worktree asks Claude's folder-trust question once; answer it in the pane, then `dispatch.sh brief <lane>` sends the slice. The lead accepts it as before, then removes the worktree if it is clean. A worker pane runs like `--auto`: push, merge and PRs wait in GATES.md for you, since its prompts come from the lead, not from you.
+- **Works under a coordinator.** With herdr-projects or Orca's orchestrator starting threads, each thread is a normal flow lead in its own worktree, with its own active task.
+
+`setup` detects hosts and offers, one at a time, what's missing: herdr's Claude integration, flow's rows in herdr's sidebar, herdr-projects, and a repo-scope plugin entry so every worktree loads flow-stack. A re-run offers only what's new; a "no" is remembered. Nothing changes outside a host, and stray host variables (tmux, ssh) are ignored unless the host's socket answers. `hooks.host: false` in `config.json` turns it all off.
+
+Limits: Orca and cmux have no expiry for status text, so a crashed session leaves its last line until the next flow session there. Windows and WSL are not supported. Conductor, Vibe Kanban and Claude Squad have no status API: flow runs there, nothing is shown.
 
 ## Forge: skills specific to your repo
 

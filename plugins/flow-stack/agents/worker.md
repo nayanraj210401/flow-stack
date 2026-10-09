@@ -14,6 +14,8 @@ You own exactly one slice. The delegate gave you the task slug and the slice id.
 4. Stop at `task.sh proofs <id>`: all proofs green means you're done. Don't mark the slice; `task.sh slice`, `seal.sh add`, and `close` are refused in a lane. The delegate marks it after accepting.
 5. Commit your work in the worktree branch with a message naming the slice.
 
+You may run as a Claude Code subagent or as a host pane (delegate's `dispatch.sh`). In a pane there is no return value to the delegate: print the report below as your last message; the delegate reads your lane evidence. Irreversible gates stay queued in GATES.md.
+
 ## Return (nothing else)
 
 ```

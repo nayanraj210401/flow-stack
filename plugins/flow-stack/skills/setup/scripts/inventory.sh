@@ -19,12 +19,32 @@ settings_local="$(json_or_empty "$C/settings.local.json")"
 proj_settings="$(json_or_empty "$root/.claude/settings.json")"
 proj_local="$(json_or_empty "$root/.claude/settings.local.json")"
 
+# hosts: agent hosts present on this machine ({} when none). Read-only; never starts a server.
+hosts() {
+  local h='{}' v rows=false
+  if command -v herdr >/dev/null 2>&1; then
+    v="$(herdr --version 2>/dev/null | awk 'NR==1{print $NF}')"
+    grep -qs '\$flow_' "$HOME/.config/herdr/config.toml" && rows=true
+    # projects: herdr-projects keeps a ~/.local/bin/herdr-projects link to its install (its README)
+    h="$(jq -c --arg v "$v" --argjson r "$rows" --argjson i "$(jq 'any(.. | strings; test("herdr-agent-state"))' <<<"$settings")" \
+      --argjson p "$(command -v herdr-projects >/dev/null 2>&1 && echo true || echo false)" \
+      '.herdr={version:$v, claude_integration:$i, sidebar_flow_rows:$r, projects:$p}' <<<"$h")"
+  fi
+  command -v orca >/dev/null 2>&1 && h="$(jq -c --argjson m "$(jq 'any(.. | strings; test("orca"))' <<<"$settings")" \
+    --argjson o "$(grep -qsi orca "$C/skills/orchestration/SKILL.md" "$HOME/.agents/skills/orchestration/SKILL.md" && echo true || echo false)" \
+    '.orca={cli:true, managed_hooks:$m, orchestration:$o}' <<<"$h")"
+  command -v cmux >/dev/null 2>&1 && h="$(jq -c '.cmux={cli:true}' <<<"$h")"
+  [ -n "${CONDUCTOR_WORKSPACE_PATH:-}" ] && h="$(jq -c '.conductor={env:true}' <<<"$h")"
+  echo "$h"
+}
+
 fingerprint() {
   {
     jq -r '.enabledPlugins // {} | to_entries[] | select(.value) | .key' <<<"$settings" | sort
     jq -r '.hooks // {} | to_entries[] | .key as $e | .value[] | .hooks[]? | "\($e) \(.command // .type)"' <<<"$settings" | sort
     [ -f "$CJ" ] && jq -r '.mcpServers // {} | keys[]' "$CJ" | sort
     jq -r '.statusLine.command // ""' <<<"$settings"
+    hosts | jq -r 'del(.conductor) | to_entries[] | "host \(.key) \(.value | del(.version) | tostring)"'
   } | shasum | cut -c1-12
 }
 [ "${1:-}" = --fingerprint ] && { fingerprint; exit 0; }
@@ -72,6 +92,7 @@ clis="$(for t in rtk headroom graphify ccusage gh uvx npx docker ntfy osascript 
 jq -n \
   --arg fp "$(fingerprint)" \
   --arg root "$root" \
+  --argjson hosts "$(hosts)" \
   --argjson plugins "$plugins" \
   --argjson uh "$(hooks_of "$settings")" \
   --argjson ulh "$(hooks_of "$settings_local")" \
@@ -94,5 +115,6 @@ jq -n \
     mcp: {user: $mu, project: $mp, repo: $mr},
     user_skills: $us, repo_skills: $rs, user_agents: $ua, user_commands: $uc,
     claude_md: $cm,
-    cli_tools: $clis
+    cli_tools: $clis,
+    hosts: $hosts
   }'
