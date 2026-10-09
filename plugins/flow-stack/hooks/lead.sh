@@ -59,9 +59,9 @@ host_run() {
 # $me.host holds the last pushed text and gate count ("-" = cleared). On a tool call it is skipped
 # while that record is newer than the files that move the phase; the text compare covers the rest.
 push() {
-  local row tk="" sl="" dn="" tt="" gt=0 txt prev="" pg=0 unread=() clear=""
+  local row tk="" sl="" dn="" tt="" gt=0 txt prev="" pg=0 sq=0 unread=() clear=""
   if [ "${1:-}" != clear ] && [ -f "$me.host" ] && [ "$event" = PostToolUse ] && [ -z "$(find "$FLOW_ACTIVE" "$FLOW_TASK_DIR/SLICES.md" "$FLOW_TASK_DIR/GATES.md" "${FLOW_STATE_DIR:-/dev/null}/TDD" -newer "$me.host" 2>/dev/null)" ]; then return 0; fi
-  { read -r prev; read -r pg; } <"$me.host" 2>/dev/null || true
+  { read -r prev; read -r pg; read -r sq; } <"$me.host" 2>/dev/null || true
   if [ "${1:-}" = clear ] || [ -z "$FLOW_TASK" ]; then clear=1; txt="-"
   else
     row="$("$(dirname "$tool")/status.sh" --full "$FLOW_ROOT" 2>/dev/null | jq -r '[.task, (.slice.id // "-"), .done, .total, (.gates | length)] | @tsv')" || return 0
@@ -69,14 +69,16 @@ push() {
     [ -n "$tk" ] || return 0
     txt="$tk · $sl · $dn/$tt · $gt gate(s)"; txt="${txt//[$'\n\r']/ }"
   fi
-  mkdir -p "$dir"; printf '%s\n%s\n' "$txt" "$gt" >"$me.host.$$" && mv "$me.host.$$" "$me.host"
-  [ "$txt" != "$prev" ] || return 0
+  [ "$txt" != "$prev" ] || { touch "$me.host"; return 0; }
+  # herdr drops a report whose --seq isn't newer than the last, so two pushes in one second still count
+  sq=$(( $(date +%s)000 > ${sq:-0} ? $(date +%s)000 : ${sq:-0} + 1 ))
+  mkdir -p "$dir"; printf '%s\n%s\n%s\n' "$txt" "$gt" "$sq" >"$me.host.$$" && mv "$me.host.$$" "$me.host"
   [ "$gt" -le "${pg:-0}" ] || unread=(--unread)
   case "$host" in
     herdr)
       if [ -n "$clear" ]; then host_run "$HERDR_BIN_PATH" pane report-metadata "$HERDR_PANE_ID" --source user:flow-stack --clear-token flow_task --clear-token flow_slice --clear-token flow_gates
       else host_run "$HERDR_BIN_PATH" pane report-metadata "$HERDR_PANE_ID" --source user:flow-stack \
-        --token "flow_task=${tk:0:80}" --token "flow_slice=${sl:0:40} $dn/$tt" --token "flow_gates=$gt" --ttl-ms 86400000 --seq "$(date +%s)000"; fi ;;
+        --token "flow_task=${tk:0:80}" --token "flow_slice=${sl:0:40} $dn/$tt" --token "flow_gates=$gt" --ttl-ms 86400000 --seq "$sq"; fi ;;
     orca) host_run "${ORCA_CLI_COMMAND:-orca}" worktree set --worktree "id:${ORCA_WORKTREE_ID:-}" --comment "${txt#-}" ${unread[@]+"${unread[@]}"} ;;
     cmux) if [ -n "$clear" ]; then host_run cmux clear-status flow; else host_run cmux set-status flow "$txt"; fi ;;
   esac
