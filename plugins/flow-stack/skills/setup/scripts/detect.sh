@@ -25,6 +25,8 @@ if [ -f "$s" ] && have jq; then
   row statusline "$(jq -r 'if .statusLine then "set" else "none" end' "$s")" "$(jq -r '.statusLine.command // ""' "$s" | cut -c1-60)"
   row user-hooks info "$(jq -r '[.hooks // {} | to_entries[] | "\(.key)×\(.value | length)"] | join(" ")' "$s")"
 fi
+for h in herdr orca cmux; do have "$h" && row "host:$h" ok "agent host: $(command -v "$h")"; done
+[ -n "${CONDUCTOR_WORKSPACE_PATH:-}" ] && row host:conductor ok "agent host (env only)"
 [ -f "${FLOW_STACK_HOME:-$HOME/.flow-stack}/profile.md" ] && row profile ok "${FLOW_STACK_HOME:-$HOME/.flow-stack}/profile.md" || row profile missing "run the profile interview"
 root=""; if git rev-parse --show-toplevel >/dev/null 2>&1; then . "$(dirname "$0")/../../../hooks/roots.sh"; flow_roots; root="$FLOW_MAIN"; fi
 if [ -n "$root" ]; then

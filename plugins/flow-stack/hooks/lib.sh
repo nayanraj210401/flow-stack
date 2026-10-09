@@ -112,7 +112,24 @@ flow_is_test() {
 
 # Auto mode (--auto in a prompt): the human is away for this session. Flag: $FLOW_HOME/auto/<session_id>.
 flow_auto_flag() { local s; s="$(flow_field .session_id)"; [ -n "$s" ] && printf '%s/auto/%s' "$FLOW_HOME" "${s//\//_}"; }
-flow_auto() { local f; f="$(flow_auto_flag)" && [ -f "$f" ]; }
+# A pane that delegate's dispatch.sh started (<git-dir>/flow-thread) is driven by prompts the lead
+# types, not the human's, so it runs like --auto: outward-facing actions wait in GATES.md.
+flow_auto() {
+  local f; f="$(flow_auto_flag)" && [ -f "$f" ] && return 0
+  [ -f "$(git -C "${FLOW_ROOT:-.}" rev-parse --absolute-git-dir 2>/dev/null)/flow-thread" ]
+}
+
+# flow_host: the agent host this session runs in: herdr | orca | cmux | conductor | none.
+# Host env leaks through tmux, ssh and nested shells, so it counts only while the host answers:
+# herdr and cmux by their socket, Orca by its agent-hook port (bare `orca` on Linux is a screen reader).
+flow_host() {
+  if [ "${HERDR_ENV:-}" = 1 ] && [ -S "${HERDR_SOCKET_PATH:-}" ] && [ -x "${HERDR_BIN_PATH:-}" ]; then echo herdr
+  elif [ -n "${ORCA_PANE_KEY:-}" ] && [ -n "${ORCA_AGENT_HOOK_PORT:-}" ] && (exec 3<>"/dev/tcp/127.0.0.1/$ORCA_AGENT_HOOK_PORT") 2>/dev/null \
+    && command -v "${ORCA_CLI_COMMAND:-orca}" >/dev/null 2>&1; then echo orca
+  elif [ -n "${CMUX_WORKSPACE_ID:-}" ] && [ -S "${CMUX_SOCKET_PATH:-/tmp/cmux.sock}" ] && command -v cmux >/dev/null 2>&1; then echo cmux
+  elif [ -n "${CONDUCTOR_WORKSPACE_PATH:-}" ]; then echo conductor
+  else echo none; fi
+}
 flow_auto_ship() { local f; f="$(flow_auto_flag)" && [ "$(cat "$f" 2>/dev/null)" = ship ]; }
 FLOW_AUTO_QUEUE="Add it to .flow/tasks/<slug>/GATES.md (question, options, recommendation), keep going on work it doesn't block, and list GATES.md first in the handoff."
 
