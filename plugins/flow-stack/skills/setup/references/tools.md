@@ -12,6 +12,19 @@ Install commands change. **Before running any install, fetch the tool's README a
 | Playwright MCP | attention: real browser verification | `claude mcp list` | `claude mcp add playwright -- npx @playwright/mcp@latest` | https://github.com/microsoft/playwright-mcp |
 | ntfy | attention: phone push when blocked | `curl -d test ntfy.sh/<topic>` | none: pick a hard-to-guess topic | https://ntfy.sh |
 
+## Agent hosts
+
+Offer each only when `inventory.sh .hosts` shows the host and the piece is missing. Ask for each one.
+
+| Piece | When | Do (confirm first) |
+|---|---|---|
+| herdr Claude integration | `hosts.herdr.claude_integration` is false | `herdr integration install claude` (adds one SessionStart hook so herdr can resume sessions) |
+| flow rows in herdr's sidebar | `hosts.herdr.sidebar_flow_rows` is false | Back up `~/.config/herdr/config.toml`, then add `$flow_task $flow_slice $flow_gates` to `[ui.sidebar.agents].rows`, merging into existing rows (herdr-projects writes there too). Then `herdr server reload-config`. |
+| herdr-projects | they want a coordinator and `hosts.herdr.projects` is false | `herdr plugin install eliasstravik/herdr-projects`, then `herdr-projects configure`. Third-party, unreviewed by herdr: say so. |
+| flow-stack at repo scope | Orca, herdr-projects or Conductor present | Add flow-stack to the repo's `.claude/settings.json` `enabledPlugins` (back it up first) so every worktree and account loads it. |
+
+Undo: on request, `/setup adapt` removes what it added (the sidebar rows, the repo `enabledPlugins` entry, the standing instruction). Left behind, they're harmless: herdr shows unknown `$flow_*` tokens as empty.
+
 ## Status line
 
 `skills/budget/scripts/statusline.sh` shows model · ctx% · $ · active task. If the human already has a status line, chain it rather than replacing it:

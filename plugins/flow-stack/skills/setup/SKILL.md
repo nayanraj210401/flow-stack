@@ -20,11 +20,12 @@ Show the human a compact table: what's present, what's missing, and what each mi
 
 The human already has a way of working. Learn it before you change anything. The rules and the known-tool table are in [references/adapt.md](references/adapt.md); read it now.
 
-1. **Inventory:** `scripts/inventory.sh` gives JSON: plugins (enabled, their skills, hook events, and MCP servers), user and project hooks, MCP servers, user and repo skills, the status line, the output style, CLAUDE.md files and imports, and CLI tools. Keep the JSON in a subagent or a scratch file; summarize, don't paste.
+1. **Inventory:** `scripts/inventory.sh` gives JSON: plugins (enabled, their skills, hook events, and MCP servers), user and project hooks, MCP servers, user and repo skills, the status line, the output style, CLAUDE.md files and imports, CLI tools, and `hosts` (agent hosts such as herdr, Orca, cmux, Conductor that run Claude in panes). Keep the JSON in a subagent or a scratch file; summarize, don't paste.
 2. **Usage:** `scripts/usage.sh 30` counts which skills, slash commands, MCP servers, and subagent types they invoked in the last 30 days. Usage beats installation: shape flow-stack around what they use.
 3. **Classify overlaps.** For each installed plugin, and each user or repo skill, match it against the capability keys in adapt.md. Unknown plugins: read the `description` in each of its SKILL.md files under `installPath`. Also check hooks on the same events as flow-stack's (SessionStart primers, PreToolUse on Bash/Read/Edit, Stop, PreCompact, Notification), the status line, and a notifier.
 4. **Decide.**
    - Clear from the evidence (for example, rtk hook present → `token-saver: rtk`; existing status line → chain it; `.claude/skills/verify/` exists → `verify-driver`): decide and record.
+   - A host in `hosts` → `host: <name>`; herdr-projects or Orca's orchestration skill present → offer `orchestrator: <it>` (off until the human says yes). See adapt.md § Agent hosts.
    - Real overlaps the human uses (for example, their router `pstack:poteto-mode` vs `flow`, or their `/review` vs flow-stack's): ask, in one batched `AskUserQuestion`. Recommend based on the usage counts.
 5. **Record.**
    - Write the `# Toolchain` lines in the profile (`- <key>: <provider> · <why>`). Show the diff first.
@@ -32,7 +33,7 @@ The human already has a way of working. Learn it before you change anything. The
    - Save the fingerprint: `scripts/inventory.sh --fingerprint > ~/.flow-stack/toolchain.fp`.
 6. **Tell the human** in ≤ 8 lines: what you found, what flow-stack will use from their setup, what it turned off, what it kept, and anything that might still overlap (for example two Stop hooks).
 
-`/setup adapt` runs only this step (and step 1). SessionStart suggests it when the fingerprint changes: a plugin was installed or removed, or hooks, MCP servers, or the status line changed. On a re-run, diff the new inventory against the current Toolchain lines and propose only the changes.
+`/setup adapt` runs only this step (and step 1). SessionStart suggests it when the fingerprint changes: a plugin was installed or removed, or hooks, MCP servers, or the status line changed. On a re-run, diff the new inventory against the current Toolchain lines and propose only the changes. The fingerprint includes hosts only when one is installed, so a new host triggers one re-adapt and nothing else does. Record a declined offer as a note (`- note: declined <thing> <date>`) and don't offer it again.
 
 If no profile exists yet, run step 3 first, then come back to record.
 
@@ -50,7 +51,7 @@ If the profile exists, run `check.sh` and report problems only. If it has no `di
 
 ## 4. Tools (optional, per tool)
 
-Read [references/tools.md](references/tools.md). Offer only what the inventory shows is missing and what doesn't duplicate something they already have (for example, don't offer serena to someone whose token-saver is already covered and who never reads large files). For each missing tool the human wants: confirm the install command from the tool's README, run it, re-run `detect.sh` to confirm, and report. Offer the flow status line; chain an existing one rather than replacing it.
+Read [references/tools.md](references/tools.md). Offer only what the inventory shows is missing and what doesn't duplicate something they already have (for example, don't offer serena to someone whose token-saver is already covered and who never reads large files). For each missing tool the human wants: confirm the install command from the tool's README, run it, re-run `detect.sh` to confirm, and report. Offer the flow status line; chain an existing one rather than replacing it. When `hosts` lists an agent host, offer the pieces that connect it to flow (tools.md § Agent hosts), each asked separately; skip any already in place.
 
 ## 5. This repo (when inside a git repo)
 

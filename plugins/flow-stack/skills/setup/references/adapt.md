@@ -27,12 +27,14 @@ Toolchain lines use these keys: `- <key>: <provider> · <why>`. A key is a flow-
 | `handoff` | flow-stack | mattpocock `/handoff` |
 | `recall` | flow-stack | `pstack:recall` |
 | `decision-log` | DECISIONS.tsv | `pstack:show-me-your-work` |
-| `delegate` | flow-stack worker agents | `pstack:swarm` or `pstack:arena` for exploration |
+| `delegate` | `agent`: flow-stack worker subagents | `herdr-panes`: each worker in its own herdr pane and worktree (delegate/scripts/dispatch.sh); `pstack:swarm` or `pstack:arena` for exploration |
 | `compaction` | PreCompact snapshot | a compaction plugin (e.g. jev-compaction); keep both unless it conflicts |
 | `token-saver` | none | rtk hook, headroom MCP, serena MCP |
 | `browser` | Playwright MCP | claude-in-chrome, gstack `/browse` |
 | `statusline` | flow statusline | the user's existing status line (chain, don't replace) |
-| `notify` | flow notify hook | another notifier hook or plugin: set flow's `notify: off` |
+| `notify` | flow notify hook | another notifier hook or plugin: set flow's `notify: off`. An agent host is not a reason: inside one, flow already skips only its desktop ping and keeps ntfy |
+| `host` | none | `herdr`, `orca`, `cmux`, `conductor`: the app that runs Claude in panes. flow reports its task, slice and gates to it |
+| `orchestrator` | none (flow is the lead) | `herdr-projects`, `orca`: a coordinator that starts threads; each thread runs flow on its own |
 | `note` | none | free text: an overlap or caveat worth remembering, e.g. another hook that can deny reads |
 
 ## Known tools
@@ -51,6 +53,20 @@ Toolchain lines use these keys: `- <key>: <provider> · <why>`. A key is a flow-
 | **An existing Stop hook that blocks** | Keep flow's claims check, but tell the human. Two blockers can each send the model back once. |
 | **A strong CLAUDE.md** (many lines, imports) | Import hard constraints into Rules and preferences into Taste (with `src: CLAUDE.md`). Don't copy tool instructions it already carries (e.g. `@RTK.md`). |
 | **An unknown plugin** | Read the `description` of each of its skills (first lines of SKILL.md under its `installPath`). Classify each against the capability keys. Only overlaps the user actually uses become questions. |
+
+## Agent hosts
+
+From `inventory.sh .hosts`. Every host runs the real `claude`, so flow-stack works inside it unchanged; what setup adds connects them.
+
+| Host (how to spot it) | Adapt by |
+|---|---|
+| **herdr** (`hosts.herdr`) | Record `host: herdr`. Offer what's missing: the Claude integration (`claude_integration: false`), flow's sidebar rows (`sidebar_flow_rows: false`), and, only if they want a coordinator, herdr-projects (`projects: false`). Offer `delegate: herdr-panes` to anyone who wants to watch workers. |
+| **herdr-projects** (`hosts.herdr.projects`) | Offer `orchestrator: herdr-projects`. If yes, offer one standing instruction in its project (`PROJECT.md`): "use /flow-stack:flow in every thread; lessons go to the repo's .flow/lessons.md". |
+| **Orca** (`hosts.orca`) | Record `host: orca`. If Orca's orchestration skill is installed, offer `orchestrator: orca`. Orca can switch Claude to a per-account config folder, so recommend enabling flow-stack in the repo's `.claude/settings.json`. Chain Orca's status line with flow's; never replace either. |
+| **cmux** (`hosts.cmux`) | Record `host: cmux`. Nothing to install. |
+| **Conductor, Vibe Kanban, Claude Squad** | No status API. Recommend the repo-scope plugin entry so their worktrees load flow-stack. |
+
+`hooks.host: false` in `config.json` turns off both the sidebar push and the desktop-ping skip, for one repo or globally.
 
 ## Output of adaptation
 
