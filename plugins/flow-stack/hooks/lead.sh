@@ -14,7 +14,8 @@ dir="$FLOW_HOME/leads"; me="$dir/${sid//\//_}"
 unchanged() {
   local p n=0
   [ -f "$me.host" ] || return 1
-  while read -r p; do n=1; [ -e "$p" ] && [ ! "$p" -nt "$me.host" ] || return 1; done < <(tail -n +4 "$me.host")
+  # strictly newer: macOS bash 3.2 compares whole seconds, so a same-second change must count
+  while read -r p; do n=1; [ -e "$p" ] && [ "$me.host" -nt "$p" ] || return 1; done < <(tail -n +4 "$me.host")
   [ "$n" = 1 ]
 }
 # Fast exit for the common tool call: a subagent's, or no mail and a fresh heartbeat (and, inside
