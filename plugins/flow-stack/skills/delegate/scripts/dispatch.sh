@@ -47,7 +47,8 @@ case "$cmd" in
     [ -x "${HERDR_BIN_PATH:-$(command -v herdr)}" ] && command -v jq >/dev/null || die "herdr-panes needs herdr and jq on PATH"
     branch="flow/$slug-$slice"; lane="${branch//\//_}"
     # herdr agent names: lowercase letters, digits, - or _, at most 32
-    name="$(printf 'flow-%s-%s' "$slug" "$slice" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9_\n-' '-' | cut -c1-32)"
+    sl="$(printf '%s' "$slice" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9_-' '-' | cut -c1-10)"
+    name="$(printf 'flow-%s' "$slug" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9_-' '-' | cut -c1-$((31 - ${#sl})))-$sl"   # the slice always survives
     res="$(herdr worktree create --cwd "$FLOW_ROOT" --branch "$branch" --no-focus)" || die "herdr worktree create failed"
     path="$(jq -r '.result.worktree.path // empty' <<<"$res")"
     ws="$(jq -r '.result.workspace.workspace_id // empty' <<<"$res")"
@@ -78,7 +79,10 @@ case "$cmd" in
     for f in "$FLOW_TASK_DIR"/lanes/*/HOST; do
       [ -f "$f" ] || continue
       lane="$(basename "$(dirname "$f")")"
-      if herdr agent get "$(hget "$lane" agent)" >/dev/null 2>&1; then echo "kept: $lane (worker still running)"; continue; fi
+      # a finished worker still sits in its pane as an idle claude: keep only one that works or waits on a question
+      case "$(herdr agent get "$(hget "$lane" agent)" 2>/dev/null | jq -r '.result.agent.agent_status // empty')" in
+        working|blocked) echo "kept: $lane (worker still running)"; continue ;;
+      esac
       ( cleanup "$lane" ) 2>&1 || true
     done ;;
   *) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;

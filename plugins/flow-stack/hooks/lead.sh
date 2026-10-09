@@ -64,7 +64,7 @@ host_run() {
 }
 
 # push: show "task · slice done/total · gates" in the host's sidebar once per change. Never prints.
-# $me.host holds the last pushed text, gate count and herdr seq ("-" = cleared). On a tool call it is skipped
+# $me.host holds the last pushed text, gate count, herdr seq ("-" = cleared), then the watched paths. On a tool call it is skipped
 # while that record is newer than the files that move the phase; the text compare covers the rest.
 push() {
   local row tk="" sl="" dn="" tt="" gt=0 txt prev="" pg=0 sq=0 watch unread=() clear=""
@@ -78,9 +78,9 @@ push() {
     txt="$tk · $sl · $dn/$tt · $gt gate(s)"; txt="${txt//[$'\n\r']/ }"
   fi
   # the files whose change moves the phase; dirs catch a GATES.md or TDD that appears later, and the
-  # pointer's dir catches a task that starts after a clear
+  # pointer's dir and the tasks dir catch a task that starts after a clear
   watch="$(for w in "$FLOW_ACTIVE" "$FLOW_TASK_DIR" "$FLOW_TASK_DIR/SLICES.md" "$FLOW_TASK_DIR/GATES.md" "$FLOW_STATE_DIR" "$FLOW_STATE_DIR/TDD"; do
-    [ -n "$w" ] && [ "$w" != / ] && [ -e "$w" ] && echo "$w"; done; [ -n "$FLOW_TASK" ] || dirname "$FLOW_ACTIVE")"
+    [ -n "$w" ] && [ "$w" != / ] && [ -e "$w" ] && echo "$w"; done; [ -n "$FLOW_TASK" ] || for w in "$(dirname "$FLOW_ACTIVE")" "$FLOW_DIR/tasks"; do [ -e "$w" ] && echo "$w"; done)"
   if [ "$txt" = "$prev" ]; then printf '%s\n%s\n%s\n%s\n' "$txt" "$gt" "$sq" "$watch" >"$me.host"; return 0; fi
   # herdr drops a report whose --seq isn't newer than the last, so two pushes in one second still count
   sq=$(( $(date +%s)000 > ${sq:-0} ? $(date +%s)000 : ${sq:-0} + 1 ))
