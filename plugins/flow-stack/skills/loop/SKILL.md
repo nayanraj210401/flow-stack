@@ -22,7 +22,7 @@ One slice at a time. Paths are relative to this skill's base directory. `T` belo
 **b. Verify.** Run `../verify/scripts/evidence.sh <id>`, plus the repo's lint and typecheck from `.flow/config.json` `commands` when set. Use the repo verify driver (`.claude/skills/verify-*/`) for UI, API, or CLI behavior. A unit test alone doesn't prove a user-visible behavior.
 
 **c. Pass?**
-- **Yes:** run `../probe/scripts/probe.sh <id> "<check>"`. TEETH means record the slice done. TOOTHLESS means the check passes without your change, so it proves nothing. Strengthen the check, re-seal (the human approves), and go back to b.
+- **Yes:** run `../probe/scripts/probe.sh <id> "<check>"`. TEETH means record the slice done. If the slice adds new code, also run it with `--hollow` (the code under test returns an empty value); reverting a new file only proves the check imports it. TOOTHLESS means the check passes without your change, so it proves nothing. Strengthen the check, re-seal (the human approves), and go back to b.
 - **No:** go to d.
 
 **d. Diagnose.** Read the failure. Name the cause in one line before touching code. Fix the cause, not the symptom: no silencing try/catch, no special-casing the test's inputs, no loosening assertions (principle-fix-root-causes). Then go back to a.
