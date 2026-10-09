@@ -33,7 +33,7 @@ The human already has a way of working. Learn it before you change anything. The
    - Save the fingerprint: `scripts/inventory.sh --fingerprint > ~/.flow-stack/toolchain.fp`.
 6. **Tell the human** in ≤ 8 lines: what you found, what flow-stack will use from their setup, what it turned off, what it kept, and anything that might still overlap (for example two Stop hooks).
 
-`/setup adapt` runs only this step (and step 1). SessionStart suggests it when the fingerprint changes: a plugin was installed or removed, or hooks, MCP servers, or the status line changed. On a re-run, diff the new inventory against the current Toolchain lines and propose only the changes. The fingerprint includes hosts only when one is installed, so a new host triggers one re-adapt and nothing else does. Record a declined offer as a note (`- note: declined <thing> <date>`) and don't offer it again.
+`/setup adapt` runs only this step (and step 1). SessionStart suggests it when the fingerprint changes: a plugin was installed or removed, or hooks, MCP servers, or the status line changed. On a re-run, diff the new inventory against the current Toolchain lines and propose only the changes. The fingerprint includes hosts only when one is installed, and leaves out their versions: a new host, or a change in what connects it (integration, sidebar rows, coordinator), triggers one re-adapt; an upgrade doesn't. Record a declined offer as a note (`- note: declined <thing> <date>`) and don't offer it again.
 
 If no profile exists yet, run step 3 first, then come back to record.
 

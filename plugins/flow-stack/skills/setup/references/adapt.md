@@ -62,7 +62,7 @@ From `inventory.sh .hosts`. Every host runs the real `claude`, so flow-stack wor
 |---|---|
 | **herdr** (`hosts.herdr`) | Record `host: herdr`. Offer what's missing: the Claude integration (`claude_integration: false`), flow's sidebar rows (`sidebar_flow_rows: false`), and, only if they want a coordinator, herdr-projects (`projects: false`). Offer `delegate: herdr-panes` to anyone who wants to watch workers. |
 | **herdr-projects** (`hosts.herdr.projects`) | Offer `orchestrator: herdr-projects`. If yes, offer one standing instruction in its project (`PROJECT.md`): "use /flow-stack:flow in every thread; lessons go to the repo's .flow/lessons.md". |
-| **Orca** (`hosts.orca`) | Record `host: orca`. If Orca's orchestration skill is installed, offer `orchestrator: orca`. Orca can switch Claude to a per-account config folder, so recommend enabling flow-stack in the repo's `.claude/settings.json`. Chain Orca's status line with flow's; never replace either. |
+| **Orca** (`hosts.orca`) | Record `host: orca`. If its orchestration skill is installed (`hosts.orca.orchestration`), offer `orchestrator: orca`. Orca can switch Claude to a per-account config folder, so recommend enabling flow-stack in the repo's `.claude/settings.json`. Chain Orca's status line with flow's; never replace either. |
 | **cmux** (`hosts.cmux`) | Record `host: cmux`. Nothing to install. |
 | **Conductor, Vibe Kanban, Claude Squad** | No status API. Recommend the repo-scope plugin entry so their worktrees load flow-stack. |
 

@@ -25,11 +25,14 @@ hosts() {
   if command -v herdr >/dev/null 2>&1; then
     v="$(herdr --version 2>/dev/null | awk 'NR==1{print $NF}')"
     grep -qs '\$flow_' "$HOME/.config/herdr/config.toml" && rows=true
+    # projects: herdr-projects keeps a ~/.local/bin/herdr-projects link to its install (its README)
     h="$(jq -c --arg v "$v" --argjson r "$rows" --argjson i "$(jq 'any(.. | strings; test("herdr-agent-state"))' <<<"$settings")" \
       --argjson p "$(command -v herdr-projects >/dev/null 2>&1 && echo true || echo false)" \
       '.herdr={version:$v, claude_integration:$i, sidebar_flow_rows:$r, projects:$p}' <<<"$h")"
   fi
-  command -v orca >/dev/null 2>&1 && h="$(jq -c --argjson m "$(jq 'any(.. | strings; test("orca"))' <<<"$settings")" '.orca={cli:true, managed_hooks:$m}' <<<"$h")"
+  command -v orca >/dev/null 2>&1 && h="$(jq -c --argjson m "$(jq 'any(.. | strings; test("orca"))' <<<"$settings")" \
+    --argjson o "$(grep -qsi orca "$C/skills/orchestration/SKILL.md" "$HOME/.agents/skills/orchestration/SKILL.md" && echo true || echo false)" \
+    '.orca={cli:true, managed_hooks:$m, orchestration:$o}' <<<"$h")"
   command -v cmux >/dev/null 2>&1 && h="$(jq -c '.cmux={cli:true}' <<<"$h")"
   [ -n "${CONDUCTOR_WORKSPACE_PATH:-}" ] && h="$(jq -c '.conductor={env:true}' <<<"$h")"
   echo "$h"
@@ -41,7 +44,7 @@ fingerprint() {
     jq -r '.hooks // {} | to_entries[] | .key as $e | .value[] | .hooks[]? | "\($e) \(.command // .type)"' <<<"$settings" | sort
     [ -f "$CJ" ] && jq -r '.mcpServers // {} | keys[]' "$CJ" | sort
     jq -r '.statusLine.command // ""' <<<"$settings"
-    hosts | jq -r 'del(.conductor) | to_entries[] | "host \(.key) \(.value | tostring)"'
+    hosts | jq -r 'del(.conductor) | to_entries[] | "host \(.key) \(.value | del(.version) | tostring)"'
   } | shasum | cut -c1-12
 }
 [ "${1:-}" = --fingerprint ] && { fingerprint; exit 0; }

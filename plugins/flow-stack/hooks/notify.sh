@@ -18,7 +18,10 @@ case "$target" in
   ""|off) exit 0 ;;
   osascript)
     # a host (herdr, Orca, cmux) already pings; ntfy and notify_on: all still fire
-    [ "$(flow_host)" != none ] && flow_enabled host && exit 0
+    case "$(flow_host)" in herdr|orca|cmux)
+      flow_roots "$(jq -r '.cwd // empty' <<<"${input:-}" 2>/dev/null)"   # so a repo's hooks.host: false counts
+      flow_enabled host && exit 0 ;;
+    esac
     osascript -e "display notification \"${msg//\"/\\\"}\" with title \"flow-stack\"" >/dev/null 2>&1 || flow_warn "osascript failed"
     ;;
   ntfy:*)

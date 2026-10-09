@@ -10,13 +10,20 @@ FLOW_INPUT="$(cat)"
 IFS=$'\t' read -r event sid agent src <<<"$(jq -r '[.hook_event_name // "", .session_id // "", .agent_id // "-", .source // "-"] | @tsv' <<<"$FLOW_INPUT")"
 [ -n "$sid" ] || exit 0
 dir="$FLOW_HOME/leads"; me="$dir/${sid//\//_}"
-# Inside an agent host that answers (flow_host) the lead also pushes its phase to the host's sidebar.
+# unchanged: every phase file recorded with the last push (lines 4+ of $me.host) still exists, none newer.
+unchanged() {
+  local p n=0
+  [ -f "$me.host" ] || return 1
+  while read -r p; do n=1; [ -e "$p" ] && [ ! "$p" -nt "$me.host" ] || return 1; done < <(tail -n +4 "$me.host")
+  [ "$n" = 1 ]
+}
+# Fast exit for the common tool call: a subagent's, or no mail and a fresh heartbeat (and, inside
+# an agent host, no phase change since the last push).
+[ "$event" = PostToolUse ] && [ "$agent" != - ] && exit 0
 host=""; [ -z "${HERDR_ENV:-}${ORCA_PANE_KEY:-}${CMUX_WORKSPACE_ID:-}" ] || host="$(flow_host)"
 case "$host" in herdr|orca|cmux) ;; *) host="" ;; esac
-# Fast exit for the common tool call: a subagent's, or no mail and a fresh heartbeat.
 if [ "$event" = PostToolUse ]; then
-  [ "$agent" = - ] || exit 0
-  [ -n "$(ls -A "$me.inbox" 2>/dev/null)" ] || [ -z "$(find "$me.json" -mmin -5 2>/dev/null)" ] || [ -n "$host" ] || exit 0
+  [ -n "$(ls -A "$me.inbox" 2>/dev/null)" ] || [ -z "$(find "$me.json" -mmin -5 2>/dev/null)" ] || { [ -n "$host" ] && ! unchanged; } || exit 0
 fi
 flow_init lead
 flow_enabled lead || exit 0
@@ -52,15 +59,15 @@ deliver() { # print and consume this lead's messages; the rename claims each one
 
 # Run a host CLI in the background, output discarded, cut off after ~1s (stock macOS has no timeout).
 host_run() {
-  ( "$@" & p=$!; ( sleep 1; kill "$p" ) & k=$!; wait "$p"; kill "$k" ) >/dev/null 2>&1 </dev/null &
+  ( "$@" & p=$!; ( sleep 1; kill "$p"; sleep 1; kill -9 "$p" ) & k=$!; wait "$p"; kill "$k" ) >/dev/null 2>&1 </dev/null &
 }
 
 # push: show "task · slice done/total · gates" in the host's sidebar once per change. Never prints.
 # $me.host holds the last pushed text, gate count and herdr seq ("-" = cleared). On a tool call it is skipped
 # while that record is newer than the files that move the phase; the text compare covers the rest.
 push() {
-  local row tk="" sl="" dn="" tt="" gt=0 txt prev="" pg=0 sq=0 unread=() clear=""
-  if [ "${1:-}" != clear ] && [ -f "$me.host" ] && [ "$event" = PostToolUse ] && [ -z "$(find "$FLOW_ACTIVE" "$FLOW_TASK_DIR/SLICES.md" "$FLOW_TASK_DIR/GATES.md" "${FLOW_STATE_DIR:-/dev/null}/TDD" -newer "$me.host" 2>/dev/null)" ]; then return 0; fi
+  local row tk="" sl="" dn="" tt="" gt=0 txt prev="" pg=0 sq=0 watch unread=() clear=""
+  [ "${1:-}" = clear ] || [ "$event" != PostToolUse ] || ! unchanged || return 0
   { read -r prev; read -r pg; read -r sq; } <"$me.host" 2>/dev/null || true
   if [ "${1:-}" = clear ] || [ -z "$FLOW_TASK" ]; then clear=1; txt="-"
   else
@@ -69,14 +76,18 @@ push() {
     [ -n "$tk" ] || return 0
     txt="$tk · $sl · $dn/$tt · $gt gate(s)"; txt="${txt//[$'\n\r']/ }"
   fi
-  [ "$txt" != "$prev" ] || { touch "$me.host"; return 0; }
+  # the files whose change moves the phase; dirs catch a GATES.md or TDD that appears later, and the
+  # pointer's dir catches a task that starts after a clear
+  watch="$(for w in "$FLOW_ACTIVE" "$FLOW_TASK_DIR" "$FLOW_TASK_DIR/SLICES.md" "$FLOW_TASK_DIR/GATES.md" "$FLOW_STATE_DIR" "$FLOW_STATE_DIR/TDD"; do
+    [ -n "$w" ] && [ "$w" != / ] && [ -e "$w" ] && echo "$w"; done; [ -n "$FLOW_TASK" ] || dirname "$FLOW_ACTIVE")"
+  if [ "$txt" = "$prev" ]; then printf '%s\n%s\n%s\n%s\n' "$txt" "$gt" "$sq" "$watch" >"$me.host"; return 0; fi
   # herdr drops a report whose --seq isn't newer than the last, so two pushes in one second still count
   sq=$(( $(date +%s)000 > ${sq:-0} ? $(date +%s)000 : ${sq:-0} + 1 ))
-  mkdir -p "$dir"; printf '%s\n%s\n%s\n' "$txt" "$gt" "$sq" >"$me.host.$$" && mv "$me.host.$$" "$me.host"
+  mkdir -p "$dir"; printf '%s\n%s\n%s\n%s\n' "$txt" "$gt" "$sq" "$watch" >"$me.host.$$" && mv "$me.host.$$" "$me.host"
   [ "$gt" -le "${pg:-0}" ] || unread=(--unread)
   case "$host" in
     herdr)
-      if [ -n "$clear" ]; then host_run "$HERDR_BIN_PATH" pane report-metadata "$HERDR_PANE_ID" --source user:flow-stack --clear-token flow_task --clear-token flow_slice --clear-token flow_gates
+      if [ -n "$clear" ]; then host_run "$HERDR_BIN_PATH" pane report-metadata "$HERDR_PANE_ID" --source user:flow-stack --clear-token flow_task --clear-token flow_slice --clear-token flow_gates --seq "$sq"
       else host_run "$HERDR_BIN_PATH" pane report-metadata "$HERDR_PANE_ID" --source user:flow-stack \
         --token "flow_task=${tk:0:80}" --token "flow_slice=${sl:0:40} $dn/$tt" --token "flow_gates=$gt" --ttl-ms 86400000 --seq "$sq"; fi ;;
     orca) host_run "${ORCA_CLI_COMMAND:-orca}" worktree set --worktree "id:${ORCA_WORKTREE_ID:-}" --comment "${txt#-}" ${unread[@]+"${unread[@]}"} ;;

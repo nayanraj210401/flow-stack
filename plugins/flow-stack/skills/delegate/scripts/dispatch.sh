@@ -5,7 +5,7 @@
 #   dispatch.sh wait <lane>            block until that pane's agent finishes (herdr agent wait)
 #   dispatch.sh cleanup <lane>         after a successful `task.sh accept`: remove the worktree dispatch.sh
 #                                      made (recorded in lanes/<lane>/HOST), only when it has no uncommitted changes
-#   dispatch.sh gc                     clean every recorded, clean lane of the active task
+#   dispatch.sh gc                     clean every recorded, clean lane whose worker has exited
 # A worker pane joins the task as a lane, so evidence, accept and the lane registry work as for the Agent tool.
 set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -22,7 +22,9 @@ cleanup() { # cleanup <lane>
   ws="$(hget "$lane" workspace)"; path="$(hget "$lane" path)"
   [ -n "$ws" ] && [ -d "$path" ] || die "lane '$lane': HOST record has no live worktree"
   [ -z "$(git -C "$path" status --porcelain 2>/dev/null)" ] || die "lane '$lane': $path has uncommitted changes; kept"
-  herdr worktree remove --workspace "$ws" >/dev/null && echo "removed: $lane ($ws)"
+  herdr worktree remove --workspace "$ws" >/dev/null || die "lane '$lane': herdr worktree remove failed"
+  mv "$(hostf "$lane")" "$(hostf "$lane").removed"
+  echo "removed: $lane ($ws)"
 }
 
 cmd="${1:-}"; shift || true
@@ -44,22 +46,24 @@ case "$cmd" in
     [ -n "$path" ] && [ -n "$ws" ] && [ -n "$pane" ] || die "unexpected herdr worktree create result: $res"
     mkdir -p "$FLOW_TASK_DIR/lanes/$lane"
     printf 'workspace=%s\npane=%s\npath=%s\nbranch=%s\nagent=%s\n' "$ws" "$pane" "$path" "$branch" "$name" >"$(hostf "$lane")"
-    gd="$(git -C "$path" rev-parse --absolute-git-dir)"
+    gd="$(git -C "$path" rev-parse --absolute-git-dir)" && [ -n "$gd" ] || die "no git dir for $path"
     : >"$gd/flow-thread"                       # its prompts come from outside: irreversible gates queue, as under --auto
     (cd "$path" && "$here/../../flow/scripts/task.sh" join "$slug" >/dev/null) || die "worker worktree could not join '$slug'"
     model="$(profile_fm build_model)"
     herdr agent start "$name" --kind claude --pane "$pane" -- ${model:+--model "$model"} >/dev/null || die "herdr agent start failed (worktree kept: $path)"
-    herdr agent prompt "$name" "You are the worker for task $slug, slice $slice. First run: task.sh join $slug (skip if task.sh active already prints it). Then follow flow-stack:loop for $slice only, as in the worker agent definition, and finish with the worker report." >/dev/null || die "herdr agent prompt failed"
+    herdr agent prompt "$name" "You are the worker for task $slug, slice $slice; this worktree already ran task.sh join $slug (run it again if task.sh active doesn't print $slug). Follow flow-stack:loop for $slice only, as in the worker agent definition, and finish with the worker report." >/dev/null || die "herdr agent prompt failed"
     echo "$lane" ;;
   wait)
     lane="${1:-}"; [ -n "$lane" ] && [ -f "$(hostf "$lane")" ] || die "usage: dispatch.sh wait <lane> (a lane dispatch.sh started)"
     herdr agent wait "$(hget "$lane" agent)" ;;
   cleanup)
     [ -n "${1:-}" ] || die "usage: dispatch.sh cleanup <lane>"; cleanup "$1" ;;
-  gc)
+  gc) # each lane on its own, so one kept lane doesn't stop the sweep; a live worker is never touched
     for f in "$FLOW_TASK_DIR"/lanes/*/HOST; do
       [ -f "$f" ] || continue
-      cleanup "$(basename "$(dirname "$f")")" 2>&1 || true
+      lane="$(basename "$(dirname "$f")")"
+      if herdr agent get "$(hget "$lane" agent)" >/dev/null 2>&1; then echo "kept: $lane (worker still running)"; continue; fi
+      ( cleanup "$lane" ) 2>&1 || true
     done ;;
   *) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac
