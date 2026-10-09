@@ -76,13 +76,15 @@ case "$cmd" in
   cleanup)
     [ -n "${1:-}" ] || die "usage: dispatch.sh cleanup <lane>"; cleanup "$1" ;;
   gc) # each lane on its own, so one kept lane doesn't stop the sweep; a live worker is never touched
+    command -v jq >/dev/null || die "gc needs jq to read worker state"
     for f in "$FLOW_TASK_DIR"/lanes/*/HOST; do
       [ -f "$f" ] || continue
       lane="$(basename "$(dirname "$f")")"
-      # a finished worker still sits in its pane as an idle claude: keep only one that works or waits on a question
-      case "$(herdr agent get "$(hget "$lane" agent)" 2>/dev/null | jq -r '.result.agent.agent_status // empty')" in
-        working|blocked) echo "kept: $lane (worker still running)"; continue ;;
-      esac
+      # clean only a worker that is provably finished (done) or gone; idle, unknown, working, blocked stay
+      if a="$(herdr agent get "$(hget "$lane" agent)" 2>/dev/null)"; then
+        st="$(jq -r '.result.agent.agent_status // "unknown"' <<<"$a")"
+        [ "$st" = done ] || { echo "kept: $lane (worker $st)"; continue; }
+      fi
       ( cleanup "$lane" ) 2>&1 || true
     done ;;
   *) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
