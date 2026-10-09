@@ -13,6 +13,7 @@ here="$(cd "$(dirname "$0")" && pwd)"
 die() { echo "dispatch.sh: $*" >&2; exit 1; }
 provider() { profile_section Toolchain | sed -n 's/^- delegate:[[:space:]]*\([a-z-]*\).*/\1/p' | head -n1; }
 hostf() { printf '%s/lanes/%s/HOST' "$FLOW_TASK_DIR" "$1"; }
+herdr() { "${HERDR_BIN_PATH:-$(command -v herdr)}" "$@"; }
 hget() { sed -n "s/^$2=//p" "$(hostf "$1")" 2>/dev/null | head -n1; }
 
 cleanup() { # cleanup <lane>
@@ -34,9 +35,9 @@ case "$cmd" in
       *) die "unsupported delegate provider '$(provider)' (agent|herdr-panes)" ;;
     esac
     [ "$FLOW_TASK" = "$slug" ] || die "task '$slug' is not the active task here"
-    command -v herdr >/dev/null && command -v jq >/dev/null || die "herdr-panes needs herdr and jq on PATH"
+    [ -x "${HERDR_BIN_PATH:-$(command -v herdr)}" ] && command -v jq >/dev/null || die "herdr-panes needs herdr and jq on PATH"
     branch="flow/$slug-$slice"; lane="${branch//\//_}"; name="flow-$slug-$slice"
-    res="$(herdr worktree create --branch "$branch" --no-focus)" || die "herdr worktree create failed"
+    res="$(herdr worktree create --cwd "$FLOW_ROOT" --branch "$branch" --no-focus)" || die "herdr worktree create failed"
     path="$(jq -r '.result.worktree.path // empty' <<<"$res")"
     ws="$(jq -r '.result.workspace.workspace_id // empty' <<<"$res")"
     pane="$(jq -r '.result.root_pane.pane_id // empty' <<<"$res")"

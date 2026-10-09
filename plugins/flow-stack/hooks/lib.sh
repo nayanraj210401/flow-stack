@@ -121,10 +121,11 @@ flow_auto() {
 
 # flow_host: the agent host this session runs in: herdr | orca | cmux | conductor | none.
 # Host env leaks through tmux, ssh and nested shells, so it counts only while the host answers:
-# herdr and cmux by their socket, Orca by its CLI.
+# herdr and cmux by their socket, Orca by its agent-hook port (bare `orca` on Linux is a screen reader).
 flow_host() {
   if [ "${HERDR_ENV:-}" = 1 ] && [ -S "${HERDR_SOCKET_PATH:-}" ] && [ -x "${HERDR_BIN_PATH:-}" ]; then echo herdr
-  elif [ -n "${ORCA_PANE_KEY:-}" ] && command -v "${ORCA_CLI_COMMAND:-orca}" >/dev/null 2>&1; then echo orca
+  elif [ -n "${ORCA_PANE_KEY:-}" ] && [ -n "${ORCA_AGENT_HOOK_PORT:-}" ] && (exec 3<>"/dev/tcp/127.0.0.1/$ORCA_AGENT_HOOK_PORT") 2>/dev/null \
+    && command -v "${ORCA_CLI_COMMAND:-orca}" >/dev/null 2>&1; then echo orca
   elif [ -n "${CMUX_WORKSPACE_ID:-}" ] && [ -S "${CMUX_SOCKET_PATH:-/tmp/cmux.sock}" ] && command -v cmux >/dev/null 2>&1; then echo cmux
   elif [ -n "${CONDUCTOR_WORKSPACE_PATH:-}" ]; then echo conductor
   else echo none; fi
