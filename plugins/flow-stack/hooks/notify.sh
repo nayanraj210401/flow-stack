@@ -17,6 +17,8 @@ target="$(profile_fm notify 2>/dev/null || true)"
 case "$target" in
   ""|off) exit 0 ;;
   osascript)
+    # a host (herdr, Orca, cmux) already pings; ntfy and notify_on: all still fire
+    [ "$(flow_host)" != none ] && flow_enabled host && exit 0
     osascript -e "display notification \"${msg//\"/\\\"}\" with title \"flow-stack\"" >/dev/null 2>&1 || flow_warn "osascript failed"
     ;;
   ntfy:*)
