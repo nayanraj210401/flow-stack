@@ -10,7 +10,7 @@ FLOW_INPUT="$(cat)"
 IFS=$'\t' read -r event sid agent src <<<"$(jq -r '[.hook_event_name // "", .session_id // "", .agent_id // "-", .source // "-"] | @tsv' <<<"$FLOW_INPUT")"
 [ -n "$sid" ] || exit 0
 dir="$FLOW_HOME/leads"; me="$dir/${sid//\//_}"
-# Inside an agent host (its socket answers) the lead also pushes its phase to the host's sidebar.
+# Inside an agent host that answers (flow_host) the lead also pushes its phase to the host's sidebar.
 host=""; [ -z "${HERDR_ENV:-}${ORCA_PANE_KEY:-}${CMUX_WORKSPACE_ID:-}" ] || host="$(flow_host)"
 case "$host" in herdr|orca|cmux) ;; *) host="" ;; esac
 # Fast exit for the common tool call: a subagent's, or no mail and a fresh heartbeat.
@@ -56,7 +56,7 @@ host_run() {
 }
 
 # push: show "task · slice done/total · gates" in the host's sidebar once per change. Never prints.
-# $me.host holds the last pushed text and gate count ("-" = cleared). On a tool call it is skipped
+# $me.host holds the last pushed text, gate count and herdr seq ("-" = cleared). On a tool call it is skipped
 # while that record is newer than the files that move the phase; the text compare covers the rest.
 push() {
   local row tk="" sl="" dn="" tt="" gt=0 txt prev="" pg=0 sq=0 unread=() clear=""
