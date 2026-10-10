@@ -32,7 +32,7 @@ if flow_held "$rel"; then
   exit 0
 fi
 if awk -F'\t' -v p="$rel" '$1 == p {f=1} END {exit !f}' "$FLOW_STATE_DIR/.clash" 2>/dev/null; then   # the wait is over
-  { awk -F'\t' -v p="$rel" '$1 != p' "$FLOW_STATE_DIR/.clash" || true; } >"$FLOW_STATE_DIR/.clash.$$"; mv "$FLOW_STATE_DIR/.clash.$$" "$FLOW_STATE_DIR/.clash"
+  awk -F'\t' -v p="$rel" '$1 != p' "$FLOW_STATE_DIR/.clash" >"$FLOW_STATE_DIR/.clash.$$"; mv "$FLOW_STATE_DIR/.clash.$$" "$FLOW_STATE_DIR/.clash"
 fi
 slice="$(awk '/^## /{h=$2} /^status: doing/{print h; exit}' "$FLOW_TASK_DIR/SLICES.md" 2>/dev/null)"
 hold="$(flow_hold_file "$rel")"; mkdir -p "$(dirname "$hold")"

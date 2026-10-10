@@ -74,7 +74,6 @@ if [ -n "$full" ]; then
 fi
 
 where=main; [ "$FLOW_ROOT" != "$FLOW_MAIN" ] && { where=lead; [ -z "$FLOW_LANE" ] || where=lane; }
-# files this checkout waits on: warned by hooks/holds.sh, and still held by another session
 clash="$([ -f "$st/.clash" ] && cut -f1 "$st/.clash" | sort -u | while read -r p; do
     flow_held "$p" && jq -nc --arg p "$p" --arg h "$HOLD_NAME" --arg t "$HOLD_TASK" --arg s "$HOLD_SLICE" '{path:$p, holder:$h, task:$t, slice:$s}'
   done | jq -sc "$clean"' map(map_values(clean))')"
