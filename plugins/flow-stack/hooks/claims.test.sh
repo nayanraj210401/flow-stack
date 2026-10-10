@@ -10,15 +10,15 @@ bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 has() { grep -Fq -- "$2" <<<"$1"; }
 
 SB="$(mktemp -d "${TMPDIR:-/tmp}/claims.XXXXXX")"; SB="$(cd "$SB" && pwd -P)"
-PIDS=()
-trap '[ ${#PIDS[@]} -eq 0 ] || kill "${PIDS[@]}" 2>/dev/null; rm -rf "$SB"' EXIT
+# fake sessions start inside $(...), so their pids go to a file the trap can read
+trap 'kill $(cat "$SB/pids" 2>/dev/null) 2>/dev/null; rm -rf "$SB"' EXIT
 export FLOW_STACK_HOME="$SB/home" CLAUDE_CONFIG_DIR="$SB/claude" FLOW_CLAUDE_JSON="$SB/claude.json"
 mkdir -p "$FLOW_STACK_HOME" "$CLAUDE_CONFIG_DIR/sessions" "$SB/repo"
 unset HERDR_ENV ORCA_PANE_KEY CMUX_WORKSPACE_ID
 # session <name>: a live fake Claude session in the registry; prints its pid
 session() {
-  sleep 600 >/dev/null 2>&1 & local p=$!
-  PIDS+=("$p")
+  sleep 600 </dev/null >/dev/null 2>&1 & local p=$!
+  echo "$p" >>"$SB/pids"
   jq -n --argjson pid "$p" --arg n "$1" '{pid:$pid, name:$n, sessionId:$n, status:"busy"}' >"$CLAUDE_CONFIG_DIR/sessions/$p.json"
   echo "$p"
 }
