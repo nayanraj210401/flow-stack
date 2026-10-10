@@ -72,5 +72,57 @@ EOF
   rm -f .flow/tasks/demo/GATES.md
 fi
 
+if on host; then
+  BIN="$SB/bin"; LOG="$SB/host.log"; mkdir -p "$BIN"; : >"$LOG"; : >"$SB/name"
+  # herdr stub: logs each call; `agent get` answers with the name in $SB/name, `agent rename` sets it
+  cat >"$BIN/herdr" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "herdr \$*" >>"$LOG"
+case "\$1 \$2" in
+  "agent get") jq -nc --arg n "\$(cat "$SB/name")" '{result:{agent:(if \$n == "" then {} else {name:\$n} end)}}' ;;
+  "agent rename") if [ "\$4" = --clear ]; then : >"$SB/name"; else printf '%s' "\$4" >"$SB/name"; fi ;;
+esac
+EOF
+  chmod +x "$BIN/herdr"
+  python3 -c 'import socket,sys; socket.socket(socket.AF_UNIX).bind(sys.argv[1])' "$SB/herdr.sock"
+  export HERDR_ENV=1 HERDR_PANE_ID=w1:p1 HERDR_SOCKET_PATH="$SB/herdr.sock" HERDR_BIN_PATH="$BIN/herdr"
+  printf 'demo\n\n' >.flow/ACTIVE
+  ev() { jq -nc --arg e "$1" --arg c "$PWD" '{hook_event_name:$e, session_id:"sess-h", cwd:$c, prompt:"go"}'; }
+  push() { printf '%s' "$(ev "$1")" | "$PLUGIN/hooks/host.sh" >/dev/null 2>&1; }
+  waitfor() { local i; for i in $(seq 1 30); do grep -Fq -- "$1" "$LOG" && return 0; sleep 0.1; done; return 1; }
+  quiet() { sleep 1.5; }
+
+  echo "-- host: an unnamed agent row takes the task's name"
+  push UserPromptSubmit
+  waitfor "agent rename w1:p1 demo" && ok "renamed to the task" || bad "no rename: $(cat "$LOG")"
+  waitfor "report-metadata" && has "$(grep report-metadata "$LOG" | tail -n1)" "--clear-token flow_gates" \
+    && ok "no open gate: no gate mark" || bad "gate mark with no gate: $(grep report-metadata "$LOG" | tail -n1)"
+  grep -q 'notification show' "$LOG" && bad "toast with no gate" || ok "no gate, no toast"
+
+  echo "-- host: a new gate toasts once and marks the row"
+  printf 'GATE · ship it?\n  options: A) yes  B) no\n' >.flow/tasks/demo/GATES.md
+  push UserPromptSubmit
+  waitfor "notification show" && has "$(grep 'notification show' "$LOG")" "ship it?" && has "$(grep 'notification show' "$LOG")" "--sound request" \
+    && ok "toast names the gate, with the request sound" || bad "toast: $(grep notification "$LOG")"
+  has "$(grep report-metadata "$LOG" | tail -n1)" "flow_gates=⚑1" && ok "row marked ⚑1" || bad "mark: $(grep report-metadata "$LOG" | tail -n1)"
+  touch .flow/tasks/demo/SLICES.md; push UserPromptSubmit; quiet
+  [ "$(grep -c 'notification show' "$LOG")" = 1 ] && ok "same gate: no second toast" || bad "toasted again"
+
+  echo "-- host: a name someone else set is kept"
+  printf 'my-own' >"$SB/name"
+  printf '## S2 · y\nstatus: todo\ncheck: true\nfence: src/**\n' >>.flow/tasks/demo/SLICES.md
+  push UserPromptSubmit; quiet
+  [ "$(cat "$SB/name")" = my-own ] && ok "the human's name survives a push" || bad "overwrote the human's name: $(cat "$SB/name")"
+
+  echo "-- host: session end clears only the name flow set"
+  push SessionEnd; quiet
+  [ "$(cat "$SB/name")" = my-own ] && ok "the human's name survives the session end" || bad "cleared the human's name"
+  : >"$SB/name"; push UserPromptSubmit; waitfor "agent rename w1:p1 demo" || true; quiet
+  push SessionEnd
+  waitfor "agent rename w1:p1 --clear" && ok "flow's own name is cleared at session end" || bad "name left: $(cat "$SB/name")"
+  unset HERDR_ENV HERDR_PANE_ID HERDR_SOCKET_PATH HERDR_BIN_PATH
+  rm -f .flow/tasks/demo/GATES.md
+fi
+
 if [ "$FAILS" -eq 0 ]; then echo "== herdr · PASS"; exit 0; fi
 echo "== herdr · FAIL ($FAILS)"; exit 1
