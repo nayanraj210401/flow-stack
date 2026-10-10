@@ -34,7 +34,7 @@ fi
 if awk -F'\t' -v p="$rel" '$1 == p {f=1} END {exit !f}' "$FLOW_STATE_DIR/.clash" 2>/dev/null; then   # the wait is over
   awk -F'\t' -v p="$rel" '$1 != p' "$FLOW_STATE_DIR/.clash" >"$FLOW_STATE_DIR/.clash.$$"; mv "$FLOW_STATE_DIR/.clash.$$" "$FLOW_STATE_DIR/.clash"
 fi
-slice="$(awk '/^## /{h=$2} /^status: doing/{print h; exit}' "$FLOW_TASK_DIR/SLICES.md" 2>/dev/null)"
+slice="$(awk '/^## /{h=$2} /^status: doing/{print h; exit}' "$FLOW_TASK_DIR/SLICES.md" 2>/dev/null || true)"
 hold="$(flow_hold_file "$rel")"; mkdir -p "$(dirname "$hold")"
 printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$FLOW_SESSION_PID" "$FLOW_TASK" "$FLOW_TASK_DIR" "${slice:--}" \
   "$(flow_owner_name "$FLOW_SESSION_PID" | tr -d '[:cntrl:]')" "$(date +%s)" "$rel" >"$hold.$$" && mv "$hold.$$" "$hold"

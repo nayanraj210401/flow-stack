@@ -100,13 +100,13 @@ flow_setting() {
 # worktree shares: "pid<TAB>task<TAB>task dir<TAB>slice<TAB>name<TAB>epoch of the last edit<TAB>path",
 # "-" for an empty field (read splits on tabs as whitespace, so an empty one would shift the rest).
 # flow_hold_file <rel>: that file's path.
-flow_hold_file() { printf '%s/holds/%s' "$FLOW_DIR" "$(printf '%s' "$1" | shasum | cut -c1-16)"; }
+flow_hold_file() { printf '%s/holds/%s' "$FLOW_DIR" "$(printf '%s' "$1" | git hash-object --stdin | cut -c1-16)"; }
 
 # flow_held <rel>: another live session, on another task and still on the slice it held it with, edited
 # <rel> within holds_ttl seconds (default 1800). Sets HOLD_PID HOLD_TASK HOLD_SLICE HOLD_NAME HOLD_TS.
 flow_held() {
   local f d; f="$(flow_hold_file "$1")"
-  HOLD_PID=""; [ ! -f "$f" ] || IFS=$'\t' read -r HOLD_PID HOLD_TASK d HOLD_SLICE HOLD_NAME HOLD_TS _ <"$f"
+  HOLD_PID="" HOLD_TASK="" HOLD_SLICE="" HOLD_NAME="" HOLD_TS="" d=""; [ ! -f "$f" ] || IFS=$'\t' read -r HOLD_PID HOLD_TASK d HOLD_SLICE HOLD_NAME HOLD_TS _ <"$f"
   [ "$HOLD_SLICE" != - ] || HOLD_SLICE=""
   [ -n "$HOLD_PID" ] && [ "$HOLD_PID" != "${FLOW_SESSION_PID:-}" ] && [ "$HOLD_TASK" != "${FLOW_TASK:-}" ] || return 1
   case "$HOLD_TS" in ""|*[!0-9]*) return 1 ;; esac

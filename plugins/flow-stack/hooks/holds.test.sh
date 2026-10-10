@@ -76,6 +76,9 @@ band="$(bun -e '
   const { bandText } = await import(process.argv[2] + "/register.mjs")
   console.log(bandText(JSON.parse(process.argv[3])))' "$H/register.tsx" "$SB" "$st" 2>&1)"
 has "$band" "⚡ src/calc.sh · pane-b" && ok "band: $band" || bad "band: $band"
+printf 'src/gone.sh\t123\n' >>.flow/tasks/demo/.clash   # its hold file was deleted (git clean)
+[ "$(FLOW_SESSION_PID="$A" "$PLUGIN/skills/flow/scripts/status.sh" "$SB/repo" 2>&1 | jq -r '.clash[0].path' 2>&1)" = src/calc.sh ] \
+  && ok "a missing hold file doesn't blank the ⚡" || bad "missing hold file broke status: $(FLOW_SESSION_PID="$A" "$PLUGIN/skills/flow/scripts/status.sh" "$SB/repo" 2>&1)"
 st_b="$(FLOW_SESSION_PID="$B" "$PLUGIN/skills/flow/scripts/status.sh" "$WB")"
 [ "$(jq -c '.clash // []' <<<"$st_b")" = '[]' ] && ok "the holder's band shows no ⚡" || bad "holder clash: $st_b"
 
