@@ -78,8 +78,8 @@ edit "$A" "$SB/repo" PreToolUse src/calc.sh
 [ -z "$OUT" ] && ok "holder's slice done: free" || bad "still held after slice done: $OUT"
 sed -i '' 's/^status: done/status: doing/' .flow/tasks/other/SLICES.md
 both "$B" "$WB" src/calc.sh   # B re-claims (it holds it already; refresh)
-f="$(ls "$SB/repo/.flow/claims/"* | head -n1)"
-awk -F'\t' 'BEGIN{OFS="\t"} {$6=$6-7200; print}' "$f" >"$f.t" && mv "$f.t" "$f"
+f="$(ls "$SB/repo/.flow/claims/"* 2>/dev/null | head -n1)"; f="${f:-$SB/no-claim}"
+awk -F'\t' 'BEGIN{OFS="\t"} {$6=$6-7200; print}' "$f" >"$f.t" 2>/dev/null </dev/null && mv "$f.t" "$f"
 edit "$A" "$SB/repo" PreToolUse src/calc.sh
 [ -z "$OUT" ] && ok "no edit by the holder for 2h: free" || bad "stale claim held: $OUT"
 both "$B" "$WB" src/calc.sh
