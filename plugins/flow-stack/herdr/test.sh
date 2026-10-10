@@ -124,5 +124,40 @@ EOF
   rm -f .flow/tasks/demo/GATES.md
 fi
 
+if on plugin; then
+  echo "-- plugin: unit and UI tests, types"
+  [ -d "$HERE/node_modules" ] || (cd "$HERE" && bun install >/dev/null 2>&1)
+  (cd "$HERE" && bun test >"$SB/bun.log" 2>&1) && ok "bun test: $(grep -Eo '[0-9]+ pass' "$SB/bun.log")" || bad "bun test: $(tail -n 15 "$SB/bun.log")"
+  (cd "$HERE" && ./node_modules/.bin/tsc --noEmit -p . >"$SB/tsc.log" 2>&1) && ok "types check" || bad "tsc: $(head -n 10 "$SB/tsc.log")"
+
+  echo "-- plugin: the board reads the real status.sh, and a decision reaches GATES.md and the pane"
+  BIN="$SB/pbin"; LOG="$SB/plugin.log"; mkdir -p "$BIN"; : >"$LOG"
+  pid="$(session flow-demo-1 sess-1)"; other="$(session flow-demo-2 sess-2)"
+  printf 'demo\n%s\n' "$pid" >.flow/ACTIVE
+  printf 'GATE · push the branch?\n  options: A) push now  B) hold   (recommend: A, because green)\n' >.flow/tasks/demo/GATES.md
+  cat >"$BIN/herdr" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "herdr \$*" >>"$LOG"
+[ "\$1 \$2" = "agent list" ] && jq -nc --arg c "$PWD" '{result:{agents:[
+  {pane_id:"w1:p1", agent:"claude", agent_status:"idle", cwd:\$c, focused:true, agent_session:{value:"sess-1"}},
+  {pane_id:"w1:p2", agent:"claude", agent_status:"working", cwd:\$c, focused:false, agent_session:{value:"sess-2"}}]}}'
+exit 0
+EOF
+  chmod +x "$BIN/herdr"
+  out="$(cd "$HERE" && HERDR_BIN_PATH="$BIN/herdr" bun -e '
+    import { load, decide } from "./src/herdr"
+    const rows = load()
+    const own = rows.find(r => r.pane === "w1:p1"), other = rows.find(r => r.pane === "w1:p2")
+    console.log(JSON.stringify({ own: own?.task?.task, gates: own?.task?.gates?.length, other: other?.task, session: own?.session }))
+    console.log(decide(own, 1, "push the branch?", "approve", "A) push now", "ship it"))' 2>&1)"
+  has "$out" '"own":"demo"' && has "$out" '"gates":1' && has "$out" '"other":null' && has "$out" '"session":"flow-demo-1"' \
+    && ok "the owner's pane shows the task and its gate; the other pane none" || bad "load: $out"
+  has "$(grep '^  decided: ' .flow/tasks/demo/GATES.md)" "choice: A) push now · note: ship it" && ok "the decision is in GATES.md" || bad "gates: $(cat .flow/tasks/demo/GATES.md) / $out"
+  p="$(grep 'agent prompt' "$LOG")"
+  has "$p" "agent prompt w1:p1 The human approved gate 1" && ! has "$p" "push the branch" \
+    && ok "the owner's pane is told, without the gate's repo text" || bad "prompt: $p"
+  rm -f .flow/tasks/demo/GATES.md
+fi
+
 if [ "$FAILS" -eq 0 ]; then echo "== herdr · PASS"; exit 0; fi
 echo "== herdr · FAIL ($FAILS)"; exit 1
