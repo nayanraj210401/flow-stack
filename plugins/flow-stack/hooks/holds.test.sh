@@ -49,6 +49,7 @@ echo "-- the first edit holds the file; the same session edits on freely"
 both "$B" "$WB" src/calc.sh
 [ -z "$OUT" ] && ok "first edit: silent" || bad "first edit spoke: $OUT"
 ls "$SB/repo/.flow/holds/"* >/dev/null 2>&1 && ok "hold recorded in the main checkout's .flow/holds" || bad "no claim file"
+git status --porcelain | grep -q '\.flow/holds' && bad "hold files show up in git status" || ok "hold files are gitignored"
 both "$B" "$WB" src/calc.sh
 [ -z "$OUT" ] && ok "holder's own edits stay silent" || bad "holder warned: $OUT"
 
@@ -87,10 +88,10 @@ edit "$A" "$SB/repo" PreToolUse src/add.sh
 [ -z "$OUT" ] && ok "hard: an unclaimed file is free" || bad "hard denied a free file: $OUT"
 
 echo "-- the claim lapses: holder's slice done, stale, holder gone"
-sed -i '' 's/^status: doing/status: done/' .flow/tasks/other/SLICES.md
+perl -pi -e 's/^status: doing/status: done/' .flow/tasks/other/SLICES.md
 edit "$A" "$SB/repo" PreToolUse src/calc.sh
 [ -z "$OUT" ] && ok "holder's slice done: free" || bad "still held after slice done: $OUT"
-sed -i '' 's/^status: done/status: doing/' .flow/tasks/other/SLICES.md
+perl -pi -e 's/^status: done/status: doing/' .flow/tasks/other/SLICES.md
 both "$B" "$WB" src/calc.sh   # B edits again (refreshes its hold)
 f="$(ls "$SB/repo/.flow/holds/"* 2>/dev/null | head -n1)"; f="${f:-$SB/no-claim}"
 awk -F'\t' 'BEGIN{OFS="\t"} {$6=$6-7200; print}' "$f" >"$f.t" 2>/dev/null </dev/null && mv "$f.t" "$f"
@@ -107,11 +108,11 @@ has "$(cat "$f")" "$A" && ok "the next editor takes the claim" || bad "claim not
 
 echo "-- a holder with no doing slice still holds (empty fields don't shift the rest)"
 B3="$(session pane-b3)"; printf 'other\n%s\n' "$B3" >"$(git rev-parse --git-common-dir)/worktrees/wt-b/flow-active"
-sed -i '' 's/^status: doing/status: todo/' .flow/tasks/other/SLICES.md
+perl -pi -e 's/^status: doing/status: todo/' .flow/tasks/other/SLICES.md
 both "$B3" "$WB" src/sub.sh
 edit "$A" "$SB/repo" PreToolUse src/sub.sh
 [ "$(jq -r '.hookSpecificOutput.permissionDecision // empty' <<<"$OUT")" = deny ] && ok "slice-less hold denies in hard mode" || bad "slice-less hold: $OUT · $(cat .flow/holds/* | grep sub.sh)"
-sed -i '' 's/^status: todo/status: doing/' .flow/tasks/other/SLICES.md
+perl -pi -e 's/^status: todo/status: doing/' .flow/tasks/other/SLICES.md
 
 echo "-- a worker lane of the same task never clashes"
 git worktree add -q -b lane-a ../wt-lane
