@@ -290,6 +290,7 @@ Check your own spend with `/flow-stack:budget` (uses ccusage) and the estimate-v
 | **guard** (Bash) | Denies `rm -rf /`, force-push to main, reading `.env`, and packages that don't exist on npm or PyPI (hallucinated dependencies). Asks you before `reset --hard`, destructive SQL, `curl \| sh`, and anything in your repo's `.flow/gates.md`. |
 | **seal** (Edit, Write, Bash) | Editing a sealed check, INTENT.md, or SEALS needs your confirmation. |
 | **fence** (Edit, Write) | Edits outside the current slice's file fence are denied until the fence is widened on purpose and logged. |
+| **holds** (Edit, Write) | Two Claude sessions on different tasks, in any worktrees of one repo, editing the same file: the first to edit it holds it. The second is warned once (`soft`, the default) or denied (`{"holds": "hard"}`), told who holds it, and pointed at `SendMessage` to sort it out. Its band shows `⚡ <file> · <holder>`. A hold lapses when the holder's slice is done, its session ends, or after 30 minutes without an edit (`holds_ttl`, seconds). |
 | **blind / read-guard** | Blind checks and `.env` files can't be read by the builder. |
 | **slice gate** | `status: done` can only be set by `task.sh slice <id> done`, which requires red first, green after the last edit, probe TEETH, and the line budget. |
 | **circuit** (PostToolUse) | The same failing check 3 times → stop, attack the premise, `challenge`, and ask you. |
@@ -306,7 +307,7 @@ Hooks fail open: if `jq` is missing or a script errors, the action is allowed an
 
 | Mod | What you get | Reads |
 |---|---|---|
-| **Flow band** | A dim line above the prompt: `flow · <task> · <slice> · n/m slices · tdd red · C1 PASS · edited since`. Empty when no task is active. | `status.sh` |
+| **Flow band** | A dim line above the prompt: `flow · <task> · <slice> · n/m slices · tdd red · C1 PASS · edited since`, and `⚡ <file> · <holder>` while another session holds a file you edited. Empty when no task is active. | `status.sh` |
 | **Spinner** | While Claude works, the spinner shows the slice: `Thinking · S2 · red…` | `status.sh` |
 | **`/flow-pane`** | A pane with slices, open gates with **Approve / Reject**, and the repo's other tasks with the session that owns each. It is a command, so it runs instantly with no Claude turn and no tokens. | `status.sh --full` |
 | **Model per role** | A flow-stack agent started with no model gets one from your profile's `budget:`. advocate and reviewer get `design_model`; worker, checker and flow-agent get `build_model`. A model the call names wins. Built-ins such as Explore are left alone. A toast names the model the first time each role spawns; a budget value that isn't a model name is ignored with a warning. | `~/.flow-stack/profile.md` |

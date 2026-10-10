@@ -21,7 +21,8 @@
       },
       {
         "matcher": "Edit|Write|MultiEdit|NotebookEdit",
-        "hooks": [{ "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/edit-guard.sh\"", "timeout": 5 }]
+        "hooks": [{ "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/edit-guard.sh\"", "timeout": 5 },
+                  { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/holds.sh\"", "timeout": 5 }]
       },
       {
         "matcher": "Read|Grep|Glob",
@@ -32,6 +33,10 @@
       {
         "hooks": [{ "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/post-tool.sh\"", "timeout": 5 },
                   { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/host.sh\"", "timeout": 5 }]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [{ "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/holds.sh\"", "timeout": 5 }]
       }
     ],
     "PreCompact": [
