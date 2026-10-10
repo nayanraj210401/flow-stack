@@ -7,6 +7,11 @@ flow_enabled session-start || exit 0
 
 source_kind="$(flow_field .source)"
 
+# Housekeeping: the pre-ownership lead registry (gone since tasks have owners), and sidebar push
+# records a crashed session never cleared at its end.
+rm -rf "$FLOW_HOME/leads"
+find "$FLOW_HOME/hosts" -type f -mtime +3 -delete 2>/dev/null || true
+
 router="$(profile_section Toolchain 2>/dev/null | sed -n 's/^- router:[[:space:]]*\([^ ·]*\).*/\1/p' | head -n1 || true)"
 
 echo '# flow-stack'
@@ -66,6 +71,11 @@ if [ -d "$FLOW_DIR/features" ]; then
   nfeat="$(ls "$FLOW_DIR"/features/*.md 2>/dev/null | grep -vc '/README\.md$' || true)"
   nstale="$(grep -lE '^status: (stale|broken)' "$FLOW_DIR"/features/*.md 2>/dev/null | wc -l | tr -d ' ')"
   printf 'Feature map: .flow/features/ (%s features%s). Before changing behavior, run %s impact.\n' "$nfeat" "$([ "$nstale" -gt 0 ] && printf ', %s stale or broken' "$nstale")" "$(cd "$(dirname "$0")/../skills/feature-map/scripts" && pwd)/features.sh"
+fi
+
+if [ -n "$FLOW_FOREIGN" ]; then
+  printf '\n## No task of yours here\nThis checkout'\''s task, %s, belongs to the live session %s (pid %s): its anchor, fences, and Stop check are not yours. To work on a task, start one in a worktree of your own (EnterWorktree, then task.sh new). To coordinate, SendMessage %s.\n' \
+    "$FLOW_FOREIGN" "$(flow_owner_name "$FLOW_OWNER")" "$FLOW_OWNER" "$(flow_owner_name "$FLOW_OWNER")"
 fi
 
 if [ -n "$FLOW_TASK_DIR" ]; then
