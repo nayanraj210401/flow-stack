@@ -308,7 +308,7 @@ Hooks fail open: if `jq` is missing or a script errors, the action is allowed an
 |---|---|---|
 | **Flow band** | A dim line above the prompt: `flow · <task> · <slice> · n/m slices · tdd red · C1 PASS · edited since`. Empty when no task is active. | `status.sh` |
 | **Spinner** | While Claude works, the spinner shows the slice: `Thinking · S2 · red…` | `status.sh` |
-| **`/flow-pane`** | A pane with slices, open gates with **Approve / Reject**, and your other leads. It is a command, so it runs instantly with no Claude turn and no tokens. | `status.sh --full` |
+| **`/flow-pane`** | A pane with slices, open gates with **Approve / Reject**, and the repo's other tasks with the session that owns each. It is a command, so it runs instantly with no Claude turn and no tokens. | `status.sh --full` |
 | **Model per role** | A flow-stack agent started with no model gets one from your profile's `budget:`. advocate and reviewer get `design_model`; worker, checker and flow-agent get `build_model`. A model the call names wins. Built-ins such as Explore are left alone. A toast names the model the first time each role spawns; a budget value that isn't a model name is ignored with a warning. | `~/.flow-stack/profile.md` |
 
 ```
@@ -324,8 +324,8 @@ Hooks fail open: if `jq` is missing or a script errors, the action is allowed an
  │ options: A) merge  B) wait   (recommend: A)       │
  │ [ Approve ]  [ Reject ]                           │
  │                                                   │
- │ LEADS                                             │   ← your other flow sessions
- │ a1b2c3d4 · api · feat/login · login S2            │
+ │ TASKS                                             │   ← the repo's other tasks
+ │ ● login · wt-login · flow-stack-ab (idle)         │
  ╰───────────────────────────────────────────────────╯
 ```
 
@@ -479,7 +479,7 @@ Then it fits around it:
 
 [herdr](https://herdr.dev), [Orca](https://github.com/stablyai/orca) and cmux run Claude Code in panes and worktrees. flow-stack runs inside them unchanged. Inside one, it also:
 
-- **Shows flow's phase in the host's sidebar.** The host already knows whether Claude is working, blocked or done. flow adds the task, slice and open gates: herdr pane labels (`$flow_task $flow_slice $flow_gates`), an Orca worktree comment (marked unread when a gate opens), a cmux status. Pushed only when they change, by the lead only, and cleared when the task or session ends.
+- **Shows flow's phase in the host's sidebar.** The host already knows whether Claude is working, blocked or done. flow adds the task, slice and open gates: herdr pane labels (`$flow_task $flow_slice $flow_gates`), an Orca worktree comment (marked unread when a gate opens), a cmux status. Pushed only when they change, only by the session that owns the task (another pane in the same checkout shows none), and cleared when the task or session ends.
 - **Leaves the desktop ping to the host.** flow's macOS notification is skipped, since the host sends its own. ntfy and `notify_on: all` still fire.
 - **Runs workers where you can see them** (opt-in, `- delegate: herdr-panes`). `delegate` starts each slice's worker in its own herdr worktree and pane instead of a hidden subagent; you can watch and steer it. Each new worktree asks Claude's folder-trust question once; answer it in the pane, then `dispatch.sh brief <lane>` sends the slice. The lead accepts it as before, then removes the worktree if it is clean. A worker pane runs like `--auto`: push, merge and PRs wait in GATES.md for you, since its prompts come from the lead, not from you.
 - **Works under a coordinator.** With herdr-projects or Orca's orchestrator starting threads, each thread is a normal flow lead in its own worktree, with its own active task.

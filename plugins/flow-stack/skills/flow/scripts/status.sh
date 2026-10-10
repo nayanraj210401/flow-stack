@@ -1,17 +1,39 @@
 #!/usr/bin/env bash
 # status.sh [--full] [dir]: the active task's state as one JSON line, for the flow band (hooks/register.tsx).
 # --full adds what the /flow-pane shows: slices [{id,title,status,verdict}], the open gates in
-#   GATES.md [{n,question,detail}], leads [{id,repo,branch,task,slice}], runs (the last 40
-#   evidence verdicts, oldest first, without the planned <id>:before reds and probe: rows), and est_usd (ESTIMATE's forecast, null when none).
+#   GATES.md [{n,question,detail}], tasks (the repo's other active tasks: [{task,where,owner,status,live}],
+#   owner and status from Claude Code's session registry), runs (the last 40 evidence verdicts, oldest
+#   first, without the planned <id>:before reds and probe: rows), and est_usd (ESTIMATE's forecast, null when none).
 #   {"task":"","slice":{"id":"","title":""},"done":0,"total":0,"tdd":"",
 #    "evidence":{"label":"","verdict":"","ts":""},"stale":false,"where":"main|lead|lane"}
 # The slice is this lane's TDD slice when the lock is on, else the first `doing` one.
-# Prints {} when no task is active. Reads only; never fails the caller.
+# With no task of its own: {"foreign":{"task","owner"}} when another live session owns this checkout's
+# task (plus tasks with --full), else {}. Reads only; never fails the caller.
 set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 full=""; [ "${1:-}" = --full ] && { full=1; shift; }
 . "$here/../../../hooks/roots.sh"; flow_roots "${1:-$PWD}"; flow_task
-command -v jq >/dev/null 2>&1 && [ -n "$FLOW_TASK_DIR" ] || { echo '{}'; exit 0; }
+command -v jq >/dev/null 2>&1 || { echo '{}'; exit 0; }
+clean='def clean: if type == "string" then gsub("[\u0001-\u001f\u007f-\u009f]"; "") else . end;'
+# tasks: every task active in this repo but ours, with its checkout and owning session
+tasks() {
+  local s c o name stat
+  flow_owners | while IFS=$'\t' read -r s c _ o; do
+    [ "$s" != "$FLOW_TASK" ] || continue
+    name=""; stat=""
+    if [ -n "$o" ]; then
+      name="$(jq -r '.name // empty' "$(flow_sessions)/$o.json" 2>/dev/null)"; stat="$(jq -r '.status // empty' "$(flow_sessions)/$o.json" 2>/dev/null)"
+    fi
+    jq -nc --arg t "$s" --arg w "$([ "$c" = "$FLOW_MAIN" ] && echo main || basename "$c")" --arg n "${name:-${o:+pid $o}}" --arg st "$stat" \
+      '{task: $t, where: $w, owner: $n, status: $st, live: ($n != "")}'
+  done | jq -sc "$clean"' map(map_values(clean))'
+}
+if [ -z "$FLOW_TASK_DIR" ]; then
+  [ -n "$FLOW_FOREIGN" ] || { echo '{}'; exit 0; }
+  jq -nc --arg t "$FLOW_FOREIGN" --arg o "$(flow_owner_name "$FLOW_OWNER")" --argjson tasks "$([ -n "$full" ] && tasks || echo null)" \
+    "$clean"' {foreign: {task: ($t | clean), owner: ($o | clean)}} + (if $tasks then {tasks: $tasks} else {} end)'
+  exit 0
+fi
 
 d="$FLOW_TASK_DIR"; st="$(flow_state_dir "$d")"
 read -r tdd_id tdd _ 2>/dev/null <"$st/TDD" || { tdd_id=""; tdd=""; }
@@ -37,16 +59,14 @@ if [ -n "$full" ]; then
   gates="$(awk '/^GATE · /{if(q!="" && !dec)print n "\t" q "\t" det; n++; q=$0; sub(/^GATE · /,"",q); det=""; dec=0; next}
     q!="" && /^  decided: /{dec=1; next} q!="" && /^  [^[:space:]]/{l=$0; sub(/^  /,"",l); det=det (det==""?"":" · ") l}
     END{if(q!="" && !dec)print n "\t" q "\t" det}' "$d/GATES.md" 2>/dev/null)"
-  # the other leads: every session's record but this checkout's
-  leads="$({ cat "${FLOW_STACK_HOME:-$HOME/.flow-stack}"/leads/*.json 2>/dev/null || true; } | jq -sc --arg root "$FLOW_ROOT" '[sort_by(.ts) | reverse[] | select(.root != $root) | {id, repo: (.repo | split("/") | last), branch, task, slice}]' 2>/dev/null)"
+  others="$(tasks)"
   runs="$(grep -E '^### [^ ]+ · [^ ]+ · [A-Z]+ · exit=' "$st/EVIDENCE.md" 2>/dev/null | awk -F' · ' '$2 !~ /:before$|^probe:/ {print $3}' | tail -n40)"
   est="$(sed -n 's/.*usd=\([0-9.]*\).*/\1/p' "$d/ESTIMATE" 2>/dev/null | head -n1)"
-  extra="$(jq -nc --arg slices "$slices" --arg gates "$gates" --argjson leads "${leads:-[]}" --arg runs "$runs" --arg est "$est" '
-    def clean: if type == "string" then gsub("[\u0001-\u001f\u007f-\u009f]"; "") else . end;
+  extra="$(jq -nc --arg slices "$slices" --arg gates "$gates" --argjson tasks "${others:-[]}" --arg runs "$runs" --arg est "$est" "$clean"'
     def rows: split("\n") | map(select(length > 0) | split("\t") | map(clean));
     {slices: ($slices | rows | map({id: .[0], title: .[1], status: .[2], verdict: (.[3] // "")})),
      gates: ($gates | rows | map({n: (.[0] | tonumber), question: .[1], detail: (.[2] // "")})),
-     leads: ($leads | map(map_values(clean))),
+     tasks: $tasks,
      runs: ($runs | split("\n") | map(select(length > 0) | clean)),
      est_usd: ($est | tonumber? // null)}')"
 fi

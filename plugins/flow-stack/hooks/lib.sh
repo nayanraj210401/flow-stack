@@ -18,15 +18,18 @@ flow_fail_open() {
 }
 
 # flow_join: a subagent in an unpointed worktree joins the task of the lead worktree that spawned it
-# (the lead registry, by session id), writing <git-dir>/flow-lane = slug, lead root. A main-spawned one writes nothing.
+# (its session's cwd in Claude Code's registry), writing <git-dir>/flow-lane = slug, lead root. A
+# main-spawned one writes nothing.
 flow_join() {
-  local sid aid lroot lgd slug gd
+  local aid lroot lgd slug gd
   [ -n "$FLOW_LANE" ] || return 0
-  aid="$(flow_field .agent_id)"; sid="$(flow_field .session_id)"
-  [ -n "$aid" ] && [ -n "$sid" ] || return 0
+  aid="$(flow_field .agent_id)"; [ -n "$aid" ] || return 0
   gd="$(git -C "$FLOW_ROOT" rev-parse --absolute-git-dir)"
   [ -s "$gd/flow-lane" ] && return 0
-  lroot="$(jq -r '.root // empty' "$FLOW_HOME/leads/${sid//\//_}.json" 2>/dev/null || true)"
+  flow_session; [ -n "$FLOW_SESSION_PID" ] || return 0
+  lroot="$(jq -r '.cwd // empty' "$(flow_sessions)/$FLOW_SESSION_PID.json" 2>/dev/null || true)"
+  [ -n "$lroot" ] || return 0
+  lroot="$(git -C "$lroot" rev-parse --show-toplevel 2>/dev/null || true)"
   [ -n "$lroot" ] && [ "$lroot" != "$FLOW_MAIN" ] && [ "$lroot" != "$FLOW_ROOT" ] || return 0
   [ "$(git -C "$lroot" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" = "$FLOW_MAIN/.git" ] || return 0
   lgd="$(git -C "$lroot" rev-parse --absolute-git-dir 2>/dev/null)" || return 0

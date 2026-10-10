@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'claude-code/testing'
 
-import { bandText, bar, parseBudget, spin, strip } from './register'
+import { bandText, bar, ownerMark, parseBudget, spin, strip } from './register'
 
 const PROFILE = `---
 budget:
@@ -125,6 +125,25 @@ test('the band shows the active task on every surface', async ($, on) => {
   }
 })
 
+test("the pane says whose task this checkout's is when another live session owns it", async ($, hooks) => {
+  const on = hooks as any
+  let ran!: () => void
+  let refreshed = new Promise<void>(r => (ran = r))
+  on('ui.invalidate', async () => {
+    ran()
+    return { value: undefined }
+  })
+  on('ui.open', async () => ({ value: { id: 'flow-pane' } }))
+  await start($, on, { foreign: { task: 'script-bug-hunt', owner: 'flow-stack-88' } })
+  await refreshed
+  refreshed = new Promise<void>(r => (ran = r))
+  await ($ as any).command.run({ command: 'flow-pane' })
+  await refreshed
+  const pane = await $.ui.mount({ plugin: 'flow-stack', surface: 'terminal', ...PANE } as any)
+  expect(await pane.find({ type: 'Text', text: /script-bug-hunt here belongs to flow-stack-88/ })).toBeDefined()
+  await pane.unmount()
+})
+
 const FULL = {
   ...STATUS,
   slices: [
@@ -132,7 +151,7 @@ const FULL = {
     { id: 'S2', title: 'token bucket', status: 'doing', verdict: 'FAIL' },
   ],
   gates: [{ n: 2, question: 'merge PR #3', detail: 'options: A) merge  B) wait' }],
-  leads: [],
+  tasks: [{ task: 'search', where: 'wt-search', owner: 'flow-stack-ab', status: 'idle', live: true }],
 }
 const PANE = { component: 'Pane', requestId: 'flow-pane', props: { title: 'flow', isFocused: true, bodyColumns: 80, placement: 'dock' } } as const
 
@@ -173,6 +192,7 @@ test('/flow-pane opens a pane with slices and gates; Approve records the gate an
     expect(await ui.find({ type: 'Text', text: /S2 token bucket · doing/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: 'FAIL' })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: 'merge PR #3' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /search · wt-search · flow-stack-ab \(idle\)/ })).toBeDefined()
     if (surface === 'terminal') {
       await ui.press({ key: 'approve-2' })
       expect(runs.find(a => a[1] === 'gate')?.slice(1)).toEqual(['gate', '2', 'approve', 'merge PR #3'])
@@ -182,6 +202,43 @@ test('/flow-pane opens a pane with slices and gates; Approve records the gate an
     }
     await ui.unmount()
   }
+})
+
+test("the open pane re-reads other sessions' state every 2s", async ($, hooks) => {
+  const on = hooks as any
+  const clock = mock.clock(on)
+  let state = 'busy'
+  on('fs.read', async () => ({ value: PROFILE }))
+  on('process.run', async () => ({
+    value: { exitCode: 0, stdout: JSON.stringify({ ...FULL, tasks: [{ ...FULL.tasks[0], status: state }] }), stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
+  }))
+  on('env.get', async () => ({ value: '/home/me' }))
+  on('session.cwd', async () => ({ value: '/tmp' }))
+  on('session.start', async (_$: unknown, e: unknown) => e)
+  on('command.register', async () => ({ value: undefined }))
+  on('ui.open', async () => ({ value: { id: 'flow-pane' } }))
+  on('ui.invalidate', async () => ({ value: undefined }))
+  await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+  await ($ as any).command.run({ command: 'flow-pane' })
+  await clock.advance(100)
+  const busy = await $.ui.mount({ plugin: 'flow-stack', surface: 'terminal', ...PANE } as any)
+  expect(await busy.find({ type: 'Text', text: /flow-stack-ab \(busy\)/ })).toBeDefined()
+  await busy.unmount()
+  state = 'idle' // the other session finishes; this one does nothing
+  await clock.advance(2100)
+  const idle = await $.ui.mount({ plugin: 'flow-stack', surface: 'terminal', ...PANE } as any)
+  expect(await idle.find({ type: 'Text', text: /flow-stack-ab \(idle\)/ })).toBeDefined()
+  await idle.unmount()
+})
+
+test("a task row's mark follows its owner's state", () => {
+  expect(ownerMark({ live: true, status: 'busy' }, 3, 1)).toEqual({ icon: spin(5), color: 'claude' })
+  expect(ownerMark({ live: true, status: 'busy' }, 4, 1).icon).not.toBe(ownerMark({ live: true, status: 'busy' }, 3, 1).icon)
+  expect(ownerMark({ live: true, status: 'idle' }, 0, 0)).toEqual({ icon: '●', color: 'success' })
+  expect(ownerMark({ live: true, status: 'idle' }, 7, 0)).toEqual({ icon: '●', color: 'success' })
+  expect(ownerMark({ live: true, status: 'waiting' }, 0, 0)).toEqual({ icon: '◆', color: 'warning' })
+  expect(ownerMark({ live: true, status: 'waiting' }, 5, 0)).toEqual({ icon: '◇', color: 'subtle' })
+  expect(ownerMark({ live: false, status: '' }, 0, 0)).toEqual({ icon: '○', color: 'subtle' })
 })
 
 test('bar fills in eighths of a cell and clamps', () => {

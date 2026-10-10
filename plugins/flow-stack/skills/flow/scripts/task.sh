@@ -10,10 +10,16 @@
 #   task.sh repos                     the active task's repos (name<TAB>path)
 #   task.sh active                    print the active slug (empty if none)
 #   task.sh dir                       print the active task dir
-#   task.sh switch <slug>             make another task active
+#   task.sh switch <slug> [--take]    make another task active here. Your own task active in another
+#                                     checkout moves here; --take takes one another live session owns,
+#                                     or moves one with no live owner
 #   task.sh close                     clear ACTIVE (folder is kept)
-#   task.sh list                      tasks with slice progress
-#   task.sh ticket [<ref>]            record (or print) the ticket this task works on; leads.sh shows it
+#   task.sh list                      tasks with slice progress, where each is active, and its owner
+#   task.sh ticket [<ref>]            record (or print) the ticket this task works on
+#
+# A task belongs to the Claude session that made it active (its pid on the pointer's line 2). While
+# that session lives, other sessions in the checkout have no task here, and new, switch, and close
+# are refused to them. A task whose owner is gone goes to the next session that writes to it.
 #   task.sh slice <id> <status>       set a slice status (todo|doing|done|blocked)
 #                                     "done" is gated: red-first, green after the last edit,
 #                                     probe TEETH, diff budget (see proofs). Override with
@@ -44,7 +50,7 @@ set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
 templates="$here/../../../templates"
-. "$here/../../../hooks/roots.sh"; flow_roots; flow_task
+. "$here/../../../hooks/roots.sh"; flow_roots; flow_task; flow_session
 root="$FLOW_MAIN"
 flow="$FLOW_DIR"
 profile="${FLOW_STACK_HOME:-$HOME/.flow-stack}/profile.md"
@@ -65,11 +71,18 @@ ws_repos() {
   awk -v n="## $1" '/^# /{on=($0=="# Workspaces")} on && /^## /{cur=$0}
     on && cur==n && /^- repos:/ {sub(/^- repos:[[:space:]]*/,""); gsub(/[[:space:]]*,[[:space:]]*/,"\n"); print; exit}' "$profile" 2>/dev/null || true
 }
-# claim <slug>: refuse a slug another checkout already leads
+# owned_by <pid>: how a refusal names a live owner, so the agent can message it (SendMessage).
+owned_by() { printf "session %s (pid %s; SendMessage reaches it by that name)" "$(flow_owner_name "$1")" "$1"; }
+# claim <slug>: refuse a slug another checkout already leads. This session's own task (or, with --take,
+# anyone's) moves here instead: its old pointer goes.
 claim() {
-  local o; o="$(flow_owners | awk -F'\t' -v s="$1" -v me="$FLOW_ROOT" '$1 == s && $2 != me && !n++ { print $2 }')"
-  [ -z "$o" ] || [ "$o" != "$FLOW_MAIN" ] || die "task '$1' is already active in the main checkout"
-  [ -z "$o" ] || die "task '$1' is already active in worktree $o"
+  local c o f
+  IFS=$'\t' read -r _ c f o < <(flow_owners | awk -F'\t' -v s="$1" -v me="$FLOW_ROOT" '$1 == s && $2 != me && !n++') || return 0
+  [ -n "$c" ] || return 0
+  if [ "$take" = 1 ] || { [ -n "$o" ] && [ "$o" = "$FLOW_SESSION_PID" ]; }; then rm -f "$f"; return 0; fi
+  [ -z "$o" ] || die "task '$1' is active in $c and belongs to $(owned_by "$o"); message it, or take it over: task.sh switch $1 --take"
+  [ "$c" != "$FLOW_MAIN" ] || die "task '$1' is already active in the main checkout (no live owner; move it here: task.sh switch $1 --take)"
+  die "task '$1' is already active in worktree $c (no live owner; move it here: task.sh switch $1 --take)"
 }
 # point_repos <task-dir> <slug>: this checkout's pointer (FLOW_ACTIVE), the home repo's, and one in every other repo.
 # Another repo's pointer is written only when empty or on this task (or the one we leave); otherwise refuse.
@@ -84,7 +97,7 @@ point_repos() {
         cur="$(head -n1 "$f" 2>/dev/null | tr -d '[:space:]' || true)"; cur="${cur##*:}"
         [ "$f" = "$FLOW_ACTIVE" ] || [ -z "$cur" ] || [ "$cur" = "$slug" ] || [ "$cur" = "$FLOW_TASK" ] || die "$name ($path) is on task '$cur'; close it there first"
       else
-        mkdir -p "$(dirname "$f")"; printf '%s\n' "$v" >"$f"
+        flow_point "$f" "$v"
         [ "$f" = "$FLOW_ACTIVE" ] || [ "$path" = "$home" ] || git -C "$path" check-ignore -q .flow/ACTIVE 2>/dev/null || grep -qxF ".flow/ACTIVE" "$path/.gitignore" 2>/dev/null || printf '.flow/ACTIVE\n' >>"$path/.gitignore"
       fi
     done < <(cat "$d/REPOS" 2>/dev/null || printf 'home\t%s\n' "$home")
@@ -150,12 +163,22 @@ gd=""; [ "$FLOW_MAIN" = "$FLOW_ROOT" ] || gd="$(git -C "$FLOW_ROOT" rev-parse --
 case "$cmd" in
   new|switch) # an unpointed worktree (not a joined worker) becomes a lead
     [ -z "$FLOW_LANE" ] || [ ! -s "$gd/flow-lane" ] || die "this worktree is a worker lane of '$(head -n1 "$gd/flow-lane")' ($gd/flow-lane); remove that file to lead a task here"
-    if [ -n "$FLOW_LANE" ]; then FLOW_ACTIVE="$gd/flow-active"; FLOW_LANE=""; FLOW_TASK=""; fi ;;
+    if [ -n "$FLOW_LANE" ]; then FLOW_ACTIVE="$gd/flow-active"; FLOW_LANE=""; FLOW_TASK=""; FLOW_FOREIGN=""; fi ;;
 esac
 case "$cmd" in
   new|switch|close|slice|accept|ticket)
     [ -z "$FLOW_LANE" ] || die "'$cmd' is refused in worktree lane '$FLOW_LANE': the task plan is shared. Return your evidence; the delegate accepts it and marks the slice." ;;
 esac
+take=""; [ "$cmd" != switch ] || [ "${2:-}" != --take ] || take=1
+if [ -n "$FLOW_FOREIGN" ]; then # another live session owns this checkout's task
+  mine="start yours in a worktree of your own (EnterWorktree, then task.sh new), or take it over: task.sh switch $FLOW_FOREIGN --take (in the task's home repo, if it lives in another)"
+  case "$cmd" in
+    new) die "this checkout's task '$FLOW_FOREIGN' belongs to $(owned_by "$FLOW_OWNER"); $mine" ;;
+    switch) [ "$take" = 1 ] && [ "${1:-}" = "$FLOW_FOREIGN" ] || die "this checkout's task '$FLOW_FOREIGN' belongs to $(owned_by "$FLOW_OWNER"); $mine" ;;
+    close) die "task '$FLOW_FOREIGN' belongs to $(owned_by "$FLOW_OWNER"); only it closes it, unless you take it over: task.sh switch $FLOW_FOREIGN --take" ;;
+  esac
+fi
+case "$cmd" in slice|decide|tdd|estimate|ticket|accept|gate) flow_claim ;; esac
 case "$cmd" in
   new)
     slug="${1:-}"; [ -n "$slug" ] || die "usage: task.sh new <slug> [playbook] [--workspace <name> | --repos <a,b>]"
@@ -236,6 +259,8 @@ case "$cmd" in
       total="$(grep -c '^status:' "$d/SLICES.md" 2>/dev/null || true)"
       done_n="$(grep -c '^status: done' "$d/SLICES.md" 2>/dev/null || true)"
       w="$(awk -F'\t' -v s="$s" -v m="$FLOW_MAIN" '$1 == s { print ($2 == m ? "" : " (worktree " $2 ")"); exit }' <<<"$own")"
+      o="$(awk -F'\t' -v s="$s" '$1 == s { print $4; exit }' <<<"$own")"
+      [ -z "$o" ] || w="$w · $(flow_owner_name "$o")"
       printf '%s %s  %s/%s slices  %s%s\n' "$([ "$s" = "$a" ] || grep -q "^$s"$'\t' <<<"$own" && echo '*' || echo ' ')" "$s" "${done_n:-0}" "${total:-0}" "$(cat "$d/PLAYBOOK" 2>/dev/null || echo '?')" "$w"
     done
     ;;
@@ -361,6 +386,6 @@ $out"
     printf 'usd=%s ctx_pct=%s human_min=%s at=%s\n' "$1" "$2" "$3" "$(date -u +%FT%TZ)" >"$(active_dir)/ESTIMATE"
     echo "estimate saved"
     ;;
-  -h|--help|"") sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//' ;;
+  -h|--help|"") sed -n '2,47p' "$0" | sed 's/^# \{0,1\}//' ;;
   *) die "unknown command: $cmd (try -h)" ;;
 esac
