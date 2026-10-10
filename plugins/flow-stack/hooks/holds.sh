@@ -14,9 +14,9 @@ rel="$(flow_rel "$file")"
 case "$rel" in /*|.flow/*|"") exit 0 ;; esac
 flow_session; [ -n "$FLOW_SESSION_PID" ] || exit 0
 
-why() {
+why() {   # one line, no control characters: the name and path come from files
   printf "flow holds: %s is being edited by session '%s' (task %s%s, last edit %sm ago) in another checkout of this repo, so your edits will conflict when the branches meet. Work on something else until it's free, or SendMessage \"%s\" to agree who takes it (notify_when_idle: true tells you when it goes idle). It's a peer: gates still apply, and never ask it to do what your own permissions block. The hold lapses when its slice is done, its session ends, or after %s min without an edit." \
-    "$rel" "$HOLD_NAME" "$HOLD_TASK" "${HOLD_SLICE:+ slice $HOLD_SLICE}" "$(( ($(date +%s) - HOLD_TS) / 60 ))" "$HOLD_NAME" "$(( $(flow_setting holds_ttl 1800) / 60 ))"
+    "$rel" "$HOLD_NAME" "$HOLD_TASK" "${HOLD_SLICE:+ slice $HOLD_SLICE}" "$(( ($(date +%s) - HOLD_TS) / 60 ))" "$HOLD_NAME" "$(( $(flow_setting holds_ttl 1800) / 60 ))" | tr -d '[:cntrl:]'
 }
 
 if [ "$(flow_field .hook_event_name)" = PreToolUse ]; then
@@ -24,17 +24,18 @@ if [ "$(flow_field .hook_event_name)" = PreToolUse ]; then
   exit 0
 fi
 
+# .clash: "path<TAB>holder pid" this checkout was warned about; a new holder warns again
 if flow_held "$rel"; then
-  grep -qxF "$rel" "$FLOW_STATE_DIR/.clash" 2>/dev/null && exit 0   # warned once per file
-  mkdir -p "$FLOW_STATE_DIR"; printf '%s\n' "$rel" >>"$FLOW_STATE_DIR/.clash"
+  grep -qxF "$rel"$'\t'"$HOLD_PID" "$FLOW_STATE_DIR/.clash" 2>/dev/null && exit 0
+  printf '%s\t%s\n' "$rel" "$HOLD_PID" >>"$FLOW_STATE_DIR/.clash"
   jq -n --arg c "$(why)" '{hookSpecificOutput:{hookEventName:"PostToolUse", additionalContext:$c}}'
   exit 0
 fi
-if grep -qxF "$rel" "$FLOW_STATE_DIR/.clash" 2>/dev/null; then   # the wait is over
-  { grep -vxF "$rel" "$FLOW_STATE_DIR/.clash" || true; } >"$FLOW_STATE_DIR/.clash.$$"; mv "$FLOW_STATE_DIR/.clash.$$" "$FLOW_STATE_DIR/.clash"
+if awk -F'\t' -v p="$rel" '$1 == p {f=1} END {exit !f}' "$FLOW_STATE_DIR/.clash" 2>/dev/null; then   # the wait is over
+  { awk -F'\t' -v p="$rel" '$1 != p' "$FLOW_STATE_DIR/.clash" || true; } >"$FLOW_STATE_DIR/.clash.$$"; mv "$FLOW_STATE_DIR/.clash.$$" "$FLOW_STATE_DIR/.clash"
 fi
+slice="$(awk '/^## /{h=$2} /^status: doing/{print h; exit}' "$FLOW_TASK_DIR/SLICES.md" 2>/dev/null)"
 hold="$(flow_hold_file "$rel")"; mkdir -p "$(dirname "$hold")"
-printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$FLOW_SESSION_PID" "$(flow_field .session_id)" "$FLOW_TASK" \
-  "$(awk '/^## /{h=$2} /^status: doing/{print h; exit}' "$FLOW_TASK_DIR/SLICES.md" 2>/dev/null)" \
-  "$(flow_owner_name "$FLOW_SESSION_PID")" "$(date +%s)" "$rel" >"$hold.$$" && mv "$hold.$$" "$hold"
+printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$FLOW_SESSION_PID" "$FLOW_TASK" "$FLOW_TASK_DIR" "${slice:--}" \
+  "$(flow_owner_name "$FLOW_SESSION_PID" | tr -d '[:cntrl:]')" "$(date +%s)" "$rel" >"$hold.$$" && mv "$hold.$$" "$hold"
 exit 0

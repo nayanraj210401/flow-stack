@@ -105,7 +105,23 @@ edit "$A" "$SB/repo" PreToolUse src/calc.sh
 both "$A" "$SB/repo" src/calc.sh
 has "$(cat "$f")" "$A" && ok "the next editor takes the claim" || bad "claim not taken: $(cat "$f")"
 
-echo "-- same task (a worker lane) never clashes; off switch; edits outside src"
+echo "-- a holder with no doing slice still holds (empty fields don't shift the rest)"
+B3="$(session pane-b3)"; printf 'other\n%s\n' "$B3" >"$(git rev-parse --git-common-dir)/worktrees/wt-b/flow-active"
+sed -i '' 's/^status: doing/status: todo/' .flow/tasks/other/SLICES.md
+both "$B3" "$WB" src/sub.sh
+edit "$A" "$SB/repo" PreToolUse src/sub.sh
+[ "$(jq -r '.hookSpecificOutput.permissionDecision // empty' <<<"$OUT")" = deny ] && ok "slice-less hold denies in hard mode" || bad "slice-less hold: $OUT · $(cat .flow/holds/* | grep sub.sh)"
+sed -i '' 's/^status: todo/status: doing/' .flow/tasks/other/SLICES.md
+
+echo "-- a worker lane of the same task never clashes"
+git worktree add -q -b lane-a ../wt-lane
+WL="$(cd ../wt-lane && pwd -P)"; L="$(session lane-a)"
+( cd "$WL" && FLOW_SESSION_PID="$L" "$T" join demo >/dev/null 2>&1 )
+both "$A" "$SB/repo" src/mul.sh
+both "$L" "$WL" src/mul.sh
+[ -z "$OUT" ] && ok "a lane of the holder's task edits freely" || bad "lane clashed: $OUT"
+
+echo "-- off switch; edits outside src"
 C="$(session pane-c)"
 edit "$C" "$SB/repo" PreToolUse src/calc.sh
 [ -z "$OUT" ] || bad "a session with no task of its own was checked: $OUT"
