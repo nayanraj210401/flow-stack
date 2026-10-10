@@ -10,7 +10,8 @@ command = ["bun", "install", "--production"]
 
 # Bind them in ~/.config/herdr/config.toml:
 #   [[keys.command]]  key = "prefix+f"  type = "plugin_action"  command = "flow-stack.board"
-#   [[keys.command]]  key = "prefix+g"  type = "plugin_action"  command = "flow-stack.decide"
+#   [[keys.command]]  key = "prefix+shift+f"  type = "plugin_action"  command = "flow-stack.decide"
+# (prefix+g is herdr's goto)
 [[actions]]
 id = "board"
 title = "flow: board"

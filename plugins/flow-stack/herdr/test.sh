@@ -132,15 +132,17 @@ if on plugin; then
 
   echo "-- plugin: the board reads the real status.sh, and a decision reaches GATES.md and the pane"
   BIN="$SB/pbin"; LOG="$SB/plugin.log"; mkdir -p "$BIN"; : >"$LOG"
-  pid="$(session flow-demo-1 sess-1)"; other="$(session flow-demo-2 sess-2)"
+  pid="$(session flow-demo-1 sess-p1)"; other="$(session flow-demo-2 sess-p2)"
+  # a crashed session's row with the same id stays in the registry; it must not win
+  jq -n '{pid:999999, name:"stale", sessionId:"sess-p1"}' >"$CLAUDE_CONFIG_DIR/sessions/999999.json"
   printf 'demo\n%s\n' "$pid" >.flow/ACTIVE
   printf 'GATE · push the branch?\n  options: A) push now  B) hold   (recommend: A, because green)\n' >.flow/tasks/demo/GATES.md
   cat >"$BIN/herdr" <<EOF
 #!/usr/bin/env bash
 printf '%s\n' "herdr \$*" >>"$LOG"
 [ "\$1 \$2" = "agent list" ] && jq -nc --arg c "$PWD" '{result:{agents:[
-  {pane_id:"w1:p1", agent:"claude", agent_status:"idle", cwd:\$c, focused:true, agent_session:{value:"sess-1"}},
-  {pane_id:"w1:p2", agent:"claude", agent_status:"working", cwd:\$c, focused:false, agent_session:{value:"sess-2"}}]}}'
+  {pane_id:"w1:p1", agent:"claude", agent_status:"idle", cwd:\$c, focused:true, agent_session:{value:"sess-p1"}},
+  {pane_id:"w1:p2", agent:"claude", agent_status:"working", cwd:\$c, focused:false, agent_session:{value:"sess-p2"}}]}}'
 exit 0
 EOF
   chmod +x "$BIN/herdr"

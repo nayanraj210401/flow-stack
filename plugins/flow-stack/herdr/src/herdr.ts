@@ -24,9 +24,12 @@ function sessions(): Session[] {
   } catch {
     return []
   }
+  // a crashed session leaves its row behind; a resumed one gets a new row with the same sessionId
   return files.flatMap(f => {
     try {
-      return [JSON.parse(readFileSync(join(dir, f), 'utf8')) as Session]
+      const s = JSON.parse(readFileSync(join(dir, f), 'utf8')) as Session
+      process.kill(s.pid, 0)
+      return [s]
     } catch {
       return []
     }
