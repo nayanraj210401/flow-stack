@@ -204,7 +204,7 @@ test('/flow-pane opens a pane with slices and gates; Approve records the gate an
   }
 })
 
-test("the open pane re-reads other sessions' state on its own: busy pulses, idle is steady", async ($, hooks) => {
+test("the open pane re-reads other sessions' state every 2s", async ($, hooks) => {
   const on = hooks as any
   const clock = mock.clock(on)
   let state = 'busy'

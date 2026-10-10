@@ -86,7 +86,8 @@ export function bar(fraction: number, width: number): string {
 export const spin = (frame: number) => SPIN[frame % SPIN.length]
 
 // A task row's mark, animated by its owner's state: busy spins, idle holds steady, any other state
-// (waiting on its human) pulses amber, and a task with no live owner is a dim ring.
+// (waiting on its human) pulses amber, and a task with no live owner is a dim ring. A row with no
+// status (an older Claude Code) reads as idle.
 export function ownerMark(t: { live: boolean; status: string }, frame: number, row: number): { icon: string; color: string } {
   if (!t.live) return { icon: '○', color: 'subtle' }
   if (t.status === 'busy') return { icon: spin(frame + row * 2), color: 'claude' }
