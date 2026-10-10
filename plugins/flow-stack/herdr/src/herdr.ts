@@ -64,6 +64,13 @@ export function load(): Row[] {
 export function decide(row: Row, n: number, question: string, verdict: 'approve' | 'reject', choice: string, note: string): string {
   const g = run(`${scripts}/task.sh`, ['gate', String(n), verdict, question, choice, note], row.cwd)
   if (!g.ok) return g.out || `gate ${n} not recorded`
+  // a blocked Claude is likely at a permission prompt, where the prompt's Enter would answer it
+  const now = run(herdrBin, ['agent', 'get', row.pane])
+  let state = ''
+  try {
+    state = (JSON.parse(now.out) as { result: { agent: { agent_status: string } } }).result.agent.agent_status
+  } catch {}
+  if (state !== 'idle' && state !== 'working' && state !== 'done') return `${g.out} · ${row.session} not told (it is ${state || 'unreadable'}); tell it when it's free`
   const past = verdict === 'approve' ? 'approved' : 'rejected'
   run(herdrBin, ['agent', 'prompt', row.pane,
     `The human ${past} gate ${n} in the herdr board${choice ? ' with a choice' : ''}${note ? ' and a note' : ''}; see GATES.md and DECISIONS.tsv.`])

@@ -33,18 +33,24 @@ host_run() {
   ( "$@" & p=$!; ( sleep 1; kill "$p"; sleep 1; kill -9 "$p" ) & k=$!; wait "$p"; kill "$k" ) >/dev/null 2>&1 </dev/null &
 }
 
+# Per herdr pane, not per session, so a resumed or restarted session in the same pane knows what
+# flow already did there: the agent name it set, and the last gate it toasted.
+pane_rec="${HERDR_PANE_ID:-}"; pane_rec="$dir/pane-${pane_rec//[^A-Za-z0-9]/_}"
+
 # herdr_name <task|"">: name this pane's herdr agent row after the task, or clear it. A name flow
-# didn't set (the human's, another plugin's) is never touched; $me.name holds the one flow set.
+# didn't set (the human's, another plugin's) is never touched, nor is any name when herdr can't be
+# read. host_run's 1s cut-off stops this function, not a herdr call it already started.
 herdr_name() {
-  local cur mine n
-  mine="$(cat "$me.name" 2>/dev/null)"
-  cur="$("$HERDR_BIN_PATH" agent get "$HERDR_PANE_ID" 2>/dev/null | jq -r '.result.agent.name // empty')" || return 0
+  local j cur mine n
+  mine="$(cat "$pane_rec.name" 2>/dev/null)"
+  j="$("$HERDR_BIN_PATH" agent get "$HERDR_PANE_ID" 2>/dev/null)" || return 0
+  cur="$(jq -er '.result.agent | .name // ""' <<<"$j")" || return 0
   [ -z "$cur" ] || [ "$cur" = "$mine" ] || return 0
   # herdr agent names: a lowercase letter, then lowercase letters, digits, - or _, at most 32
   n="$(printf '%s' "$1" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9_-' '-' | sed 's/^[^a-z]*//' | cut -c1-32)"
   if [ -n "$n" ]; then
-    [ "$n" = "$cur" ] || "$HERDR_BIN_PATH" agent rename "$HERDR_PANE_ID" "$n" && printf '%s' "$n" >"$me.name"
-  elif [ -n "$cur" ]; then "$HERDR_BIN_PATH" agent rename "$HERDR_PANE_ID" --clear; rm -f "$me.name"; fi
+    [ "$n" = "$cur" ] || "$HERDR_BIN_PATH" agent rename "$HERDR_PANE_ID" "$n" && printf '%s' "$n" >"$pane_rec.name"
+  elif [ -n "$cur" ]; then "$HERDR_BIN_PATH" agent rename "$HERDR_PANE_ID" --clear && rm -f "$pane_rec.name"; fi
 }
 
 # push: show the task in the host's sidebar once per change. Never prints. In herdr, also: open gates
@@ -78,7 +84,11 @@ push() {
         mark=(--clear-token flow_gates); [ "$gt" = 0 ] || mark=(--token "flow_gates=⚑$gt")
         host_run "$HERDR_BIN_PATH" pane report-metadata "$HERDR_PANE_ID" --source user:flow-stack \
           --token "flow_task=${tk:0:80}" --token "flow_slice=${sl:0:40} $dn/$tt" "${mark[@]}" --ttl-ms 86400000 --seq "$sq"
-        [ -z "${unread[*]:-}" ] || host_run "$HERDR_BIN_PATH" notification show "$tk: gate open" --body "${gq:0:200}" --sound request
+        # toast the newest open gate once per pane, whatever the count did meanwhile (one decided, one added)
+        if [ "$gt" != 0 ] && [ "$gq" != "$(cat "$pane_rec.toast" 2>/dev/null)" ]; then
+          printf '%s' "$gq" >"$pane_rec.toast"
+          host_run "$HERDR_BIN_PATH" notification show "$tk: gate open" --body "${gq:0:200}" --sound request
+        fi
         host_run herdr_name "$tk"
       fi ;;
     orca) host_run "${ORCA_CLI_COMMAND:-orca}" worktree set --worktree "id:${ORCA_WORKTREE_ID:-}" --comment "${txt#-}" ${unread[@]+"${unread[@]}"} ;;

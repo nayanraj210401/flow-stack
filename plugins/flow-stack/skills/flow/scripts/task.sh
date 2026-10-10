@@ -362,8 +362,9 @@ $out"
     n="${1:-}"; verdict="${2:-}"; want="${3:-}"; g="$(active_dir)/GATES.md"
     case "$verdict" in approve|reject) ;; *) die "usage: task.sh gate <n> approve|reject \"<question>\" [choice] [note]" ;; esac
     # one line each, no control characters: they land in GATES.md and in herdr's terminal
-    choice="$(printf '%s' "${4:-}" | jq -Rrs 'gsub("[\n\r\t]"; " ") | gsub("[\u0001-\u001f\u007f-\u009f]"; "")')"
-    note="$(printf '%s' "${5:-}" | jq -Rrs 'gsub("[\n\r\t]"; " ") | gsub("[\u0001-\u001f\u007f-\u009f]"; "")')"
+    # and no " · ", which separates the decided line's fields
+    oneline() { printf '%s' "$1" | jq -Rrs 'gsub("[\n\r\t]"; " ") | gsub("[\u0001-\u001f\u007f-\u009f]"; "") | gsub(" · "; " - ")'; }
+    choice="$(oneline "${4:-}")"; note="$(oneline "${5:-}")"
     q="$(awk -v n="$n" '/^GATE · /{k++} k == n && /^GATE · /{sub(/^GATE · /,""); print; exit}' "$g" 2>/dev/null |
       jq -Rr 'gsub("[\u0001-\u001f\u007f-\u009f]"; "")')"  # the same text status.sh shows the pane
     [ -n "$q" ] || die "no gate $n in $g"

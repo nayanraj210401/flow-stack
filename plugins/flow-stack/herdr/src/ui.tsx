@@ -142,7 +142,7 @@ export function Decide({ io, row, gate, onDone }: { io: Io; row: Row; gate: Gate
       {evidence.map((l, i) => <Text key={i} color="gray" wrap="truncate">{l}</Text>)}
       <Box flexDirection="column" marginTop={1}>
         {choices.map((c, i) => (
-          <Text key={c.label} color={i === sel ? 'cyan' : c.verdict === 'reject' ? 'red' : undefined}>
+          <Text key={i} color={i === sel ? 'cyan' : c.verdict === 'reject' ? 'red' : undefined}>
             {i === sel ? '▸ ' : '  '}{c.label}{opts[i]?.key === recommend ? <Text color="green"> (recommended)</Text> : null}
           </Text>
         ))}
@@ -160,7 +160,7 @@ export function Decide({ io, row, gate, onDone }: { io: Io; row: Row; gate: Gate
 export function DecideFocused({ io, pane }: { io: Io; pane: string }) {
   const { exit } = useApp()
   const [done, setDone] = useState('')
-  const row = io.load().find(r => r.pane === pane)
+  const [row] = useState(() => io.load().find(r => r.pane === pane))
   const gate = row?.task?.gates?.[0]
   useInput((_, key) => { if (!gate || done) exit() })
   if (done) return <Text color="cyan">{done} · any key closes</Text>
