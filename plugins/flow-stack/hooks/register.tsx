@@ -14,6 +14,8 @@ type Status = {
   tdd: string
   evidence: { label: string; verdict: string; ts: string } | null
   stale: boolean
+  // files another live session holds that this checkout edited too (hooks/holds.sh)
+  clash?: { path: string; holder: string; task: string; slice: string }[]
   // with status.sh --full, while the pane is open
   slices?: { id: string; title: string; status: string; verdict: string }[]
   gates?: { n: number; question: string; detail: string }[]
@@ -68,6 +70,8 @@ export function bandText(s: Status): string {
   if (s.evidence) {
     parts.push(`${s.evidence.label} ${s.evidence.verdict}${s.stale ? ' · edited since' : ''}`)
   }
+  const [c, ...more] = s.clash ?? []
+  if (c) parts.push(`⚡ ${c.path} · ${c.holder} (${c.task}${c.slice ? ` ${c.slice}` : ''})${more.length ? ` +${more.length}` : ''}`)
   return parts.join(' · ')
 }
 

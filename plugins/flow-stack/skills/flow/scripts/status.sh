@@ -6,6 +6,8 @@
 #   first, without the planned <id>:before reds and probe: rows), and est_usd (ESTIMATE's forecast, null when none).
 #   {"task":"","slice":{"id":"","title":""},"done":0,"total":0,"tdd":"",
 #    "evidence":{"label":"","verdict":"","ts":""},"stale":false,"where":"main|lead|lane"}
+# clash (only when there is one): the files this checkout waits on, each still held by another live
+#   session ({path,holder,task,slice}; hooks/holds.sh).
 # The slice is this lane's TDD slice when the lock is on, else the first `doing` one.
 # With no task of its own: {"foreign":{"task","owner"}} when another live session owns this checkout's
 # task (plus tasks with --full), else {}. Reads only; never fails the caller.
@@ -72,7 +74,10 @@ if [ -n "$full" ]; then
 fi
 
 where=main; [ "$FLOW_ROOT" != "$FLOW_MAIN" ] && { where=lead; [ -z "$FLOW_LANE" ] || where=lane; }
-jq -nc --argjson extra "$extra" --arg task "$FLOW_TASK" --arg where "$where" --arg slice "$slice" \
+clash="$([ -f "$st/.clash" ] && cut -f1 "$st/.clash" | sort -u | while read -r p; do
+    flow_held "$p" && jq -nc --arg p "$p" --arg h "$HOLD_NAME" --arg t "$HOLD_TASK" --arg s "$HOLD_SLICE" '{path:$p, holder:$h, task:$t, slice:$s}'
+  done | jq -sc "$clean"' map(map_values(clean))')"
+jq -nc --argjson extra "$extra" --arg task "$FLOW_TASK" --arg where "$where" --arg slice "$slice" --argjson clash "${clash:-[]}" \
   --arg done "${done_n:-0}" --arg total "${total:-0}" --arg tdd "$tdd" \
   --arg ts "${ev_ts:-}" --arg label "${ev_label:-}" --arg verdict "${ev_verdict:-}" --argjson stale "$stale" '
   # repo files are untrusted: no control characters (terminal escapes) reach the band or spinner
@@ -81,4 +86,4 @@ jq -nc --argjson extra "$extra" --arg task "$FLOW_TASK" --arg where "$where" --a
    slice: ($slice | if . == "" then null else {id: (split(" · ")[0] | clean), title: (split(" · ")[1:] | join(" · ") | clean)} end),
    done: ($done | tonumber), total: ($total | tonumber), tdd: ($tdd | clean),
    evidence: (if $ts == "" then null else {label: ($label | clean), verdict: ($verdict | clean), ts: ($ts | clean)} end),
-   stale: $stale} + $extra'
+   stale: $stale} + (if $clash == [] then {} else {clash: $clash} end) + $extra'

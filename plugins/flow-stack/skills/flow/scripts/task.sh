@@ -108,7 +108,7 @@ ensure_repo_files() {
   mkdir -p "$flow/tasks"
   [ -f "$flow/config.json" ] || cp "$templates/config.json" "$flow/config.json"
   local gi="$root/.gitignore"
-  for line in ".flow/ACTIVE" ".flow/tasks/" ".flow/trail.jsonl"; do
+  for line in ".flow/ACTIVE" ".flow/tasks/" ".flow/trail.jsonl" ".flow/holds/"; do
     git -C "$root" check-ignore -q "$line" 2>/dev/null && continue
     grep -qxF "$line" "$gi" 2>/dev/null || printf '%s\n' "$line" >>"$gi"
   done

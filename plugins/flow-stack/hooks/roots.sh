@@ -86,6 +86,34 @@ flow_claim() {
   [ "$o" = "$FLOW_SESSION_PID" ] || flow_live "$o" || flow_point "$FLOW_ACTIVE" "$(head -n1 "$FLOW_ACTIVE")"
 }
 
+# flow_setting <key> <default>: a top-level config.json value; the repo's .flow/ wins, then ~/.flow-stack/.
+flow_setting() {
+  local cfg v
+  for cfg in "$FLOW_DIR/config.json" "${FLOW_HOME:-${FLOW_STACK_HOME:-$HOME/.flow-stack}}/config.json"; do
+    v="$(jq -r --arg k "$1" '.[$k] // empty | tostring' "$cfg" 2>/dev/null)"
+    [ -n "$v" ] && { printf '%s' "$v"; return; }
+  done
+  printf '%s' "$2"
+}
+
+# File holds (hooks/holds.sh): one file per repo path in the main checkout's .flow/holds/, which every
+# worktree shares: "pid<TAB>task<TAB>task dir<TAB>slice<TAB>name<TAB>epoch of the last edit<TAB>path",
+# "-" for an empty field (read splits on tabs as whitespace, so an empty one would shift the rest).
+# flow_hold_file <rel>: that file's path.
+flow_hold_file() { printf '%s/holds/%s' "$FLOW_DIR" "$(printf '%s' "$1" | git hash-object --stdin | cut -c1-16)"; }
+
+# flow_held <rel>: another live session, on another task and still on the slice it held it with, edited
+# <rel> within holds_ttl seconds (default 1800). Sets HOLD_PID HOLD_TASK HOLD_SLICE HOLD_NAME HOLD_TS.
+flow_held() {
+  local f d; f="$(flow_hold_file "$1")"
+  HOLD_PID="" HOLD_TASK="" HOLD_SLICE="" HOLD_NAME="" HOLD_TS="" d=""; [ ! -f "$f" ] || IFS=$'\t' read -r HOLD_PID HOLD_TASK d HOLD_SLICE HOLD_NAME HOLD_TS _ <"$f"
+  [ "$HOLD_SLICE" != - ] || HOLD_SLICE=""
+  [ -n "$HOLD_PID" ] && [ "$HOLD_PID" != "${FLOW_SESSION_PID:-}" ] && [ "$HOLD_TASK" != "${FLOW_TASK:-}" ] || return 1
+  case "$HOLD_TS" in ""|*[!0-9]*) return 1 ;; esac
+  [ $(( $(date +%s) - HOLD_TS )) -lt "$(flow_setting holds_ttl 1800)" ] && flow_live "$HOLD_PID" || return 1
+  [ -z "$HOLD_SLICE" ] || awk -v s="$HOLD_SLICE" '/^## /{on=($2==s)} on && /^status: doing/{f=1} END{exit !f}' "$d/SLICES.md" 2>/dev/null
+}
+
 flow_task() {
   local a h o
   FLOW_TASK=""; FLOW_TASK_DIR=""; FLOW_TASK_HOME=""; FLOW_FOREIGN=""; FLOW_OWNER=""
