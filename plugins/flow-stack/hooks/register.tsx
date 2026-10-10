@@ -197,6 +197,8 @@ export const register: Register = on => {
       shown = Math.abs(target - shown) < 0.005 ? target : shown + (target - shown) * 0.25
       void $.clock.now().then(prune)
       if (frame % 10 === 1) void $.session.usage().then(u => (usage = u), () => {})
+      // other sessions change state without touching this one: re-read every 2s while open
+      if (frame % 20 === 0) void refresh($)
       $.ui.invalidate('ui.render')
     })
     void refresh($)

@@ -204,6 +204,33 @@ test('/flow-pane opens a pane with slices and gates; Approve records the gate an
   }
 })
 
+test("the open pane re-reads other sessions' state on its own: busy pulses, idle is steady", async ($, hooks) => {
+  const on = hooks as any
+  const clock = mock.clock(on)
+  let state = 'busy'
+  on('fs.read', async () => ({ value: PROFILE }))
+  on('process.run', async () => ({
+    value: { exitCode: 0, stdout: JSON.stringify({ ...FULL, tasks: [{ ...FULL.tasks[0], status: state }] }), stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
+  }))
+  on('env.get', async () => ({ value: '/home/me' }))
+  on('session.cwd', async () => ({ value: '/tmp' }))
+  on('session.start', async (_$: unknown, e: unknown) => e)
+  on('command.register', async () => ({ value: undefined }))
+  on('ui.open', async () => ({ value: { id: 'flow-pane' } }))
+  on('ui.invalidate', async () => ({ value: undefined }))
+  await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+  await ($ as any).command.run({ command: 'flow-pane' })
+  await clock.advance(100)
+  const busy = await $.ui.mount({ plugin: 'flow-stack', surface: 'terminal', ...PANE } as any)
+  expect(await busy.find({ type: 'Text', text: /flow-stack-ab \(busy\)/ })).toBeDefined()
+  await busy.unmount()
+  state = 'idle' // the other session finishes; this one does nothing
+  await clock.advance(2100)
+  const idle = await $.ui.mount({ plugin: 'flow-stack', surface: 'terminal', ...PANE } as any)
+  expect(await idle.find({ type: 'Text', text: /flow-stack-ab \(idle\)/ })).toBeDefined()
+  await idle.unmount()
+})
+
 test('bar fills in eighths of a cell and clamps', () => {
   expect(bar(0, 4)).toBe('░░░░')
   expect(bar(0.5, 4)).toBe('██░░')
