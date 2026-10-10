@@ -9,8 +9,9 @@ trap 'exit 0' ERR
 FLOW_INPUT="$(cat)"
 IFS=$'\t' read -r event sid agent src <<<"$(jq -r '[.hook_event_name // "", .session_id // "", .agent_id // "-", .source // "-"] | @tsv' <<<"$FLOW_INPUT")"
 [ -n "$sid" ] || exit 0
+host=""
 [ -z "${HERDR_ENV:-}${ORCA_PANE_KEY:-}${CMUX_WORKSPACE_ID:-}" ] || host="$(flow_host)"
-case "${host:-}" in herdr|orca|cmux) ;; *) exit 0 ;; esac
+case "$host" in herdr|orca|cmux) ;; *) exit 0 ;; esac
 dir="$FLOW_HOME/hosts"; me="$dir/${sid//\//_}"
 # unchanged: every phase file recorded with the last push (lines 4+ of $me) still exists, none newer.
 unchanged() {

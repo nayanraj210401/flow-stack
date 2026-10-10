@@ -324,8 +324,8 @@ Hooks fail open: if `jq` is missing or a script errors, the action is allowed an
  │ options: A) merge  B) wait   (recommend: A)       │
  │ [ Approve ]  [ Reject ]                           │
  │                                                   │
- │ LEADS                                             │   ← your other flow sessions
- │ a1b2c3d4 · api · feat/login · login S2            │
+ │ TASKS                                             │   ← the repo's other tasks
+ │ ● login · wt-login · flow-stack-ab (idle)         │
  ╰───────────────────────────────────────────────────╯
 ```
 

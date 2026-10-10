@@ -78,10 +78,10 @@ claim() {
   local c o f
   IFS=$'\t' read -r _ c f o < <(flow_owners | awk -F'\t' -v s="$1" -v me="$FLOW_ROOT" '$1 == s && $2 != me && !n++') || return 0
   [ -n "$c" ] || return 0
-  if [ -n "$o" ] && { [ "$o" = "$FLOW_SESSION_PID" ] || [ "$take" = 1 ]; }; then rm -f "$f"; return 0; fi
+  if [ "$take" = 1 ] || { [ -n "$o" ] && [ "$o" = "$FLOW_SESSION_PID" ]; }; then rm -f "$f"; return 0; fi
   [ -z "$o" ] || die "task '$1' is active in $c and belongs to $(owned_by "$o"); message it, or take it over: task.sh switch $1 --take"
-  [ "$c" != "$FLOW_MAIN" ] || die "task '$1' is already active in the main checkout"
-  die "task '$1' is already active in worktree $c"
+  [ "$c" != "$FLOW_MAIN" ] || die "task '$1' is already active in the main checkout (no live owner; move it here: task.sh switch $1 --take)"
+  die "task '$1' is already active in worktree $c (no live owner; move it here: task.sh switch $1 --take)"
 }
 # point_repos <task-dir> <slug>: this checkout's pointer (FLOW_ACTIVE), the home repo's, and one in every other repo.
 # Another repo's pointer is written only when empty or on this task (or the one we leave); otherwise refuse.
@@ -170,7 +170,7 @@ case "$cmd" in
 esac
 take=""; [ "$cmd" != switch ] || [ "${2:-}" != --take ] || take=1
 if [ -n "$FLOW_FOREIGN" ]; then # another live session owns this checkout's task
-  mine="start yours in a worktree of your own (EnterWorktree, then task.sh new), or take it over: task.sh switch $FLOW_FOREIGN --take"
+  mine="start yours in a worktree of your own (EnterWorktree, then task.sh new), or take it over: task.sh switch $FLOW_FOREIGN --take (in the task's home repo, if it lives in another)"
   case "$cmd" in
     new) die "this checkout's task '$FLOW_FOREIGN' belongs to $(owned_by "$FLOW_OWNER"); $mine" ;;
     switch) [ "$take" = 1 ] && [ "${1:-}" = "$FLOW_FOREIGN" ] || die "this checkout's task '$FLOW_FOREIGN' belongs to $(owned_by "$FLOW_OWNER"); $mine" ;;

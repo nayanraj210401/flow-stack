@@ -21,7 +21,9 @@ tasks() {
   flow_owners | while IFS=$'\t' read -r s c _ o; do
     [ "$s" != "$FLOW_TASK" ] || continue
     name=""; stat=""
-    [ -z "$o" ] || IFS=$'\t' read -r name stat < <(jq -r '[.name // "", .status // ""] | @tsv' "$(flow_sessions)/$o.json" 2>/dev/null)
+    if [ -n "$o" ]; then
+      name="$(jq -r '.name // empty' "$(flow_sessions)/$o.json" 2>/dev/null)"; stat="$(jq -r '.status // empty' "$(flow_sessions)/$o.json" 2>/dev/null)"
+    fi
     jq -nc --arg t "$s" --arg w "$([ "$c" = "$FLOW_MAIN" ] && echo main || basename "$c")" --arg n "${name:-${o:+pid $o}}" --arg st "$stat" \
       '{task: $t, where: $w, owner: $n, status: $st, live: ($n != "")}'
   done | jq -sc "$clean"' map(map_values(clean))'

@@ -59,8 +59,15 @@ flow_session() {
   done
 }
 
-# flow_live <pid>: that Claude session is running (its process and its registry row both exist).
-flow_live() { [ -n "$1" ] && [ -f "$(flow_sessions)/$1.json" ] && kill -0 "$1" 2>/dev/null; }
+# flow_live <pid>: that Claude session is running: its registry row exists, and the process with that
+# pid is the one the row names (the same start time; a crashed session's row can outlive its pid).
+flow_live() {
+  local f st
+  f="$(flow_sessions)/$1.json"
+  [ -n "$1" ] && [ -f "$f" ] && kill -0 "$1" 2>/dev/null || return 1
+  st="$(jq -r '.procStart // empty' "$f" 2>/dev/null || true)"
+  [ -z "$st" ] || [ "$(TZ=UTC ps -o lstart= -p "$1" 2>/dev/null | sed 's/ *$//' || true)" = "$st" ]
+}
 
 # flow_owner_name <pid>: the session's name as ListAgents and SendMessage know it, else "pid <pid>".
 flow_owner_name() { local n; n="$(jq -r '.name // empty' "$(flow_sessions)/$1.json" 2>/dev/null)"; printf '%s' "${n:-pid $1}"; }
