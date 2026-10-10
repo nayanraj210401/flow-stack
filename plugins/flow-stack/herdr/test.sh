@@ -120,6 +120,28 @@ EOF
   : >"$SB/name"; push UserPromptSubmit; waitfor "agent rename w1:p1 demo" || true; quiet
   push SessionEnd
   waitfor "agent rename w1:p1 --clear" && ok "flow's own name is cleared at session end" || bad "name left: $(cat "$SB/name")"
+
+  echo "-- host: a resumed session in the same pane neither re-toasts nor loses flow's name"
+  : >"$SB/name"; : >"$LOG"; rm -f "$FLOW_STACK_HOME"/hosts/pane-*
+  printf 'GATE · ship it?\n  options: A) yes  B) no\n' >.flow/tasks/demo/GATES.md
+  push UserPromptSubmit; waitfor "notification show" || true; waitfor "agent rename w1:p1 demo" || true; quiet
+  ev() { jq -nc --arg e "$1" --arg c "$PWD" '{hook_event_name:$e, session_id:"sess-h2", cwd:$c, prompt:"go", source:"resume"}'; }
+  push SessionStart; quiet
+  [ "$(grep -c 'notification show' "$LOG")" = 1 ] && ok "no second toast for the same gate after a resume" || bad "re-toasted on resume"
+  printf '\nGATE · tag it?\n' >>.flow/tasks/demo/GATES.md
+  push UserPromptSubmit; quiet
+  has "$(grep 'notification show' "$LOG" | tail -n1)" "tag it?" && ok "a new gate toasts after the resume" || bad "new gate not toasted: $(grep notification "$LOG")"
+  push SessionEnd
+  waitfor "agent rename w1:p1 --clear" && ok "the resumed session clears flow's name" || bad "name left after resume: $(cat "$SB/name")"
+
+  echo "-- host: herdr unreadable → the name is left alone"
+  printf 'my-own' >"$SB/name"
+  mv "$BIN/herdr" "$BIN/herdr.ok"
+  printf '#!/usr/bin/env bash\nprintf "%%s\\n" "herdr $*" >>"%s"\ncase "$1 $2" in "agent get") exit 1 ;; "agent rename") printf "%%s" "$3" >"%s" ;; esac\n' "$LOG" "$SB/name" >"$BIN/herdr"; chmod +x "$BIN/herdr"
+  printf '## S3 · z\nstatus: todo\ncheck: true\nfence: src/**\n' >>.flow/tasks/demo/SLICES.md
+  push UserPromptSubmit; quiet
+  [ "$(cat "$SB/name")" = my-own ] && ok "a failed agent get renames nothing" || bad "renamed on a failed read: $(cat "$SB/name")"
+  mv "$BIN/herdr.ok" "$BIN/herdr"
   unset HERDR_ENV HERDR_PANE_ID HERDR_SOCKET_PATH HERDR_BIN_PATH
   rm -f .flow/tasks/demo/GATES.md
 fi
@@ -140,6 +162,7 @@ if on plugin; then
   cat >"$BIN/herdr" <<EOF
 #!/usr/bin/env bash
 printf '%s\n' "herdr \$*" >>"$LOG"
+[ "\$1 \$2" = "agent get" ] && jq -nc --arg s "\$(cat "$SB/state" 2>/dev/null || echo idle)" '{result:{agent:{agent_status:\$s}}}'
 [ "\$1 \$2" = "agent list" ] && jq -nc --arg c "$PWD" '{result:{agents:[
   {pane_id:"w1:p1", agent:"claude", agent_status:"idle", cwd:\$c, focused:true, agent_session:{value:"sess-p1"}},
   {pane_id:"w1:p2", agent:"claude", agent_status:"working", cwd:\$c, focused:false, agent_session:{value:"sess-p2"}}]}}'
@@ -158,6 +181,18 @@ EOF
   p="$(grep 'agent prompt' "$LOG")"
   has "$p" "agent prompt w1:p1 The human approved gate 1" && ! has "$p" "push the branch" \
     && ok "the owner's pane is told, without the gate's repo text" || bad "prompt: $p"
+
+  echo "-- plugin: a blocked pane is not typed into (it may be at a permission prompt)"
+  printf '\nGATE · tag it?\n' >>.flow/tasks/demo/GATES.md
+  echo blocked >"$SB/state"; : >"$LOG"
+  out="$(cd "$HERE" && HERDR_BIN_PATH="$BIN/herdr" bun -e '
+    import { load, decide } from "./src/herdr"
+    const own = load().find(r => r.pane === "w1:p1")
+    console.log(decide(own, 2, "tag it?", "reject", "", ""))' 2>&1)"
+  grep -q 'agent prompt' "$LOG" && bad "typed into a blocked pane: $(grep 'agent prompt' "$LOG")" || ok "no prompt sent to a blocked pane"
+  has "$out" "not told" && ok "the answer says the pane wasn't told" || bad "result: $out"
+  grep -q '^  decided: human reject' .flow/tasks/demo/GATES.md && ok "the decision is still recorded" || bad "not recorded"
+  rm -f "$SB/state"
   rm -f .flow/tasks/demo/GATES.md
 fi
 
