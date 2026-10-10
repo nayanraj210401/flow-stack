@@ -125,10 +125,10 @@ A gate is a moment where the human decides. Present it in this shape and nothing
 GATE · <what needs deciding, one line>
   options: A) ...  B) ...   (recommend: A, because ...)
   evidence: <file:line or EVIDENCE entry>
-  decided: <who> <approve|reject> <ISO time>     # written by task.sh gate; the gate is closed
+  decided: <who> <approve|reject> <ISO time>[ · choice: <option>][ · note: <text>]   # written by task.sh gate; the gate is closed
 ```
 
-Batch open gates into one message. Log the answer to DECISIONS.tsv with `who=human`. Gates queued in `GATES.md` are numbered 1, 2, … in file order; the `/flow-pane` lists the open ones (no `decided:` line) and its buttons run `task.sh gate <n> approve|reject "<question>"`.
+Batch open gates into one message. Log the answer to DECISIONS.tsv with `who=human`. Gates queued in `GATES.md` are numbered 1, 2, … in file order; the `/flow-pane` and the herdr board list the open ones (no `decided:` line); the pane's buttons and herdr's decide popup run `task.sh gate <n> approve|reject "<question>" [choice] [note]`.
 
 ## Resolution order for slots
 
