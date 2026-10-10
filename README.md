@@ -481,9 +481,35 @@ Then it fits around it:
 [herdr](https://herdr.dev), [Orca](https://github.com/stablyai/orca) and cmux run Claude Code in panes and worktrees. flow-stack runs inside them unchanged. Inside one, it also:
 
 - **Shows flow's phase in the host's sidebar.** The host already knows whether Claude is working, blocked or done. flow adds the task, slice and open gates: herdr pane labels (`$flow_task $flow_slice $flow_gates`), an Orca worktree comment (marked unread when a gate opens), a cmux status. Pushed only when they change, only by the session that owns the task (another pane in the same checkout shows none), and cleared when the task or session ends.
+- **Marks and announces gates in herdr.** An open gate shows as `⚑n` in the `$flow_gates` row until it is decided, even while the agent keeps working under `--auto`. A new one raises a herdr toast with its question. An agent row with no name takes the task's name; a name you or another plugin set is never touched.
 - **Leaves the desktop ping to the host.** flow's macOS notification is skipped, since the host sends its own. ntfy and `notify_on: all` still fire.
 - **Runs workers where you can see them** (opt-in, `- delegate: herdr-panes`). `delegate` starts each slice's worker in its own herdr worktree and pane instead of a hidden subagent; you can watch and steer it. Each new worktree asks Claude's folder-trust question once; answer it in the pane, then `dispatch.sh brief <lane>` sends the slice. The lead accepts it as before, then removes the worktree if it is clean. A worker pane runs like `--auto`: push, merge and PRs wait in GATES.md for you, since its prompts come from the lead, not from you.
 - **Works under a coordinator.** With herdr-projects or Orca's orchestrator starting threads, each thread is a normal flow lead in its own worktree, with its own active task.
+
+### The herdr plugin: board and gate decisions
+
+`plugins/flow-stack/herdr/` is a herdr plugin (Bun + Ink). Link it and bind its two actions:
+
+```bash
+herdr plugin link "$(pwd)/plugins/flow-stack/herdr"     # from a flow-stack checkout; needs bun
+cd plugins/flow-stack/herdr && bun install
+```
+
+```toml
+# ~/.config/herdr/config.toml  (prefix+g is herdr's goto)
+[[keys.command]]
+key = "prefix+f"
+type = "plugin_action"
+command = "flow-stack.board"
+
+[[keys.command]]
+key = "prefix+shift+f"
+type = "plugin_action"
+command = "flow-stack.decide"
+```
+
+- **`prefix+f`: the board.** Every Claude pane in herdr with the task its session owns, needs-you first (open gates, then blocked, then working). The selected task's slices carry their evidence tier: `◆` verified by a recorded PASS, `◇` marked done with no evidence, `✗` failing. Its open gates and recent runs show too. `↵` jumps to the pane, `d` answers its gate. It redraws on herdr's pane events (flow's sidebar push is one), not on a timer.
+- **`prefix+shift+f`: decide the focused pane's gate.** The gate's question and evidence, its options with the recommended one selected, Reject, and an optional note. The answer goes to GATES.md and DECISIONS.tsv through `task.sh gate`, then the pane's Claude is told to read them. The gate's text stays out of that prompt, since GATES.md is repo text.
 
 `setup` detects hosts and offers, one at a time, what's missing: herdr's Claude integration, flow's rows in herdr's sidebar, herdr-projects, and a repo-scope plugin entry so every worktree loads flow-stack. A re-run offers only what's new; a "no" is remembered. Nothing changes outside a host, and stray host variables (tmux, ssh) are ignored unless the host's socket answers. `hooks.host: false` in `config.json` turns it all off.
 

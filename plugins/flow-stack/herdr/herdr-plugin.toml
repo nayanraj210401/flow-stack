@@ -1,0 +1,42 @@
+id = "flow-stack"
+name = "flow-stack"
+version = "1.2.0"
+min_herdr_version = "0.9.1"
+description = "flow-stack in herdr: a board of every Claude pane's task, slices, evidence and open gates; answer a gate with an option and a note"
+platforms = ["linux", "macos"]
+
+[[build]]
+command = ["bun", "install", "--production"]
+
+# Bind them in ~/.config/herdr/config.toml:
+#   [[keys.command]]  key = "prefix+f"  type = "plugin_action"  command = "flow-stack.board"
+#   [[keys.command]]  key = "prefix+shift+f"  type = "plugin_action"  command = "flow-stack.decide"
+# (prefix+g is herdr's goto)
+[[actions]]
+id = "board"
+title = "flow: board"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["sh", "-c", "exec \"$HERDR_BIN_PATH\" plugin pane open --plugin flow-stack --entrypoint board"]
+
+[[actions]]
+id = "decide"
+title = "flow: decide this pane's gate"
+contexts = ["pane"]
+command = ["sh", "-c", "exec \"$HERDR_BIN_PATH\" plugin pane open --plugin flow-stack --entrypoint decide"]
+
+# herdr finds commands on PATH only; bun may live in ~/.bun/bin
+[[panes]]
+id = "board"
+title = "flow board"
+placement = "popup"
+width = "90%"
+height = "85%"
+command = ["sh", "-c", "exec \"$(command -v bun || echo \"$HOME/.bun/bin/bun\")\" src/main.tsx board"]
+
+[[panes]]
+id = "decide"
+title = "flow gate"
+placement = "popup"
+width = "70%"
+height = 18
+command = ["sh", "-c", "exec \"$(command -v bun || echo \"$HOME/.bun/bin/bun\")\" src/main.tsx decide"]

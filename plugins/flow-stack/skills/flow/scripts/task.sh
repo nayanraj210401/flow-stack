@@ -33,10 +33,11 @@
 #   task.sh accept <lane>             import a worker lane's EVIDENCE.md into the task
 #                                     (delegate, main checkout, after reviewing its branch)
 #   task.sh decide <who> <reversible yes|no> <decision> <why> [evidence]
-#   task.sh gate <n> approve|reject "<question>"   decide open gate <n> of GATES.md (1-based,
-#                                     file order) if its question is still <question>: add its
-#                                     decided: line, log it to DECISIONS.tsv. The /flow-pane's
-#                                     buttons call this; the guard hook keeps the agent off it.
+#   task.sh gate <n> approve|reject "<question>" [choice] [note]   decide open gate <n> of GATES.md
+#                                     (1-based, file order) if its question is still <question>: add
+#                                     its decided: line (with the option chosen and a note, if given),
+#                                     log it to DECISIONS.tsv. The /flow-pane's buttons and the herdr
+#                                     decide popup call this; the guard hook keeps the agent off it.
 #
 #   task.sh join <slug>               in a worktree: become a worker lane of <slug> (workers of a
 #                                     lead worktree join on their first hook; this is the fallback)
@@ -359,19 +360,25 @@ $out"
     ;;
   gate)
     n="${1:-}"; verdict="${2:-}"; want="${3:-}"; g="$(active_dir)/GATES.md"
-    case "$verdict" in approve|reject) ;; *) die "usage: task.sh gate <n> approve|reject \"<question>\"" ;; esac
+    case "$verdict" in approve|reject) ;; *) die "usage: task.sh gate <n> approve|reject \"<question>\" [choice] [note]" ;; esac
+    # one line each, no control characters: they land in GATES.md and in herdr's terminal
+    # and no " · ", which separates the decided line's fields
+    oneline() { printf '%s' "$1" | jq -Rrs 'gsub("[\n\r\t]"; " ") | gsub("[\u0001-\u001f\u007f-\u009f]"; "") | gsub(" · "; " - ")'; }
+    choice="$(oneline "${4:-}")"; note="$(oneline "${5:-}")"
     q="$(awk -v n="$n" '/^GATE · /{k++} k == n && /^GATE · /{sub(/^GATE · /,""); print; exit}' "$g" 2>/dev/null |
       jq -Rr 'gsub("[\u0001-\u001f\u007f-\u009f]"; "")')"  # the same text status.sh shows the pane
     [ -n "$q" ] || die "no gate $n in $g"
     [ "$q" = "$want" ] || die "gate $n is now \"$q\", not \"$want\" (GATES.md changed; reload the pane)"
     awk -v n="$n" '/^GATE · /{k++; on=(k==n)} on && /^  decided: /{d=1} END{exit d}' "$g" || die "gate $n is already decided"
     ts="$(date -u +%FT%TZ)"; tmp="$(mktemp "$g.XXXXXX")"
-    awk -v n="$n" -v line="  decided: human $verdict $ts" '
+    said="${choice:+ · choice: $choice}${note:+ · note: $note}"
+    LINE="  decided: human $verdict $ts$said" awk -v n="$n" '
+      BEGIN { line = ENVIRON["LINE"] }
       /^GATE · /{ if (on) { print line; on=0 } k++; if (k==n) on=1 }
       on && /^[[:space:]]*$/ { print line; on=0 }
       { print }
       END { if (on) print line }' "$g" >"$tmp" && chmod 644 "$tmp" && mv "$tmp" "$g"
-    "$0" decide human no "$verdict: $q" "decided in the /flow-pane" >/dev/null
+    "$0" decide human no "$verdict: $q$said" "decided in a flow pane" >/dev/null
     echo "gate $n ${verdict%e}ed: $q"
     ;;
   decide)

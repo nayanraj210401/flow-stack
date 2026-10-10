@@ -5,7 +5,8 @@
 #   owner and status from Claude Code's session registry), runs (the last 40 evidence verdicts, oldest
 #   first, without the planned <id>:before reds and probe: rows), and est_usd (ESTIMATE's forecast, null when none).
 #   {"task":"","slice":{"id":"","title":""},"done":0,"total":0,"tdd":"",
-#    "evidence":{"label":"","verdict":"","ts":""},"stale":false,"where":"main|lead|lane"}
+#    "evidence":{"label":"","verdict":"","ts":""},"stale":false,"where":"main|lead|lane","owner":"<pid>"}
+# owner is the pid of the live Claude session that owns the task ("" when none: unclaimed or gone).
 # clash (only when there is one): the files this checkout waits on, each still held by another live
 #   session ({path,holder,task,slice}; hooks/holds.sh).
 # The slice is this lane's TDD slice when the lock is on, else the first `doing` one.
@@ -74,15 +75,16 @@ if [ -n "$full" ]; then
 fi
 
 where=main; [ "$FLOW_ROOT" != "$FLOW_MAIN" ] && { where=lead; [ -z "$FLOW_LANE" ] || where=lane; }
+owner="$(sed -n 2p "$FLOW_ACTIVE" 2>/dev/null | tr -d '[:space:]')"; flow_live "$owner" || owner=""
 clash="$([ -f "$st/.clash" ] && cut -f1 "$st/.clash" | sort -u | while read -r p; do
     flow_held "$p" && jq -nc --arg p "$p" --arg h "$HOLD_NAME" --arg t "$HOLD_TASK" --arg s "$HOLD_SLICE" '{path:$p, holder:$h, task:$t, slice:$s}'
   done | jq -sc "$clean"' map(map_values(clean))')"
-jq -nc --argjson extra "$extra" --arg task "$FLOW_TASK" --arg where "$where" --arg slice "$slice" --argjson clash "${clash:-[]}" \
+jq -nc --argjson extra "$extra" --arg task "$FLOW_TASK" --arg where "$where" --arg slice "$slice" --arg owner "$owner" --argjson clash "${clash:-[]}" \
   --arg done "${done_n:-0}" --arg total "${total:-0}" --arg tdd "$tdd" \
   --arg ts "${ev_ts:-}" --arg label "${ev_label:-}" --arg verdict "${ev_verdict:-}" --argjson stale "$stale" '
   # repo files are untrusted: no control characters (terminal escapes) reach the band or spinner
   def clean: gsub("[\u0001-\u001f\u007f-\u009f]"; "");
-  {task: ($task | clean), where: $where,
+  {task: ($task | clean), where: $where, owner: $owner,
    slice: ($slice | if . == "" then null else {id: (split(" · ")[0] | clean), title: (split(" · ")[1:] | join(" · ") | clean)} end),
    done: ($done | tonumber), total: ($total | tonumber), tdd: ($tdd | clean),
    evidence: (if $ts == "" then null else {label: ($label | clean), verdict: ($verdict | clean), ts: ($ts | clean)} end),
