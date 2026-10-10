@@ -85,6 +85,16 @@ export function bar(fraction: number, width: number): string {
 
 export const spin = (frame: number) => SPIN[frame % SPIN.length]
 
+// A task row's mark, animated by its owner's state: busy spins, idle holds steady, any other state
+// (waiting on its human) pulses amber, and a task with no live owner is a dim ring.
+export function ownerMark(t: { live: boolean; status: string }, frame: number, row: number): { icon: string; color: string } {
+  if (!t.live) return { icon: '○', color: 'subtle' }
+  if (t.status === 'busy') return { icon: spin(frame + row * 2), color: 'claude' }
+  if (t.status === 'idle' || t.status === '') return { icon: '●', color: 'success' }
+  const lit = Math.floor(frame / 5) % 2 === 0
+  return { icon: lit ? '◆' : '◇', color: lit ? 'warning' : 'subtle' }
+}
+
 // Consecutive equal verdicts as one run of ■, so the strip is a few Texts, not forty.
 export function strip(runs: string[]): { verdict: string; cells: string }[] {
   const out: { verdict: string; cells: string }[] = []
@@ -328,16 +338,17 @@ export const register: Register = on => {
         {tasks.length > 0 && (
           <Box flexDirection="column">
             <Text bold>TASKS</Text>
-            {tasks.map((t, i) => (
-              <Box key={`task-${t.task}`} gap={1}>
-                <Text color={!t.live ? 'subtle' : t.status !== 'busy' || Math.floor((frame + i * 3) / 4) % 2 === 0 ? 'success' : 'subtle'}>
-                  {t.live ? '●' : '○'}
-                </Text>
-                <Text dimColor>
-                  {t.task} · {t.where} · {t.live ? `${t.owner}${t.status ? ` (${t.status})` : ''}` : 'no live owner'}
-                </Text>
-              </Box>
-            ))}
+            {tasks.map((t, i) => {
+              const mark = ownerMark(t, frame, i)
+              return (
+                <Box key={`task-${t.task}`} gap={1}>
+                  <Text color={mark.color}>{mark.icon}</Text>
+                  <Text dimColor>
+                    {t.task} · {t.where} · {t.live ? `${t.owner}${t.status ? ` (${t.status})` : ''}` : 'no live owner'}
+                  </Text>
+                </Box>
+              )
+            })}
           </Box>
         )}
       </Box>

@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'claude-code/testing'
 
-import { bandText, bar, parseBudget, spin, strip } from './register'
+import { bandText, bar, ownerMark, parseBudget, spin, strip } from './register'
 
 const PROFILE = `---
 budget:
@@ -229,6 +229,16 @@ test("the open pane re-reads other sessions' state on its own: busy pulses, idle
   const idle = await $.ui.mount({ plugin: 'flow-stack', surface: 'terminal', ...PANE } as any)
   expect(await idle.find({ type: 'Text', text: /flow-stack-ab \(idle\)/ })).toBeDefined()
   await idle.unmount()
+})
+
+test("a task row's mark follows its owner's state", () => {
+  expect(ownerMark({ live: true, status: 'busy' }, 3, 1)).toEqual({ icon: spin(5), color: 'claude' })
+  expect(ownerMark({ live: true, status: 'busy' }, 4, 1).icon).not.toBe(ownerMark({ live: true, status: 'busy' }, 3, 1).icon)
+  expect(ownerMark({ live: true, status: 'idle' }, 0, 0)).toEqual({ icon: '●', color: 'success' })
+  expect(ownerMark({ live: true, status: 'idle' }, 7, 0)).toEqual({ icon: '●', color: 'success' })
+  expect(ownerMark({ live: true, status: 'waiting' }, 0, 0)).toEqual({ icon: '◆', color: 'warning' })
+  expect(ownerMark({ live: true, status: 'waiting' }, 5, 0)).toEqual({ icon: '◇', color: 'subtle' })
+  expect(ownerMark({ live: false, status: '' }, 0, 0)).toEqual({ icon: '○', color: 'subtle' })
 })
 
 test('bar fills in eighths of a cell and clamps', () => {
