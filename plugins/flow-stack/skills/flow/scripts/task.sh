@@ -11,7 +11,8 @@
 #   task.sh active                    print the active slug (empty if none)
 #   task.sh dir                       print the active task dir
 #   task.sh switch <slug> [--take]    make another task active here. Your own task active in another
-#                                     checkout moves here; --take takes one another live session owns
+#                                     checkout moves here; --take takes one another live session owns,
+#                                     or moves one with no live owner
 #   task.sh close                     clear ACTIVE (folder is kept)
 #   task.sh list                      tasks with slice progress, where each is active, and its owner
 #   task.sh ticket [<ref>]            record (or print) the ticket this task works on
