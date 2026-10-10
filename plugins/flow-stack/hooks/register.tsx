@@ -1,7 +1,7 @@
 // flow-stack's mod: what bash hooks can't do.
 //   - the flow band above the prompt, and the slice beside the spinner (state from skills/flow/scripts/status.sh)
 //   - each flow-stack agent spawns on the model its role gets in the profile's budget:
-//   - /flow-pane: the task's slices, open gates with Approve/Reject, the other leads, this session's
+//   - /flow-pane: the task's slices, open gates with Approve/Reject, the repo's other tasks and their owners, this session's
 //     subagents, the evidence history, and context and cost gauges, animated while open
 import type { EngineInterface, Register, SessionUsage, Timer } from 'claude-code'
 
@@ -17,7 +17,10 @@ type Status = {
   // with status.sh --full, while the pane is open
   slices?: { id: string; title: string; status: string; verdict: string }[]
   gates?: { n: number; question: string; detail: string }[]
-  leads?: { id: string; repo: string; branch: string; task: string; slice: string }[]
+  // the repo's other active tasks and the Claude session that owns each (owner "" = nobody live)
+  tasks?: { task: string; where: string; owner: string; status: string; live: boolean }[]
+  // this checkout's task when another live session owns it (then there is no task of ours)
+  foreign?: { task: string; owner: string }
   runs?: string[]
   est_usd?: number | null
 }
@@ -137,7 +140,7 @@ async function refresh($: EngineInterface) {
         const args = [...(paneOpen ? ['--full'] : []), await $.session.cwd()]
         const { stdout } = await $.process.run([`${$.plugin.root}/skills/flow/scripts/status.sh`, ...args])
         const next = JSON.parse(stdout || '{}') as Status
-        status = next.task ? next : null
+        status = next.task || next.foreign ? next : null
       } catch {
         status = null
       }
@@ -178,7 +181,7 @@ export const register: Register = on => {
     if (budget.rejected.length) {
       $.ui.toast(`flow-stack: ignoring budget ${budget.rejected.join(', ')} (not a model name)`, { timeoutMs: 10000 })
     }
-    await $.command.register({ name: 'flow-pane', description: "Open flow-stack's pane: slices, gates to approve, leads" })
+    await $.command.register({ name: 'flow-pane', description: "Open flow-stack's pane: slices, gates to approve, who owns which task" })
     void refresh($)
     return next(e)
   })
@@ -210,7 +213,7 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Button, Text } = $.ui.resolve(e)
-    const { slices = [], gates = [], leads = [], runs = [], est_usd = null } = status ?? {}
+    const { slices = [], gates = [], tasks = [], runs = [], est_usd = null } = status ?? {}
     const age = frame - openedAt
     const pulse = Math.floor(frame / 5) % 2 === 0
     // row i fades in on frame i after the pane opens
@@ -222,11 +225,15 @@ export const register: Register = on => {
     const busy = agents.filter(([, l]) => l.end === undefined).length
     return (
       <Box flexDirection="column" gap={1}>
-        {status ? (
+        {status?.task ? (
           <Box gap={1}>
             <Text color="claude">{spin(frame)}</Text>
             <Text bold>{bandText(status)}</Text>
           </Box>
+        ) : status?.foreign ? (
+          <Text dimColor>
+            No task of yours: {status.foreign.task} here belongs to {status.foreign.owner}. Start yours in a worktree.
+          </Text>
         ) : (
           <Text dimColor>No active flow task. Start one with /flow-stack:flow.</Text>
         )}
@@ -316,16 +323,16 @@ export const register: Register = on => {
             ))}
           </Box>
         )}
-        {leads.length > 0 && (
+        {tasks.length > 0 && (
           <Box flexDirection="column">
-            <Text bold>LEADS</Text>
-            {leads.map((l, i) => (
-              <Box key={`lead-${l.id}`} gap={1}>
-                <Text color={Math.floor((frame + i * 3) / 4) % 2 === 0 ? 'success' : 'subtle'}>●</Text>
+            <Text bold>TASKS</Text>
+            {tasks.map((t, i) => (
+              <Box key={`task-${t.task}`} gap={1}>
+                <Text color={!t.live ? 'subtle' : t.status !== 'busy' || Math.floor((frame + i * 3) / 4) % 2 === 0 ? 'success' : 'subtle'}>
+                  {t.live ? '●' : '○'}
+                </Text>
                 <Text dimColor>
-                  {l.id} · {l.repo} · {l.branch}
-                  {l.task ? ` · ${l.task}` : ''}
-                  {l.slice ? ` ${l.slice}` : ''}
+                  {t.task} · {t.where} · {t.live ? `${t.owner}${t.status ? ` (${t.status})` : ''}` : 'no live owner'}
                 </Text>
               </Box>
             ))}
@@ -373,7 +380,7 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (!status || e.props.hasSurvey) return next(e)
+    if (!status?.task || e.props.hasSurvey) return next(e)
     const { Text } = $.ui.resolve(e)
     return <Text dimColor wrap="truncate-end">{bandText(status)}</Text>
   })

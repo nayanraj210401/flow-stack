@@ -12,8 +12,11 @@
 #              parallel workers never share a file.
 #
 # flow_task then resolves the active task. .flow/ACTIVE holds "<slug>" (the task lives here) or
-# "@<home-repo-path>:<slug>" (a multi-repo task whose folder lives in its home repo):
-#   FLOW_TASK, FLOW_TASK_DIR  the slug and its folder (empty when no task is active)
+# "@<home-repo-path>:<slug>" (a multi-repo task whose folder lives in its home repo), then on line 2
+# the pid of the Claude session that owns it. While that session lives, the task is its alone: every
+# other session in the checkout has none (a lane's flow-lane pointer has no owner; workers share it).
+#   FLOW_TASK, FLOW_TASK_DIR  the slug and its folder (empty when no task is active, or it isn't ours)
+#   FLOW_FOREIGN, FLOW_OWNER  the slug and owner pid of the task here that another live session owns
 #   FLOW_TASK_HOME            the repo that owns the task folder
 #   FLOW_REPO                 this repo's name: its row in the task's REPOS, else the folder name
 #   FLOW_REPO_KEY             "" in the home repo, else FLOW_REPO; it qualifies seal paths
@@ -40,11 +43,51 @@ flow_roots() {
   fi
 }
 
+# Claude Code keeps a row per live session: <config dir>/sessions/<pid>.json {pid, sessionId, cwd, name, status}.
+flow_sessions() { printf '%s/sessions' "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"; }
+
+# flow_session: set FLOW_SESSION_PID to the Claude session this process runs under (a hook's parent,
+# or an ancestor of a script it runs); "" outside Claude, where the human sees every task. A preset
+# FLOW_SESSION_PID wins.
+flow_session() {
+  local p="$PPID" n=0 reg
+  [ -z "${FLOW_SESSION_PID+x}" ] || return 0
+  FLOW_SESSION_PID=""; reg="$(flow_sessions)"
+  while [ -n "$p" ] && [ "$p" -gt 1 ] && [ $n -lt 8 ]; do
+    [ -f "$reg/$p.json" ] && { FLOW_SESSION_PID="$p"; return 0; }
+    p="$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' ' || true)"; n=$((n + 1))
+  done
+}
+
+# flow_live <pid>: that Claude session is running (its process and its registry row both exist).
+flow_live() { [ -n "$1" ] && [ -f "$(flow_sessions)/$1.json" ] && kill -0 "$1" 2>/dev/null; }
+
+# flow_owner_name <pid>: the session's name as ListAgents and SendMessage know it, else "pid <pid>".
+flow_owner_name() { local n; n="$(jq -r '.name // empty' "$(flow_sessions)/$1.json" 2>/dev/null)"; printf '%s' "${n:-pid $1}"; }
+
+# flow_point <file> <value>: write a task pointer this session owns.
+flow_point() { flow_session; mkdir -p "$(dirname "$1")"; printf '%s\n%s\n' "$2" "$FLOW_SESSION_PID" >"$1"; }
+
+# flow_claim: make an unowned pointer (no owner recorded, or the owner is gone) this session's.
+flow_claim() {
+  local o
+  [ -z "$FLOW_LANE" ] && [ -s "$FLOW_ACTIVE" ] || return 0
+  flow_session; [ -n "$FLOW_SESSION_PID" ] || return 0
+  o="$(sed -n 2p "$FLOW_ACTIVE" | tr -d '[:space:]')"
+  [ "$o" = "$FLOW_SESSION_PID" ] || flow_live "$o" || flow_point "$FLOW_ACTIVE" "$(head -n1 "$FLOW_ACTIVE")"
+}
+
 flow_task() {
-  local a h
-  FLOW_TASK=""; FLOW_TASK_DIR=""; FLOW_TASK_HOME=""
+  local a h o
+  FLOW_TASK=""; FLOW_TASK_DIR=""; FLOW_TASK_HOME=""; FLOW_FOREIGN=""; FLOW_OWNER=""
   FLOW_REPO="$(basename "$FLOW_MAIN")"; FLOW_REPO_KEY=""
   a="$(head -n1 "$FLOW_ACTIVE" 2>/dev/null | tr -d '[:space:]' || true)"
+  if [ -n "$a" ] && [ "${FLOW_ACTIVE##*/}" != flow-lane ]; then
+    o="$(sed -n 2p "$FLOW_ACTIVE" 2>/dev/null | tr -d '[:space:]' || true)"
+    if [ -n "$o" ] && flow_session && [ -n "$FLOW_SESSION_PID" ] && [ "$o" != "$FLOW_SESSION_PID" ] && flow_live "$o"; then
+      FLOW_FOREIGN="${a##*:}"; FLOW_OWNER="$o"; return 0
+    fi
+  fi
   case "$a" in
     "") return 0 ;;
     @*) h="${a#@}"; h="${h%:*}"; FLOW_TASK="${a##*:}"; FLOW_TASK_HOME="${h/#\~/$HOME}" ;;
@@ -74,14 +117,18 @@ flow_repo_path() {
   awk -F'\t' -v n="$1" '$1 == n { print $2; exit }' "$FLOW_TASK_DIR/REPOS" 2>/dev/null || true
 }
 
-# flow_owners [main]: "slug<TAB>checkout" for every local task some checkout leads: the main checkout's
-# ACTIVE, then each lead worktree's flow-active. Multi-repo pointers (@home:slug) belong to their home repo.
+# flow_owners [main]: "slug<TAB>checkout<TAB>pointer<TAB>owner pid" for every local task some checkout
+# leads: the main checkout's ACTIVE, then each lead worktree's flow-active. Multi-repo pointers
+# (@home:slug) belong to their home repo. The pid is "" when unowned or its session is gone; it comes
+# last because `read` with IFS=tab collapses an empty field in the middle.
 flow_owners() {
-  local m="${1:-$FLOW_MAIN}" f v
+  local m="${1:-$FLOW_MAIN}" f v o c
   for f in "$m/.flow/ACTIVE" "$m"/.git/worktrees/*/flow-active; do
     v="$(head -n1 "$f" 2>/dev/null | tr -d '[:space:]')"
     case "$v" in ""|@*) continue ;; esac
-    if [ "$f" = "$m/.flow/ACTIVE" ]; then printf '%s\t%s\n' "$v" "$m"; else printf '%s\t%s\n' "$v" "$(dirname "$(cat "${f%/*}/gitdir")")"; fi
+    o="$(sed -n 2p "$f" | tr -d '[:space:]')"; flow_live "$o" || o=""
+    c="$m"; [ "$f" = "$m/.flow/ACTIVE" ] || c="$(dirname "$(cat "${f%/*}/gitdir")")"
+    printf '%s\t%s\t%s\t%s\n' "$v" "$c" "$f" "$o"
   done
 }
 

@@ -68,6 +68,11 @@ if [ -d "$FLOW_DIR/features" ]; then
   printf 'Feature map: .flow/features/ (%s features%s). Before changing behavior, run %s impact.\n' "$nfeat" "$([ "$nstale" -gt 0 ] && printf ', %s stale or broken' "$nstale")" "$(cd "$(dirname "$0")/../skills/feature-map/scripts" && pwd)/features.sh"
 fi
 
+if [ -n "$FLOW_FOREIGN" ]; then
+  printf '\n## No task of yours here\nThis checkout'\''s task, %s, belongs to the live session %s (pid %s): its anchor, fences, and Stop check are not yours. To work on a task, start one in a worktree of your own (EnterWorktree, then task.sh new). To coordinate, SendMessage %s.\n' \
+    "$FLOW_FOREIGN" "$(flow_owner_name "$FLOW_OWNER")" "$FLOW_OWNER" "$(flow_owner_name "$FLOW_OWNER")"
+fi
+
 if [ -n "$FLOW_TASK_DIR" ]; then
   goal="$(awk '/<!--/{c=1} c{if(/-->/)c=0; next} /^## Goal/{on=1;next} on && /^## /{exit} on && NF{print; exit}' "$FLOW_TASK_DIR/INTENT.md" 2>/dev/null || true)"
   slice="$(awk '/^## /{h=$0} /^status: doing/{print h; exit}' "$FLOW_TASK_DIR/SLICES.md" 2>/dev/null || true)"

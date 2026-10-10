@@ -125,6 +125,25 @@ test('the band shows the active task on every surface', async ($, on) => {
   }
 })
 
+test("the pane says whose task this checkout's is when another live session owns it", async ($, hooks) => {
+  const on = hooks as any
+  let ran!: () => void
+  let refreshed = new Promise<void>(r => (ran = r))
+  on('ui.invalidate', async () => {
+    ran()
+    return { value: undefined }
+  })
+  on('ui.open', async () => ({ value: { id: 'flow-pane' } }))
+  await start($, on, { foreign: { task: 'script-bug-hunt', owner: 'flow-stack-88' } })
+  await refreshed
+  refreshed = new Promise<void>(r => (ran = r))
+  await ($ as any).command.run({ command: 'flow-pane' })
+  await refreshed
+  const pane = await $.ui.mount({ plugin: 'flow-stack', surface: 'terminal', ...PANE } as any)
+  expect(await pane.find({ type: 'Text', text: /script-bug-hunt here belongs to flow-stack-88/ })).toBeDefined()
+  await pane.unmount()
+})
+
 const FULL = {
   ...STATUS,
   slices: [
@@ -132,7 +151,7 @@ const FULL = {
     { id: 'S2', title: 'token bucket', status: 'doing', verdict: 'FAIL' },
   ],
   gates: [{ n: 2, question: 'merge PR #3', detail: 'options: A) merge  B) wait' }],
-  leads: [],
+  tasks: [{ task: 'search', where: 'wt-search', owner: 'flow-stack-ab', status: 'idle', live: true }],
 }
 const PANE = { component: 'Pane', requestId: 'flow-pane', props: { title: 'flow', isFocused: true, bodyColumns: 80, placement: 'dock' } } as const
 
@@ -173,6 +192,7 @@ test('/flow-pane opens a pane with slices and gates; Approve records the gate an
     expect(await ui.find({ type: 'Text', text: /S2 token bucket · doing/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: 'FAIL' })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: 'merge PR #3' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /search · wt-search · flow-stack-ab \(idle\)/ })).toBeDefined()
     if (surface === 'terminal') {
       await ui.press({ key: 'approve-2' })
       expect(runs.find(a => a[1] === 'gate')?.slice(1)).toEqual(['gate', '2', 'approve', 'merge PR #3'])

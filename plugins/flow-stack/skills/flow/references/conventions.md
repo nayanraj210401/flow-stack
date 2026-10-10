@@ -21,10 +21,10 @@ The single source of truth for file locations and formats. Skills and hooks both
 | `<repo>/.flow/board/` | board staging: `board.json`, `board.html` (from `board`; the artifact is the product) | no |
 | `~/.flow-stack/board/url` | the board artifact's link, reused on every publish | no (personal) |
 | `~/.flow-stack/auto/<session_id>` | auto mode is on for that session: `--auto` in a prompt creates it, `--no-auto` removes it (anchor hook); hooks turn every ask into deny-and-queue | no |
-| `~/.flow-stack/leads/<session_id>.json` | one per flow session (a lead), written by the lead hook on start, each prompt, and every 5 min of tool calls; removed at session end, pruned after 3 days: `sid id repo root branch task goal slice ticket updated ts` | no |
-| `~/.flow-stack/leads/<session_id>.inbox/` | messages to that lead, one `{ts, from, label, text}` JSON file each, from `leads.sh msg`; consumed on its next prompt or tool call (never a subagent's) | no |
+| `~/.flow-stack/hosts/<session_id>` | the host hook's last sidebar push: text, gate count, herdr seq, then the files whose change moves the phase; removed at session end | no |
+| `~/.claude/sessions/<pid>.json` | Claude Code's own row per live session (`pid sessionId cwd name status`); flow reads it for task owners and never writes it | no (Claude Code's) |
 | `<repo>/.flow/ready.tsv` | ready-for-review ledger: `ts\tsha\tkind\tresult\tnote`, kinds review, deslop, tour, ready, and each `do` id (from `review/scripts/ready.sh`). The repo's own pre-PR gates are `.flow/config.json` `"ready": [{"id": "e2e", "run": "<cmd>"}, {"id": "sec-scan", "do": "<step, e.g. an MCP scan>"}]`: a `run` is checked live, and a `do` needs `ready.sh record <id> done` for HEAD | no |
-| `<repo>/.flow/ACTIVE` | the active task: `<slug>`, or `@<home-repo-path>:<slug>` in a non-home repo of a multi-repo task | no |
+| `<repo>/.flow/ACTIVE` | the active task: `<slug>`, or `@<home-repo-path>:<slug>` in a non-home repo of a multi-repo task; line 2 is the owning Claude session's pid (empty: anyone's). While that session lives, other sessions in the checkout have no task | no |
 | `<main>/.git/worktrees/<name>/flow-active` | the task a linked worktree leads (same format as ACTIVE); written by `task.sh new/switch` run in that worktree, removed by its `close` and with the worktree | no |
 | `<main>/.git/worktrees/<name>/flow-lane` | a worker's join: the slug and the lead's root (a worktree lead, not main); written by the worker's first hook | no |
 | `<repo>/.flow/tasks/<slug>/` | task folder | no (trace can export) |
@@ -56,7 +56,7 @@ The single source of truth for file locations and formats. Skills and hooks both
 | `TRACE.md` | trace skill | template `TRACE.md` |
 | `.circuit` | circuit hook | counters, internal |
 | `REPOS` | `task.sh new --workspace/--repos` | multi-repo tasks only: `name<TAB>path` per repo; names are the profile's `# Repos` names |
-| `TICKET` | `task.sh ticket <ref>` | the ticket id or URL the task works on, first line; shown by `leads.sh` |
+| `TICKET` | `task.sh ticket <ref>` | the ticket id or URL the task works on, first line |
 | `GATES.md` | the agent (auto mode, gate skill) | open human gates, blocks as in Human gates below |
 | `TDD` | `task.sh tdd` | opt-in TDD lock: `<slice> <red\|green> <red-FAIL count at the switch>`; per lane in a worktree |
 | `lanes/<lane>/` | a worker in a linked git worktree | its own `EVIDENCE.md`, `trail.jsonl`, `.circuit`, `HANDOFF.auto.md`; imported with `task.sh accept <lane>` |
