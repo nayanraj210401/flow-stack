@@ -33,11 +33,11 @@ case "$rel" in
   .flow/tasks/*/SLICES.md)
     # "done" goes through the proof gate (task.sh slice <id> done), never a direct edit.
     count_done() { grep -c '^status: done' 2>/dev/null || true; }
-    new_text="$(flow_field '.tool_input.new_string // .tool_input.content')"
+    new_text="$(flow_field '.tool_input.new_string // .tool_input.content // ([.tool_input.edits[]?.new_string] | join("\n"))')"
     if [ "$(flow_field .tool_name)" = Write ]; then
       before="$(count_done <"$epath/$rel")"
     else
-      before="$(flow_field .tool_input.old_string | count_done)"
+      before="$(flow_field '.tool_input.old_string // ([.tool_input.edits[]?.old_string] | join("\n"))' | count_done)"
     fi
     after="$(printf '%s\n' "$new_text" | count_done)"
     if [ "${after:-0}" -gt "${before:-0}" ]; then
