@@ -34,7 +34,7 @@ while IFS= read -r seg; do
   rest="$(sed -E "s/^$gopts[[:space:]]+push//" <<<"$seg")"
   grep -Eq '(^|[[:space:]])(--force|-[A-Za-z]*f[A-Za-z]*([[:space:]]|$))|(^|[[:space:]:])\+[^[:space:]]' <<<"$rest" || continue
   force_push=1
-  grep -Eq '[[:space:]:+](main|master)([[:space:]]|$)' <<<"$rest" && force_main=1
+  grep -Eq '([[:space:]:+]|refs/heads/)(main|master)([[:space:]]|$)' <<<"$rest" && force_main=1
 done < <(grep -Eo "$gopts[[:space:]]+push([[:space:]][^;&|]*)?" <<<"$cmd" || true)
 if [ -n "$force_main" ]; then
   pre_decide deny "flow guard: force-push to main/master is blocked. Push a branch and open a PR."
