@@ -75,6 +75,15 @@ flow_field() {
   jq -r "$1 // empty" <<<"$FLOW_INPUT"
 }
 
+# flow_edit_file: the file an edit tool call writes. Built-ins give file_path or notebook_path;
+# MCP writers (serena) give relative_path, relative to the project root.
+flow_edit_file() {
+  local f
+  f="$(flow_field '.tool_input.file_path // .tool_input.notebook_path')"
+  [ -n "$f" ] || { f="$(flow_field .tool_input.relative_path)"; [ -z "$f" ] || f="$FLOW_ROOT/$f"; }
+  printf '%s' "$f"
+}
+
 # flow_norm <path>: resolve ., .. and // as a string (the file may not exist). A relative
 # path that climbs above its start keeps its leading ..; an absolute one stops at /.
 flow_norm() {

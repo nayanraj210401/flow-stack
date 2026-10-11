@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PreToolUse · PostToolUse (Edit|Write|MultiEdit|NotebookEdit): file holds between live Claude sessions.
+# PreToolUse · PostToolUse (Edit|Write|MultiEdit|NotebookEdit, MCP writers): file holds between live Claude sessions.
 # The first session on a flow task to edit a repo file holds it (roots.sh: flow_hold_file, flow_held).
 # Another live session on another task that edits it is warned once (soft, the default) or denied
 # (`"holds": "hard"` in config.json), with who holds it and how to reach them, and its band shows ⚡
@@ -8,7 +8,7 @@
 . "$(dirname "$0")/lib.sh"
 flow_init holds
 [ -n "$FLOW_TASK_DIR" ] && flow_enabled holds || exit 0
-file="$(flow_field '.tool_input.file_path // .tool_input.notebook_path')"
+file="$(flow_edit_file)"
 [ -n "$file" ] || exit 0
 rel="$(flow_rel "$file")"
 case "$rel" in /*|.flow/*|"") exit 0 ;; esac
