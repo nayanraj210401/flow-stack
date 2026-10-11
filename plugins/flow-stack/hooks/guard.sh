@@ -139,7 +139,13 @@ if [ -n "$FLOW_TASK_DIR" ] && flow_tdd && [ "$TDD_PHASE" = green ] && flow_enabl
             *) if [ "$script" = next ] || [ -z "$script" ]; then script=done; else targets="$targets"$'\n'"$a"; fi ;;
           esac
         done ;;
-      git) case "${2:-}" in checkout|restore|rm) shift 2; targets="$targets"$'\n'"$(printf '%s\n' "$@")" ;; esac ;;
+      git) case "${2:-}" in
+        restore|rm) shift 2; targets="$targets"$'\n'"$(printf '%s\n' "$@")" ;;
+        checkout) shift 2 # paths only: what follows --, else operands that exist (not branch names)
+          if [[ " $* " == *" -- "* ]]; then targets="$targets"$'\n'"$(printf '%s\n' "$@" | awk 'f; $0 == "--" {f = 1}')"
+          else for a in "$@"; do a="${a//[\"\']/}"; case "$a" in /*) ;; *) a="$FLOW_CWD/$a" ;; esac
+            [ -e "$a" ] && targets="$targets"$'\n'"$a"; done; fi ;;
+      esac ;;
     esac
   done < <(tr ';&|(){}' '\n' <<<"$cmd")
   while IFS= read -r t; do
