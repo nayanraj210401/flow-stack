@@ -28,7 +28,15 @@ while IFS= read -r seg; do
     pre_decide ask "flow guard: recursive rm on an unguarded variable ('$seg'). If it's empty or points elsewhere, this deletes the wrong tree. Check it first, then guard it: rm -rf \"\${VAR:?}\"."
   fi
 done < <(grep -Eo '(^|[;&|(`[:space:]])rm[[:space:]][^;&|]*' <<<"$cmd" || true)
-if has 'git[[:space:]]+push[^;&|]*(--force|[[:space:]]-f([[:space:]]|$))[^;&|]*[[:space:]:+](main|master)([[:space:]]|$)'; then
+gopts='git([[:space:]]+(-[cC][[:space:]]+[^[:space:];&|]+|-[^[:space:];&|]+))*'
+force_push="" force_main=""
+while IFS= read -r seg; do
+  rest="$(sed -E "s/^$gopts[[:space:]]+push//" <<<"$seg")"
+  grep -Eq '(^|[[:space:]])(--force|-[A-Za-z]*f[A-Za-z]*([[:space:]]|$))|(^|[[:space:]:])\+[^[:space:]]' <<<"$rest" || continue
+  force_push=1
+  grep -Eq '([[:space:]:+]|refs/heads/)(main|master)([[:space:]]|$)' <<<"$rest" && force_main=1
+done < <(grep -Eo "$gopts[[:space:]]+push([[:space:]][^;&|]*)?" <<<"$cmd" || true)
+if [ -n "$force_main" ]; then
   pre_decide deny "flow guard: force-push to main/master is blocked. Push a branch and open a PR."
 fi
 if has '(^|[;&|[:space:]])(cat|less|more|head|tail|bat|strings|xxd)[[:space:]][^;&|]*\.env(\.[a-z]+)?([[:space:]]|$)' && ! has '\.env\.(example|sample|template)'; then
@@ -168,7 +176,7 @@ if grep -Eiq "$lead"'[[:space:]]*["'"'"']?(git[[:space:]]+push|gh[[:space:]]+(pr
 fi
 
 # 5. Built-in escalations: reversible only with effort, so the human decides.
-if has 'git[[:space:]]+push[^;&|]*(--force|[[:space:]]-f([[:space:]]|$))'; then
+if [ -n "$force_push" ]; then
   pre_decide ask "flow guard: force-push rewrites remote history."
 fi
 if has 'git[[:space:]]+(reset[[:space:]]+--hard|clean[[:space:]]+-[a-z]*f)'; then
