@@ -39,10 +39,10 @@
 #                                     log it to DECISIONS.tsv. The /flow-pane's buttons and the herdr
 #                                     decide popup call this; the guard hook keeps the agent off it.
 #
-#   task.sh join <slug>               in a worktree: become a worker lane of <slug> (workers of a
+#   task.sh join <slug>               in a worktree: become a worker lane of <slug> (subagents of the main checkout or a
 #                                     lead worktree join on their first hook; this is the fallback)
 #
-# A linked git worktree is a lane of the main checkout's task (a delegate worker): the task
+# A linked git worktree holding a flow-lane is a lane (a delegate worker): the task
 # folder is read-only there, close, slice, and accept are refused, and proofs read the lane's
 # own evidence and trail (.flow/tasks/<slug>/lanes/<lane>/). new or switch in a worktree makes
 # it a lead of its own task instead (<git-dir>/flow-active); one checkout leads a task at a time.
@@ -226,7 +226,7 @@ case "$cmd" in
     point_repos "$d" "$slug"
     echo "$d"
     ;;
-  join) # join <slug>: make this worktree a worker lane of <slug> (the hook auto-joins workers of a lead)
+  join) # join <slug>: make this worktree a worker lane of <slug> (the hook auto-joins subagents of main or a lead)
     s="${1:-}"; [[ "$s" =~ ^[a-z0-9][a-z0-9-]*$ ]] && [ -n "$gd" ] && [ -d "$flow/tasks/$s" ] || die "usage: task.sh join <slug> (in a worktree; the task must exist)"
     [ ! -s "$gd/flow-active" ] || die "this worktree leads '$(head -n1 "$gd/flow-active")'; close it before joining another task"
     printf '%s\n' "$s" >"$gd/flow-lane"; echo "joined: $s" ;;
