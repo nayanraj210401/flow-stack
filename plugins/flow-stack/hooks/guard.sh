@@ -154,10 +154,16 @@ if [ -n "$FLOW_TASK_DIR" ] && flow_tdd && [ "$TDD_PHASE" = green ] && flow_enabl
         done ;;
       git) case "${2:-}" in
         restore|rm) shift 2; targets="$targets"$'\n'"$(printf '%s\n' "$@")" ;;
-        checkout) shift 2 # paths only: what follows --, else operands that exist (not branch names)
-          if [[ " $* " == *" -- "* ]]; then targets="$targets"$'\n'"$(printf '%s\n' "$@" | awk 'f; $0 == "--" {f = 1}')"
-          else for a in "$@"; do a="${a//[\"\']/}"; case "$a" in /*) ;; *) a="$FLOW_CWD/$a" ;; esac
-            [ -e "$a" ] && targets="$targets"$'\n'"$a"; done; fi ;;
+        checkout) shift 2; skip="" dd="" # paths, not refs or the branch -b/-B/--orphan creates
+          for a in "$@"; do
+            a="${a//[\"\']/}"
+            if [ -n "$dd" ]; then targets="$targets"$'\n'"$a"; continue; fi
+            case "$a" in --) dd=1; continue ;; -b|-B|--orphan) skip=1; continue ;; -*) continue ;; esac
+            [ -z "$skip" ] || { skip=""; continue; }
+            git -C "$FLOW_CWD" rev-parse -q --verify "$a^{commit}" >/dev/null 2>&1 ||
+              [ -n "$(git -C "$FLOW_CWD" for-each-ref --count=1 "refs/remotes/*/$a" 2>/dev/null)" ] ||
+              targets="$targets"$'\n'"$a"
+          done ;;
       esac ;;
     esac
   done < <(tr ';&|(){}' '\n' <<<"$cmd")

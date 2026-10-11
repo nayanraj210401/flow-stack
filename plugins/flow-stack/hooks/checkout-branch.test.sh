@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # checkout-branch.test.sh: in TDD green, guard.sh locks tests against `git checkout <path>` but
 # lets `git checkout <branch>` through, even when the branch name looks like a test path (#64).
+# Operands that are refs, or new branch names, are not paths; everything else is.
 set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)"
 FAILS=0
@@ -18,6 +19,7 @@ printf '# Intent\n## Goal\ng\n' > .flow/tasks/x/INTENT.md
 printf '## S1 a\nstatus: doing\nfence: src/** tests/**\n' > .flow/tasks/x/SLICES.md
 echo 'echo ok' > tests/a.test.sh
 git add -A && git commit -qm i
+git branch feature/tests/x; git branch feat/base
 echo 'S1 green 1' > .flow/tasks/x/TDD
 
 decide() {
@@ -35,13 +37,17 @@ echo "-- switching branches passes"
 expect allow 'git checkout main'
 expect allow 'git checkout feature/tests/x'
 expect allow 'git checkout -b tests/x'
-expect allow 'git checkout -b feat/a.test.sh origin/feat/a.test.sh'
+expect allow 'git checkout -b feat/a.test.sh feat/base'
+expect allow 'git checkout -B tests/y'
 echo "-- writing a test through checkout/restore is denied"
 expect deny 'git checkout -- tests/a.test.sh'
 expect deny 'git checkout HEAD -- tests/a.test.sh'
 expect deny 'git checkout tests/a.test.sh'
 expect deny 'git checkout HEAD tests/a.test.sh'
 expect deny 'git restore tests/a.test.sh'
+expect deny "git checkout main 'tests/*.test.sh'"
+expect deny 'git checkout HEAD tests/gone.test.sh'
+expect deny 'cd src && git checkout HEAD tests/a.test.sh'
 
 [ "$FAILS" -eq 0 ] && { echo "== checkout-branch · PASS"; exit 0; }
 echo "== checkout-branch · FAIL ($FAILS)"; exit 1
