@@ -108,10 +108,10 @@ if [ "$code" -ne 0 ]; then verdict=TEETH; else verdict=TOOTHLESS; fi
 if [ -n "$ev" ]; then
   mkdir -p "$(dirname "$ev")"
   {
-    printf '### %s · probe:%s · %s · exit=%s\n' "$(date -u +%FT%TZ)" "$label" "$verdict" "$code"
-    printf -- '- cmd (on %s source): `%s`\n' "$mode" "$check"
-    printf -- '- %s: %s\n' "$mode" "$(printf '%s ' "${reverted[@]#* }")"
-    [ -z "$note" ] || printf -- '- note: %s\n' "$note"
+    printf '### %s · probe:%s · %s · exit=%s\n' "$(date -u +%FT%TZ)" "${label//$'\n'/ ⏎ }" "$verdict" "$code"
+    printf -- '- cmd (on %s source): `%s`\n' "$mode" "${check//$'\n'/ ⏎ }"
+    printf -- '- %s: %s\n' "$mode" "$(printf '%s ' "${reverted[@]#* }" | tr '\n' ' ')"
+    [ -z "$note" ] || printf -- '- note: %s\n' "${note//$'\n'/ ⏎ }"
     printf '\n'
   } >>"$ev"
 fi
