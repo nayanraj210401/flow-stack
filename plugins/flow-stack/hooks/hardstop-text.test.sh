@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # hardstop-text.test.sh: guard.sh's recursive-rm and force-push stops judge commands, not text.
-# Quoted strings, commit messages and heredoc bodies that name them pass; real invocations,
-# wrapped or after a heredoc, are still stopped (#74).
+# Only literal text is skipped: terminated heredoc bodies, and the quoted messages and echo/printf
+# words that can't run (no $( or backticks, not piped). Every invocation is still stopped (#74).
 set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)"
 FAILS=0
@@ -49,6 +49,22 @@ expect deny 'GIT_TRACE=1 git push -f origin main'
 expect deny "sh -c 'git push --force origin main'"
 expect deny $'cat > n.md <<EOF\nhi\nEOF\ngit push -f origin main'
 expect ask 'git push -f origin feat/x'
+expect deny '{ rm -rf /; }'
+expect deny 'timeout 5 rm -rf /'
+expect deny 'nice rm -rf ~'
+expect deny 'find . -exec rm -rf / \;'
+expect deny 'case x in x) rm -rf /;; esac'
+expect deny 'timeout 9 git push -f origin main'
+expect deny 'git push -f origin "main"'
+expect deny 'echo rm -rf / | sh'
+expect deny 'echo "$(rm -rf /)"'
+expect deny $'cat <<EOF\n$(rm -rf /)\nEOF'
+expect deny 'git commit -m "$(rm -rf /)"'
+echo "-- << that starts no heredoc hides nothing"
+expect deny $'echo $((1<<n))\nrm -rf /'
+expect deny $'grep x <<<EOF\nrm -rf /'
+expect deny $'git commit -m \'see <<EOF\'\nrm -rf /'
+expect deny $'echo $((1<<n))\ngit push -f origin main'
 
 [ "$FAILS" -eq 0 ] && { echo "== hardstop-text · PASS"; exit 0; }
 echo "== hardstop-text · FAIL ($FAILS)"; exit 1
