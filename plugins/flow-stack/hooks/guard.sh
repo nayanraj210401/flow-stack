@@ -39,9 +39,16 @@ done < <(grep -Eo "$gopts[[:space:]]+push([[:space:]][^;&|]*)?" <<<"$cmd" || tru
 if [ -n "$force_main" ]; then
   pre_decide deny "flow guard: force-push to main/master is blocked. Push a branch and open a PR."
 fi
-if has '(^|[;&|[:space:]])(cat|less|more|head|tail|bat|strings|xxd)[[:space:]][^;&|]*\.env(\.[a-z]+)?([[:space:]]|$)' && ! has '\.env\.(example|sample|template)'; then
-  pre_decide deny "flow guard: reading .env files puts secrets in the transcript. Read .env.example or ask the user which variable matters."
-fi
+# Judge each argument of a reader on its own: quotes and dirs stripped, the example/sample/template
+# names exempt per path, so a second .env.example arg doesn't waive the check.
+while IFS= read -r seg; do
+  set -f; set -- $seg; set +f
+  for a in "$@"; do
+    a="${a//[\"\']/}"; a="${a%%[<>]*}"; a="${a##*/}"
+    grep -Eiq '^\.env(\.[A-Za-z0-9_.-]+)?$' <<<"$a" && ! grep -Eiq '^\.env\.(example|sample|template)$' <<<"$a" &&
+      pre_decide deny "flow guard: reading .env files puts secrets in the transcript. Read .env.example or ask the user which variable matters."
+  done
+done < <(grep -Eio '(^|[;&|[:space:]])(cat|less|more|head|tail|bat|strings|xxd)[[:space:]][^;&|]*' <<<"$cmd" || true)
 
 # Gates are the human's: the /flow-pane decides them through task.sh gate, never the agent.
 # A speed bump, not a boundary: an agent could still edit GATES.md by hand.
