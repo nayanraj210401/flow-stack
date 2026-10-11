@@ -30,7 +30,7 @@ for id in S1 C1; do
   { [ "$rc" = 2 ] && [ "$(teeth "$id")" = 0 ]; } && ok "$id false: refused" || bad "$id false: rc=$rc, TEETH recorded $(teeth "$id")x"
 done
 "$PROBE" S9 false >/dev/null 2>&1; rc=$?
-[ "$rc" = 2 ] && ok "undeclared S9: refused" || bad "undeclared S9: rc=$rc"
+[ "$rc" != 2 ] && ok "undeclared S9: runs (no check to hold it to)" || bad "undeclared S9: refused"
 
 echo "-- the declared check runs"
 for id in S1 C1; do
