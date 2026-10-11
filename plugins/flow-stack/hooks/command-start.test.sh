@@ -32,7 +32,9 @@ want() { # want <allow|deny> <command>
 echo "-- outward commands behind a prefix still wait"
 for c in "git push origin feat" "FOO=1 git push origin feat" "FOO=1 BAR=2 gh pr create --title x" "git -C . push origin feat" \
          "git -c k=v push origin feat" "gh -R a/b pr create --title x" "gh --repo a/b pr merge 3" "npm --prefix x publish" \
-         "FOO=1 npm publish" "if true; then git push origin feat; fi" "! git push origin feat"; do
+         "FOO=1 npm publish" "if true; then git push origin feat; fi" "! git push origin feat" \
+         "if true; then git push; fi" "git push;" "(git push)" "git push|cat" "npm publish; echo" "gh pr create;" "(gh pr create)" \
+         "gh pr ready; true" "FOO='a b' gh pr create --title x" 'FOO="a b" git push origin feat'; do
   want deny "$c"
 done
 
