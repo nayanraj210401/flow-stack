@@ -16,14 +16,14 @@ cmd="$(flow_field .tool_input.command)"
 
 has() { grep -Eiq -- "$1" <<<"$cmd"; }
 
-# 1. Built-in hard stops.
-if has 'rm[[:space:]]+-[a-z]*(rf|fr)[a-z]*[[:space:]]+(/|~|\$HOME)/?\*?([[:space:]]|$)'; then
-  pre_decide deny "flow guard: recursive delete of / or home is never allowed."
-fi
+# 1. Built-in hard stops: recursive delete of / or home, in any flag spelling.
 # 1b. Recursive delete of an unguarded variable: empty or wrong, it hits the wrong tree.
 #     ${VAR:?} aborts instead of expanding to nothing, so guarded targets pass.
 while IFS= read -r seg; do
   grep -Eq '[[:space:]](-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)([[:space:]]|$)' <<<"$seg" || continue
+  if grep -Eq "[[:space:]][\"']?(/|~|\\\$HOME|\\\$\{HOME\})/?\*?[\"']?([[:space:]]|\$)" <<<"$seg"; then
+    pre_decide deny "flow guard: recursive delete of / or home is never allowed."
+  fi
   if sed -E 's/\$\{[A-Za-z_0-9]+:\?[^}]*\}//g' <<<"$seg" | grep -Eq '\$\{?[A-Za-z_0-9@*]'; then
     pre_decide ask "flow guard: recursive rm on an unguarded variable ('$seg'). If it's empty or points elsewhere, this deletes the wrong tree. Check it first, then guard it: rm -rf \"\${VAR:?}\"."
   fi
