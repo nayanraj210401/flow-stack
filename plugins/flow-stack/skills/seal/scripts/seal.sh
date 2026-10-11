@@ -15,9 +15,12 @@ root="$FLOW_ROOT"
 [ -n "$FLOW_TASK" ] || { echo "seal.sh: no active task" >&2; exit 2; }
 seals="$FLOW_TASK_DIR/SEALS"
 # SEALS names a file repo-relative in the task's home repo, "<repo>:<path>" in any other task repo.
+# This repo's own entries resolve in this checkout ($FLOW_ROOT, a lead worktree included), the file add hashed.
 abs_of() {
   local q="$1" n="${1%%:*}" p
-  if [ "$n" != "$q" ] && p="$(flow_repo_path "$n")" && [ -n "$p" ]; then printf '%s/%s' "$p" "${q#*:}"
+  if [ "$n" != "$q" ] && [ -n "$FLOW_REPO_KEY" ] && [ "$n" = "$FLOW_REPO_KEY" ]; then printf '%s/%s' "$FLOW_ROOT" "${q#*:}"
+  elif [ "$n" != "$q" ] && p="$(flow_repo_path "$n")" && [ -n "$p" ]; then printf '%s/%s' "$p" "${q#*:}"
+  elif [ -z "$FLOW_REPO_KEY" ]; then printf '%s/%s' "$FLOW_ROOT" "$q"
   else printf '%s/%s' "$FLOW_TASK_HOME" "$q"; fi
 }
 case "${1:-}" in add|reseal|rm) [ -z "$FLOW_LANE" ] || { echo "seal.sh: refused in worktree lane '$FLOW_LANE': the task plan is shared; return this to the delegate as a gate" >&2; exit 2; }
