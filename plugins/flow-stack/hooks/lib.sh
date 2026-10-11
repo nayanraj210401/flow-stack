@@ -74,14 +74,38 @@ flow_field() {
   jq -r "$1 // empty" <<<"$FLOW_INPUT"
 }
 
-# Path relative to the repo root; absolute input outside the repo is returned as-is.
+# flow_norm <path>: resolve ., .. and // as a string (the file may not exist). A relative
+# path that climbs above its start keeps its leading ..; an absolute one stops at /.
+flow_norm() {
+  local p="$1" seg out="" abs="" old_ifs="$IFS"
+  local -a stack=()
+  [[ "$p" == /* ]] && abs=/
+  set -f; IFS=/
+  for seg in $p; do
+    case "$seg" in
+      ""|.) ;;
+      ..) if [ "${#stack[@]}" -gt 0 ] && [ "${stack[${#stack[@]}-1]}" != .. ]; then
+            unset "stack[${#stack[@]}-1]"
+          elif [ -z "$abs" ]; then
+            stack[${#stack[@]}]=..
+          fi ;;
+      *) stack[${#stack[@]}]="$seg" ;;
+    esac
+  done
+  set +f; IFS="$old_ifs"
+  for seg in ${stack[@]+"${stack[@]}"}; do out="$out${out:+/}$seg"; done
+  printf '%s' "$abs$out"
+}
+
+# Path relative to the repo root, dot segments resolved; absolute input outside the repo is returned as-is.
+# A path that climbs above the root stays as ../... and so matches no fence.
 flow_rel() {
-  local p="$1"
+  local p
+  p="$(flow_norm "$1")"
   case "$p" in
     "$FLOW_DIR"/*) printf '.flow/%s' "${p#"$FLOW_DIR"/}" ;;
     "$FLOW_ROOT"/*) printf '%s' "${p#"$FLOW_ROOT"/}" ;;
-    /*) printf '%s' "$p" ;;
-    *) printf '%s' "${p#./}" ;;
+    *) printf '%s' "$p" ;;
   esac
 }
 

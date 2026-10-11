@@ -13,7 +13,8 @@ rel="$(flow_rel "$file")"
 # task's home .flow/) is judged as that repo's file, not waved through as "outside".
 erepo="$FLOW_REPO"; ekey="$FLOW_REPO_KEY"; epath="$FLOW_MAIN"
 case "$rel" in
-  /*) while IFS=$'\t' read -r n p; do
+  /*) file="$rel"
+      while IFS=$'\t' read -r n p; do
         [ -n "$p" ] || continue
         case "$file" in "$p"/*)
           rel="${file#"$p"/}"; erepo="$n"; epath="$p"
