@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# PreToolUse(Edit|Write|MultiEdit|NotebookEdit): sealed checks need the
+# PreToolUse(Edit|Write|MultiEdit|NotebookEdit, MCP writers like serena's): sealed checks need the
 # human; edits outside the current slice's fence must be widened on purpose;
 # under an opt-in TDD lock, red edits only tests and green edits only code.
 . "$(dirname "$0")/lib.sh"
 flow_init edit-guard
 [ -n "$FLOW_TASK_DIR" ] || exit 0
 
-file="$(flow_field '.tool_input.file_path // .tool_input.notebook_path')"
+file="$(flow_edit_file)"
 [ -n "$file" ] || exit 0
 rel="$(flow_rel "$file")"
 # The repo the file belongs to. In a multi-repo task a file in another task repo (or the
@@ -35,12 +35,23 @@ case "$rel" in
     # "done" goes through the proof gate (task.sh slice <id> done), never a direct edit.
     count_done() { grep -Ec '^status:[[:space:]]+done([[:space:]]|$)' 2>/dev/null || true; }
     cur="$epath/$rel"; [ -f "$cur" ] || cur=/dev/null
-    after="$(jq -r --rawfile cur "$cur" '
+    # MCP writers in Edit/Write terms; one whose result can't be worked out here is denied.
+    ti=.tool_input
+    case "$(flow_field .tool_name)" in
+      mcp__*__create_text_file) ti='.tool_input | {content}' ;;
+      mcp__*__replace_content)
+        if [ "$(flow_field .tool_input.mode)" = literal ]; then
+          ti='.tool_input | {edits: [{old_string: .needle, new_string: .repl, replace_all: .allow_multiple_occurrences}]}'
+        else ti=""; fi ;;
+      mcp__*) ti="" ;;
+    esac
+    [ -n "$ti" ] || pre_decide deny "flow gate: edit SLICES.md with Edit or Write (or a literal replace_content), so the hook can check it never marks a slice done by hand."
+    after="$(jq -r --rawfile cur "$cur" "$ti"' | 
       def sub1($e): ($e.old_string // "") as $o | if $o == "" then . else
         (split($o)) as $p | if ($p | length) < 2 then .
         elif $e.replace_all == true then $p | join($e.new_string // "")
         else $p[0] + ($e.new_string // "") + ($p[1:] | join($o)) end end;
-      .tool_input | if has("content") then .content
+      if has("content") then .content
       else reduce (.edits // [.])[] as $e ($cur; sub1($e)) end' <<<"$FLOW_INPUT" | count_done)"
     before="$(count_done <"$cur")"
     if [ "${after:-0}" -gt "${before:-0}" ]; then

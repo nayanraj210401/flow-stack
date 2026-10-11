@@ -39,9 +39,16 @@ done < <(grep -Eo "$gopts[[:space:]]+push([[:space:]][^;&|]*)?" <<<"$cmd" || tru
 if [ -n "$force_main" ]; then
   pre_decide deny "flow guard: force-push to main/master is blocked. Push a branch and open a PR."
 fi
-if has '(^|[;&|[:space:]])(cat|less|more|head|tail|bat|strings|xxd)[[:space:]][^;&|]*\.env(\.[a-z]+)?([[:space:]]|$)' && ! has '\.env\.(example|sample|template)'; then
-  pre_decide deny "flow guard: reading .env files puts secrets in the transcript. Read .env.example or ask the user which variable matters."
-fi
+# Judge each argument of a reader on its own: quotes and dirs stripped, the example/sample/template
+# names exempt per path, so a second .env.example arg doesn't waive the check.
+while IFS= read -r seg; do
+  set -f; set -- $seg; set +f
+  for a in "$@"; do
+    a="${a//[\"\']/}"; a="${a%%[<>]*}"; a="${a##*/}"
+    grep -Eiq '^\.env(\.[A-Za-z0-9_.-]+)?$' <<<"$a" && ! grep -Eiq '^\.env\.(example|sample|template)$' <<<"$a" &&
+      pre_decide deny "flow guard: reading .env files puts secrets in the transcript. Read .env.example or ask the user which variable matters."
+  done
+done < <(grep -Eio '(^|[;&|[:space:]])(cat|less|more|head|tail|bat|strings|xxd)[[:space:]][^;&|]*' <<<"$cmd" || true)
 
 # Gates are the human's: the /flow-pane decides them through task.sh gate, never the agent.
 # A speed bump, not a boundary: an agent could still edit GATES.md by hand.
@@ -49,8 +56,39 @@ if has 'task\.sh[[:space:]]+gate([[:space:]]|$)'; then
   pre_decide deny "flow guard: gates are the human's to decide (the /flow-pane's buttons). Ask, or leave it in GATES.md."
 fi
 
+# Paths as the shell resolves them, for the blind and seal checks below: after `cd <dir>`, each
+# word also appears absolute and repo-relative, so `cd tests && echo x > a.test.sh` still names
+# tests/a.test.sh. Words under .flow/tasks are always resolved, so their globs can be matched.
+paths="" blind_glob=""
+if has '(^|[;&|(])[[:space:]]*(cd|pushd)[[:space:]]|\.flow/tasks/'; then
+  dir="$FLOW_CWD" cded=""
+  while IFS= read -r seg; do
+    set -f; set -- $seg; set +f
+    if [ "${1:-}" = cd ] || [ "${1:-}" = pushd ]; then
+      shift; while [ "${1:-}" = -- ] || [[ "${1:-}" == -[LPe@] ]]; do shift; done
+      a="${1//[\"\']/}"
+      case "$a" in ""|-|\~*|*\$*) ;; /*) dir="$(flow_norm "$a")"; cded=1 ;; *) dir="$(flow_norm "$dir/$a")"; cded=1 ;; esac
+      continue
+    fi
+    for w in "$@"; do
+      w="${w//[\"\']/}"; [[ "$w" =~ ^[0-9\&]*[\<\>]+(.*) ]] && w="${BASH_REMATCH[1]}"
+      case "$w" in ""|-*|*\$*) continue ;; esac
+      [ -n "$cded" ] || [[ "$w" == *.flow/tasks/* ]] || continue
+      case "$w" in /*) p="$(flow_norm "$w")" ;; *) p="$(flow_norm "$dir/$w")" ;; esac
+      r="$(flow_rel "$p")"; paths="$paths"$'\n'"$p"$'\n'"$r"
+      # .flow/tasks/<task>/<seg>/...: <seg> that is, or globs to, "blind" reaches the blind checks.
+      if [[ "$r" == .flow/tasks/*/* ]]; then
+        s="${r#.flow/tasks/*/}"; s="${s%%/*}"
+        # shellcheck disable=SC2053
+        [[ blind == $s ]] && blind_glob=1
+      fi
+    done
+  done < <(tr ';&|(){}' '\n' <<<"$cmd")
+fi
+
 # 2. Blind checks: only blind-run.sh may touch them.
-if has '\.flow/tasks/[^/[:space:]]+/blind' && ! has 'blind-run\.sh'; then
+if { has '\.flow/tasks/[^/[:space:]]+/blind' || [ -n "$blind_glob" ] ||
+     grep -Eq '\.flow/tasks/[^/[:space:]]+/blind' <<<"$paths"; } && ! has 'blind-run\.sh'; then
   pre_decide deny "flow guard: blind checks are held out from the builder. Run them only via verify's scripts/blind-run.sh."
 fi
 
@@ -73,7 +111,7 @@ if [ -n "$FLOW_TASK_DIR" ] && [ -f "$FLOW_TASK_DIR/SEALS" ]; then
       [ -z "$FLOW_REPO_KEY" ] && own=1
     fi
     for needle in "$base/$rest" ${own:+"$rest"}; do
-      if grep -Fq -- "$needle" <<<"$cmd" && has '(sed[[:space:]]+-i|perl[[:space:]]+-p?i|>[^&]|tee|mv|rm|cp|truncate|git[[:space:]]+(checkout|restore|rm))'; then
+      if grep -Fq -- "$needle" <<<"$cmd$paths" && has '(sed[[:space:]]+-i|perl[[:space:]]+-p?i|>[^&]|tee|mv|rm|cp|truncate|git[[:space:]]+(checkout|restore|rm))'; then
         pre_decide ask "flow seal: this command may modify sealed check '$sealed'. Sealed checks change only with the human's approval."
       fi
     done

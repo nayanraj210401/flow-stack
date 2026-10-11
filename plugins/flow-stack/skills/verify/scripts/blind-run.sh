@@ -28,7 +28,7 @@ installed=()
 cleanup() {
   for t in "${installed[@]:-}"; do
     [ -n "$t" ] || continue
-    if [ -f "$backup/${t//\//__}" ]; then mv "$backup/${t//\//__}" "$root/$t"; else rm -f "$root/$t"; fi
+    if [ -f "$backup/$t" ]; then mv "$backup/$t" "$root/$t"; else rm -f "$root/$t"; fi
   done
   rm -rf "$backup"
 }
@@ -38,8 +38,11 @@ while IFS= read -r line; do
   src="$(sed -E 's/^file:[[:space:]]*(.*)[[:space:]]+->[[:space:]]+.*$/\1/' <<<"$line")"
   dst="$(sed -E 's/^.*->[[:space:]]+//' <<<"$line")"
   [ -f "$blind/$src" ] || { echo "blind-run: missing blind/$src" >&2; exit 2; }
+  case "/${dst#./}/" in */../*|//*) echo "blind-run: target must be repo-relative without '..': $dst" >&2; exit 2 ;; esac
   mkdir -p "$(dirname "$root/$dst")"
-  [ -f "$root/$dst" ] && cp "$root/$dst" "$backup/${dst//\//__}"
+  if [ -f "$root/$dst" ]; then
+    { mkdir -p "$(dirname "$backup/$dst")" && cp "$root/$dst" "$backup/$dst"; } || { echo "blind-run: cannot back up $dst" >&2; exit 2; }
+  fi
   cp "$blind/$src" "$root/$dst"
   installed+=("$dst")
 done < <(grep -E '^file:' "$manifest")
