@@ -26,7 +26,7 @@ The single source of truth for file locations and formats. Skills and hooks both
 | `<repo>/.flow/ready.tsv` | ready-for-review ledger: `ts\tsha\tkind\tresult\tnote`, kinds review, deslop, tour, ready, and each `do` id (from `review/scripts/ready.sh`). The repo's own pre-PR gates are `.flow/config.json` `"ready": [{"id": "e2e", "run": "<cmd>"}, {"id": "sec-scan", "do": "<step, e.g. an MCP scan>"}]`: a `run` is checked live, and a `do` needs `ready.sh record <id> done` for HEAD | no |
 | `<repo>/.flow/ACTIVE` | the active task: `<slug>`, or `@<home-repo-path>:<slug>` in a non-home repo of a multi-repo task; line 2 is the owning Claude session's pid (empty: anyone's). While that session lives, other sessions in the checkout have no task | no |
 | `<main>/.git/worktrees/<name>/flow-active` | the task a linked worktree leads (same format as ACTIVE); written by `task.sh new/switch` run in that worktree, removed by its `close` and with the worktree | no |
-| `<main>/.git/worktrees/<name>/flow-lane` | a worker's join: the slug and the lead's root (a worktree lead, not main); written by the worker's first hook | no |
+| `<main>/.git/worktrees/<name>/flow-lane` | a worker's join: the slug and the spawner's root (main or a lead worktree). A worktree without this file or a `flow-active` has no task. Written by a subagent's first hook, or by `task.sh join` | no |
 | `<repo>/.flow/tasks/<slug>/` | task folder | no (trace can export) |
 
 `FLOW_STACK_HOME` overrides `~/.flow-stack`.
