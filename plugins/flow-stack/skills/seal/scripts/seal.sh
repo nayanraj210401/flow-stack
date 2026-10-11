@@ -44,7 +44,7 @@ case "${1:-}" in
     for p in "$@"; do
       while IFS= read -r f; do
         [ -n "$f" ] || continue
-        grep -vF "  $(flow_qual "$f")" "$seals" >"$seals.tmp" || true
+        awk -v q="$(flow_qual "$f")" 'substr($0, 67) != q' "$seals" >"$seals.tmp"
         mv "$seals.tmp" "$seals"
         hash_file "$f" >>"$seals"
         echo "sealed: $(flow_qual "$f")"
