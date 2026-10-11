@@ -22,6 +22,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --keep) keep+=("${2#./}"); shift 2 ;;
     --hollow) [ $# -ge 4 ] || { echo "probe: --hollow needs <file> <old text> <new text>" >&2; exit 2; }
+      case "/${2#./}/" in */../*|//*) echo "probe: --hollow path must be relative to the repo without '..': $2" >&2; exit 2 ;; esac
       hollow+=("${2#./}" "$3" "$4"); shift 4 ;;
     *) echo "probe: unknown arg $1" >&2; exit 2 ;;
   esac
@@ -45,11 +46,12 @@ is_kept() {
 }
 
 stash="$(mktemp -d)"
+stash_copy() { mkdir -p "$(dirname "$stash/$1")" && cp "$1" "$stash/$1"; }
 reverted=()   # entries: "<kind> <path>"  kind = M (tracked modified), A (untracked/new), D (deleted)
 restore() {
   for e in "${reverted[@]:-}"; do
     [ -n "$e" ] || continue
-    kind="${e%% *}"; f="${e#* }"; saved="$stash/${f//\//__}"
+    kind="${e%% *}"; f="${e#* }"; saved="$stash/$f"
     case "$kind" in
       M) cp "$saved" "$f" ;;
       A) mkdir -p "$(dirname "$f")"; mv "$saved" "$f" ;;
@@ -68,7 +70,7 @@ if [ "${#hollow[@]}" -gt 0 ]; then
     [[ -n "$old" && "$c" == *"$old"* ]] || { echo "probe: --hollow text not found in $f" >&2; exit 2; }
     rest="${c#*"$old"}"
     [[ "$rest" != *"$old"* ]] || { echo "probe: --hollow text occurs more than once in $f; quote more of it" >&2; exit 2; }
-    [ -e "$stash/${f//\//__}" ] || { cp "$f" "$stash/${f//\//__}"; reverted+=("M $f"); }
+    [ -e "$stash/$f" ] || { stash_copy "$f" && reverted+=("M $f"); } || { echo "probe: cannot stash $f" >&2; exit 2; }
     printf '%s' "${c%%"$old"*}$new$rest" >"$f"
   done
 else
@@ -78,8 +80,8 @@ while IFS=$'\t' read -r status f; do
   is_kept "$f" && continue
   case "$status" in
     D) git show "HEAD:$f" >"$f" 2>/dev/null && reverted+=("D $f") ;;
-    A) cp "$f" "$stash/${f//\//__}" && rm -f "$f" && reverted+=("A $f") ;;
-    *) cp "$f" "$stash/${f//\//__}" && git show "HEAD:$f" >"$f" && reverted+=("M $f") ;;
+    A) stash_copy "$f" && rm -f "$f" && reverted+=("A $f") ;;
+    *) stash_copy "$f" && git show "HEAD:$f" >"$f" && reverted+=("M $f") ;;
   esac
 done < <(git diff --name-status --no-renames HEAD; git ls-files --others --exclude-standard | awk '{print "A\t" $0}')
 fi
