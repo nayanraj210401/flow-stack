@@ -16,22 +16,24 @@ cmd="$(flow_field .tool_input.command)"
 
 has() { grep -Eiq -- "$1" <<<"$cmd"; }
 
-# Literal text can't run, so the hard stops below skip it: heredoc bodies with a terminator line
-# (an unquoted one only without $( or backticks), and quoted -m/--message/--title/--body values and
-# echo/printf words that have neither and aren't piped on.
+# Literal text can't run, so the hard stops below skip it: the bodies of heredocs fed to cat, tee,
+# git or gh that have a terminator line (an unquoted one only without $( or backticks), and quoted
+# -m/--message/--title/--body values and the words of an echo/printf command that have neither and
+# aren't piped on. A heredoc fed to anything else (bash, ssh …) is code.
 lit="$(perl -e '
   my @l = split /\n/, do { local $/; <STDIN> }, -1; my @o;
   for (my $i = 0; $i < @l; $i++) {
     push @o, $l[$i];
-    next unless $l[$i] =~ /(?:^|\s)<<(-?)[ \t]*(["\x27]?)([A-Za-z_]\w*)\2/;
-    my ($dash, $q, $d) = ($1, $2, $3); my $j = $i + 1;
+    next unless $l[$i] =~ /^(.*?)(?:^|\s)<<(-?)[ \t]*(["\x27]?)([A-Za-z_]\w*)\3/;
+    my ($pre, $dash, $q, $d) = ($1, $2, $3, $4); my $j = $i + 1;
+    next unless ((split /[;&|(]/, " $pre")[-1] // "") =~ /^\s*(?:\w+=\S*\s+)*(?:cat|tee|git|gh)(?:\s|$)/;
     $j++ while $j < @l && $l[$j] !~ ($dash ? qr/^\t*\Q$d\E$/ : qr/^\Q$d\E$/);
     next if $j >= @l || ($q eq "" && join("\n", @l[$i + 1 .. $j - 1]) =~ /\$\(|`/);
     $i = $j;
   }
   $_ = join "\n", @o;
   s/((?:^|\s)(?:-m|--message|--title|--body)(?:\s+|=))(\x27[^\x27]*\x27|"[^"`\$\\]*")/$1\x27\x27/g;
-  s{(^|[\s;&(])(echo|printf)([^;&|\n]*)(\|?)}{ my @m = ($1, $2, $3, $4); $m[3] || $m[2] =~ /\$\(|`/ ? join("", @m) : "$m[0]$m[1]" }ge;
+  s{((?:^|[;&|(])[ \t]*)(echo|printf)([^;&|\n]*)(\|?)}{ my @m = ($1, $2, $3, $4); $m[3] || $m[2] =~ /\$\(|`/ ? join("", @m) : "$m[0]$m[1]" }ge;
   print' <<<"$cmd")"
 
 # 1. Built-in hard stops: recursive delete of / or home, in any flag spelling.
