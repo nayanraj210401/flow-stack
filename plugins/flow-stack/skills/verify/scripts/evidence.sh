@@ -26,6 +26,7 @@ declared() { # declared <C<n>|S<n>>: the command the active task gives for that 
   esac 2>/dev/null | head -n1
 }
 
+[[ "$label" =~ ^[A-Za-z0-9._:-]+$ ]] || refuse "label must match [A-Za-z0-9._:-]+ (got a label with other characters)."
 id="${label%%:*}"
 if [ -n "$FLOW_TASK_DIR" ] && [[ "$id" =~ ^[CS][0-9]+$ ]]; then
   want="$(declared "$id")"
@@ -68,12 +69,12 @@ if [ -n "$ev" ]; then
   dirty="$([ -n "$(git -C "$root" status --porcelain 2>/dev/null | grep -v '^?? .flow/' || true)" ] && echo yes || echo no)"
   {
     printf '### %s · %s · %s · exit=%s\n' "$(date -u +%FT%TZ)" "$label" "$verdict" "$code"
-    printf -- '- cmd: `%s`\n' "$check"
+    printf -- '- cmd: `%s`\n' "${check//$'\n'/ ⏎ }"
     [ -n "$FLOW_REPO_KEY" ] && printf -- '- repo: %s\n' "$FLOW_REPO_KEY"
     printf -- '- head: %s  dirty: %s  took: %ss\n' "$head_sha" "$dirty" "$secs"
-    for a in "$@"; do printf -- '- artifact: %s\n' "$a"; done
+    for a in "$@"; do printf -- '- artifact: %s\n' "${a//$'\n'/ ⏎ }"; done
     printf '<details><summary>output (last 40 lines)</summary>\n\n```\n'
-    tail -n 40 "$out"
+    tail -n 40 "$out" | sed 's/^/    /'
     printf '```\n</details>\n\n'
   } >>"$ev"
 else
