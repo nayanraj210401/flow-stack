@@ -16,10 +16,23 @@ cmd="$(flow_field .tool_input.command)"
 
 has() { grep -Eiq -- "$1" <<<"$cmd"; }
 
+# Rules that judge invocations, not text, match $lead on $code: heredoc bodies are dropped, and the
+# command must start a line, follow ; && || | ( ` or if/then/!, VAR=x prefixes, or a wrapper (eval,
+# sh/bash/zsh/dash, command, env, time, nohup, xargs, sudo, exec) with any flags of its own.
+code="$(awk -v q="'" '
+  hd != "" { if ($0 == hd) hd = ""; next }
+  { print
+    if (match($0, "<<-?[ \t]*[\"" q "]?[A-Za-z_][A-Za-z0-9_]*")) {
+      hd = substr($0, RSTART, RLENGTH); sub("<<-?[ \t]*[\"" q "]?", "", hd) } }' <<<"$cmd")"
+lead='(^|[;&|(`]|(^|[;&|(`[:space:]])(eval|command|env|time|nohup|xargs|sudo|exec|(ba|z|da)?sh)([[:space:]][^;&|]*)?[[:space:]])'
+lead="$lead"'[[:space:]]*((if|then|elif|else|do|while|until|!)[[:space:]]+|[A-Za-z_][A-Za-z0-9_]*=([^[:space:]]*|"[^"]*"|'"'"'[^'"'"']*'"'"')[[:space:]]+)*["'"'"']?'
+cend='([[:space:];&|)]|$)'
+
 # 1. Built-in hard stops: recursive delete of / or home, in any flag spelling.
 # 1b. Recursive delete of an unguarded variable: empty or wrong, it hits the wrong tree.
 #     ${VAR:?} aborts instead of expanding to nothing, so guarded targets pass.
 while IFS= read -r seg; do
+  seg="rm ${seg#*rm[[:space:]]}"
   grep -Eq '[[:space:]](-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)([[:space:]]|$)' <<<"$seg" || continue
   if grep -Eq "[[:space:]][\"']?(/|~|\\\$HOME|\\\$\{HOME\})/?\*?[\"']?([[:space:]]|\$)" <<<"$seg"; then
     pre_decide deny "flow guard: recursive delete of / or home is never allowed."
@@ -27,15 +40,15 @@ while IFS= read -r seg; do
   if sed -E 's/\$\{[A-Za-z_0-9]+:\?[^}]*\}//g' <<<"$seg" | grep -Eq '\$\{?[A-Za-z_0-9@*]'; then
     pre_decide ask "flow guard: recursive rm on an unguarded variable ('$seg'). If it's empty or points elsewhere, this deletes the wrong tree. Check it first, then guard it: rm -rf \"\${VAR:?}\"."
   fi
-done < <(grep -Eo '(^|[;&|(`[:space:]])rm[[:space:]][^;&|]*' <<<"$cmd" || true)
+done < <(grep -Eo "${lead}rm[[:space:]][^;&|)\`]*" <<<"$code" || true)
 gopts='git([[:space:]]+(-[cC][[:space:]]+[^[:space:];&|]+|-[^[:space:];&|]+))*'
 force_push="" force_main=""
 while IFS= read -r seg; do
-  rest="$(sed -E "s/^$gopts[[:space:]]+push//" <<<"$seg")"
+  rest="${seg#*push}"
   grep -Eq '(^|[[:space:]])(--force|-[A-Za-z]*f[A-Za-z]*([[:space:]]|$))|(^|[[:space:]:])\+[^[:space:]]' <<<"$rest" || continue
   force_push=1
-  grep -Eq '([[:space:]:+]|refs/heads/)(main|master)([[:space:]]|$)' <<<"$rest" && force_main=1
-done < <(grep -Eo "$gopts[[:space:]]+push([[:space:]][^;&|]*)?" <<<"$cmd" || true)
+  grep -Eq '([[:space:]:+]|refs/heads/)(main|master)["'"'"']?([[:space:]]|$)' <<<"$rest" && force_main=1
+done < <(grep -Eo "$lead$gopts[[:space:]]+push([[:space:]][^;&|)\`]*)?" <<<"$code" || true)
 if [ -n "$force_main" ]; then
   pre_decide deny "flow guard: force-push to main/master is blocked. Push a branch and open a PR."
 fi
@@ -165,18 +178,7 @@ if has 'status:[[:space:]]*done' && ! has 'task\.sh' &&
 fi
 
 # 3c. Ready for review: in a flow-stack repo, a non-draft PR or `gh pr ready` needs ready.sh's stamp for HEAD.
-#     Only a real invocation counts: heredoc bodies are dropped, and gh must start a command:
-#     line start, ; && || | (, if/then/!, VAR=x prefixes, or behind a wrapper (eval, sh/bash/zsh/dash, command, env, time,
-#     nohup, xargs, sudo, exec) with any flags of its own. Case-insensitive: case-insensitive
-#     filesystems run GH as gh. A commit message that mentions it mid-sentence passes.
-code="$(awk -v q="'" '
-  hd != "" { if ($0 == hd) hd = ""; next }
-  { print
-    if (match($0, "<<-?[ \t]*[\"" q "]?[A-Za-z_][A-Za-z0-9_]*")) {
-      hd = substr($0, RSTART, RLENGTH); sub("<<-?[ \t]*[\"" q "]?", "", hd) } }' <<<"$cmd")"
-lead='(^|[;&|(]|(^|[;&|([:space:]])(eval|command|env|time|nohup|xargs|sudo|exec|(ba|z|da)?sh)([[:space:]][^;&|]*)?[[:space:]])'
-lead="$lead"'[[:space:]]*((if|then|elif|else|do|while|until|!)[[:space:]]+|[A-Za-z_][A-Za-z0-9_]*=([^[:space:]]*|"[^"]*"|'"'"'[^'"'"']*'"'"')[[:space:]]+)*["'"'"']?'
-cend='([[:space:];&|)]|$)'
+#     Case-insensitive: case-insensitive filesystems run GH as gh.
 gopt='([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*'
 pr_cmd="$(grep -Ei "$lead"'gh'"$gopt"'[[:space:]]+pr[[:space:]]+(create|ready)'"$cend" <<<"$code" || true)"
 if [ -d "$FLOW_DIR" ] && flow_enabled ready && [ -n "$pr_cmd" ] &&
