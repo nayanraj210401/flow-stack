@@ -9,6 +9,7 @@
 # --hollow instead swaps <old text> (must occur exactly once) for <new text>,
 # e.g. a return value for an empty one ([], '', {}), and records probe:<label>:hollow.
 # A check that passes when the output is empty has no teeth either.
+# A C<n>/S<n> label must be given its declared check, as evidence.sh requires.
 #
 # Kept (not reverted): sealed files, .flow/, --keep paths, and test-looking
 # paths (tests/, test/, spec/, __tests__/, *.test.*, *.spec.*, *_test.*, test_*.py).
@@ -33,6 +34,13 @@ git rev-parse --show-toplevel >/dev/null 2>&1 || { echo "probe: needs a git repo
 cd "$FLOW_ROOT"
 slug="$FLOW_TASK"
 seals="$FLOW_TASK_DIR/SEALS"
+# A C<n>/S<n> label vouches for that declared check, so it runs nothing else (as evidence.sh).
+if [ -n "$FLOW_TASK_DIR" ] && [[ "${label%%:*}" =~ ^[CS][0-9]+$ ]]; then
+  want="$(flow_declared "${label%%:*}")"
+  [ -n "$want" ] && [ "$check" = "$want" ] || {
+    echo "probe: ${label%%:*} is declared as \`${want:-nothing}\` in task $FLOW_TASK; probe that command, or use a free label." >&2
+    echo "flow-probe: REFUSED"; exit 2; }
+fi
 ev=""
 [ -n "$FLOW_TASK_DIR" ] && ev="$(flow_state_dir "$FLOW_TASK_DIR")/EVIDENCE.md"
 

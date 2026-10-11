@@ -170,6 +170,14 @@ flow_owners() {
   done
 }
 
+# flow_declared <C<n>|S<n>>: the command the active task declares for that check (INTENT.md, SLICES.md check:).
+flow_declared() {
+  case "$1" in
+    C*) sed -nE "s/^- \[.\] $1 · .* · \`(.*)\`[[:space:]]*\$/\1/p" "$FLOW_TASK_DIR/INTENT.md" ;;
+    S*) awk -v id="$1" '/^## /{on=($2==id)} on&&/^check:/{sub(/^check:[ \t]*/,""); print; exit}' "$FLOW_TASK_DIR/SLICES.md" ;;
+  esac 2>/dev/null | head -n1
+}
+
 # flow_state_dir <task-dir>: where this checkout writes EVIDENCE.md, trail.jsonl, .circuit, HANDOFF.auto.md.
 flow_state_dir() {
   if [ -n "$FLOW_LANE" ]; then printf '%s/lanes/%s%s' "$1" "${FLOW_REPO_KEY:+${FLOW_REPO_KEY}_}" "$FLOW_LANE"; else printf '%s' "$1"; fi

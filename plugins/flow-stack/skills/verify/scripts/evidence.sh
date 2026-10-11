@@ -19,17 +19,11 @@ label="$1"; check="${2-}"; shift; [ $# -eq 0 ] || shift
 . "$(dirname "$0")/../../../hooks/roots.sh"; flow_roots; flow_task
 
 refuse() { echo "evidence.sh: $*" >&2; echo "flow-evidence: REFUSED"; exit 2; }
-declared() { # declared <C<n>|S<n>>: the command the active task gives for that check
-  case "$1" in
-    C*) sed -nE "s/^- \[.\] $1 · .* · \`(.*)\`[[:space:]]*\$/\1/p" "$FLOW_TASK_DIR/INTENT.md" ;;
-    S*) awk -v id="$1" '/^## /{on=($2==id)} on&&/^check:/{sub(/^check:[ \t]*/,""); print; exit}' "$FLOW_TASK_DIR/SLICES.md" ;;
-  esac 2>/dev/null | head -n1
-}
 
 [[ "$label" =~ ^[A-Za-z0-9._:-]+$ ]] || refuse "label must match [A-Za-z0-9._:-]+ (got a label with other characters)."
 id="${label%%:*}"
 if [ -n "$FLOW_TASK_DIR" ] && [[ "$id" =~ ^[CS][0-9]+$ ]]; then
-  want="$(declared "$id")"
+  want="$(flow_declared "$id")"
   [ -n "$want" ] || refuse "$id has no runnable command declared in task $FLOW_TASK. Declare it (INTENT.md \`- [ ] $id · <what> · \\\`<cmd>\\\`\`, or a slice's check:), or use a free label."
   [ -z "$check" ] || [ "$check" = "$want" ] || refuse "$id is declared as \`$want\`. Run \`evidence.sh $label\` with no command, or record this run under another label."
   check="$want"

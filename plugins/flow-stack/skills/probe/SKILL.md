@@ -13,6 +13,7 @@ scripts/probe.sh <label> "<check command>" [--keep <path> …]
 
 - It reverts uncommitted source changes relative to HEAD. It keeps sealed files, `.flow/`, test-looking paths, and any `--keep` paths.
 - It runs the check, restores everything (even on Ctrl-C), and records `probe:<label> · TEETH|TOOTHLESS` in EVIDENCE.md.
+- A `C<n>`/`S<n>` label must be given the command the task declares for it (as evidence.sh); any other command is refused.
 - Exit code 0 means TEETH; 1 means TOOTHLESS.
 
 Use `--keep` for fixtures or helpers the check needs that don't look like tests.
