@@ -73,7 +73,7 @@ if [ -n "$ev" ]; then
     printf -- '- head: %s  dirty: %s  took: %ss\n' "$head_sha" "$dirty" "$secs"
     for a in "$@"; do printf -- '- artifact: %s\n' "$a"; done
     printf '<details><summary>output (last 40 lines)</summary>\n\n```\n'
-    tail -n 40 "$out"
+    tail -n 40 "$out" | sed 's/^/    /'
     printf '```\n</details>\n\n'
   } >>"$ev"
 else
