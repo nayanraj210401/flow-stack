@@ -40,7 +40,7 @@ is_kept() {
   local f="$1" k
   case "$f" in .flow/*|.gitignore) return 0 ;; esac
   [[ "$f" =~ (^|/)(tests?|spec|__tests__)/|[._-](test|spec)\.[a-z]+$|_test\.[a-z]+$|(^|/)test_[^/]*\.py$ ]] && return 0
-  [ -f "$seals" ] && awk -v p="$(flow_qual "$f")" '$2 == p {found=1} END {exit !found}' "$seals" && return 0
+  [ -f "$seals" ] && p="$(flow_qual "$f")" awk '$2 == ENVIRON["p"] {found=1} END {exit !found}' "$seals" && return 0
   for k in "${keep[@]:-}"; do [ -n "$k" ] && [[ "$f" == "$k" || "$f" == "$k"/* ]] && return 0; done
   return 1
 }
