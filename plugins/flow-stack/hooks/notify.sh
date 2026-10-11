@@ -22,7 +22,9 @@ case "$target" in
       flow_roots "$(jq -r '.cwd // empty' <<<"${input:-}" 2>/dev/null)"   # so a repo's hooks.host: false counts
       flow_enabled host && exit 0 ;;
     esac
-    osascript -e "display notification \"${msg//\"/\\\"}\" with title \"flow-stack\"" >/dev/null 2>&1 || flow_warn "osascript failed"
+    # the message goes in as argv, never into the script text, so no quoting can break out
+    osascript -e 'on run argv' -e 'display notification (item 1 of argv) with title "flow-stack"' -e 'end run' "$msg" >/dev/null 2>&1 ||
+      flow_warn "osascript failed"
     ;;
   ntfy:*)
     curl -s --max-time 5 -d "$msg" "${NTFY_SERVER:-https://ntfy.sh}/${target#ntfy:}" >/dev/null 2>&1 || flow_warn "ntfy failed"
