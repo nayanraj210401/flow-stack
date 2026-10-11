@@ -62,7 +62,7 @@ case "$rel" in
 esac
 
 if flow_enabled seal && [ -f "$FLOW_TASK_DIR/SEALS" ]; then
-  if awk -v p="${ekey:+$ekey:}$rel" '$2 == p {found=1} END {exit !found}' "$FLOW_TASK_DIR/SEALS"; then
+  if p="${ekey:+$ekey:}$rel" awk '$2 == ENVIRON["p"] {found=1} END {exit !found}' "$FLOW_TASK_DIR/SEALS"; then
     pre_decide ask "flow seal: '$rel' is a sealed acceptance check for task '$FLOW_TASK'. Changing it changes what 'done' means, so the human approves. If approved, re-seal afterwards."
   fi
 fi

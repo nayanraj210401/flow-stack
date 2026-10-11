@@ -9,6 +9,7 @@
 # --hollow instead swaps <old text> (must occur exactly once) for <new text>,
 # e.g. a return value for an empty one ([], '', {}), and records probe:<label>:hollow.
 # A check that passes when the output is empty has no teeth either.
+# A C<n>/S<n> label with a declared check must be given that check.
 #
 # Kept (not reverted): sealed files, .flow/, --keep paths, and test-looking
 # paths (tests/, test/, spec/, __tests__/, *.test.*, *.spec.*, *_test.*, test_*.py).
@@ -33,6 +34,13 @@ git rev-parse --show-toplevel >/dev/null 2>&1 || { echo "probe: needs a git repo
 cd "$FLOW_ROOT"
 slug="$FLOW_TASK"
 seals="$FLOW_TASK_DIR/SEALS"
+# A C<n>/S<n> label with a declared check vouches for that check, so it runs nothing else.
+if [ -n "$FLOW_TASK_DIR" ] && [[ "${label%%:*}" =~ ^[CS][0-9]+$ ]]; then
+  want="$(flow_declared "${label%%:*}")"
+  [ -z "$want" ] || [ "$check" = "$want" ] || {
+    echo "probe: ${label%%:*} is declared as \`$want\` in task $FLOW_TASK; probe that command, or use a free label." >&2
+    echo "flow-probe: REFUSED"; exit 2; }
+fi
 ev=""
 [ -n "$FLOW_TASK_DIR" ] && ev="$(flow_state_dir "$FLOW_TASK_DIR")/EVIDENCE.md"
 
@@ -40,7 +48,7 @@ is_kept() {
   local f="$1" k
   case "$f" in .flow/*|.gitignore) return 0 ;; esac
   [[ "$f" =~ (^|/)(tests?|spec|__tests__)/|[._-](test|spec)\.[a-z]+$|_test\.[a-z]+$|(^|/)test_[^/]*\.py$ ]] && return 0
-  [ -f "$seals" ] && awk -v p="$(flow_qual "$f")" '$2 == p {found=1} END {exit !found}' "$seals" && return 0
+  [ -f "$seals" ] && p="$(flow_qual "$f")" awk '$2 == ENVIRON["p"] {found=1} END {exit !found}' "$seals" && return 0
   for k in "${keep[@]:-}"; do [ -n "$k" ] && [[ "$f" == "$k" || "$f" == "$k"/* ]] && return 0; done
   return 1
 }

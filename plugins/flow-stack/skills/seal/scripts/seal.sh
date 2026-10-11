@@ -27,7 +27,10 @@ case "${1:-}" in add|reseal|rm) [ -z "$FLOW_LANE" ] || { echo "seal.sh: refused 
  ;; esac
 cd "$root"
 
-hash_file() { shasum -a 256 "$1" | awk -v p="$(flow_qual "$1")" '{print $1 "  " p}'; }
+# Paths reach awk through ENVIRON, never -v, which unescapes backslashes.
+# Hash from stdin: shasum prefixes "\" to the hash of a file whose name has a backslash.
+sha() { shasum -a 256 <"$1" | cut -d' ' -f1; }
+hash_file() { printf '%s  %s\n' "$(sha "$1")" "$(flow_qual "$1")"; }
 
 expand() {
   local p="${1#./}"
@@ -47,7 +50,7 @@ case "${1:-}" in
     for p in "$@"; do
       while IFS= read -r f; do
         [ -n "$f" ] || continue
-        awk -v q="$(flow_qual "$f")" 'substr($0, 67) != q' "$seals" >"$seals.tmp"
+        q="$(flow_qual "$f")" awk 'substr($0, 67) != ENVIRON["q"]' "$seals" >"$seals.tmp"
         mv "$seals.tmp" "$seals"
         hash_file "$f" >>"$seals"
         echo "sealed: $(flow_qual "$f")"
@@ -61,7 +64,7 @@ case "${1:-}" in
       [ -n "$f" ] || continue
       a="$(abs_of "$f")"
       if [ ! -f "$a" ]; then echo "MISSING  $f"; bad=1
-      elif [ "$(shasum -a 256 "$a" | awk '{print $1}')" != "$h" ]; then echo "CHANGED  $f"; bad=1
+      elif [ "$(sha "$a")" != "$h" ]; then echo "CHANGED  $f"; bad=1
       fi
     done <"$seals"
     [ "$bad" = 0 ] && echo "seals intact ($(wc -l <"$seals" | tr -d ' ') files)"
@@ -72,13 +75,13 @@ case "${1:-}" in
     [ -f "$seals" ] || { echo "no seals"; exit 0; }
     awk '{print $2}' "$seals" >"$seals.list"
     : >"$seals"
-    while IFS= read -r f; do a="$(abs_of "$f")"; [ -f "$a" ] && printf '%s  %s\n' "$(shasum -a 256 "$a" | awk '{print $1}')" "$f" >>"$seals"; done <"$seals.list"
+    while IFS= read -r f; do a="$(abs_of "$f")"; [ -f "$a" ] && printf '%s  %s\n' "$(sha "$a")" "$f" >>"$seals"; done <"$seals.list"
     rm -f "$seals.list"
     echo "resealed"
     ;;
   rm)
     [ -n "${2:-}" ] || { echo "usage: seal.sh rm <path>" >&2; exit 2; }
-    line="$(awk -v q="$(flow_qual "${2#./}")" '$2 == q {print; exit}' "$seals" 2>/dev/null || true)"
+    line="$(q="$(flow_qual "${2#./}")" awk '$2 == ENVIRON["q"] {print; exit}' "$seals" 2>/dev/null || true)"
     [ -n "$line" ] || { echo "seal.sh: $(flow_qual "${2#./}") is not sealed (seal.sh list)" >&2; exit 1; }
     grep -vxF "$line" "$seals" >"$seals.tmp" || true
     mv "$seals.tmp" "$seals"; echo "unsealed: $(flow_qual "${2#./}")"

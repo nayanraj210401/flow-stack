@@ -16,6 +16,26 @@ cmd="$(flow_field .tool_input.command)"
 
 has() { grep -Eiq -- "$1" <<<"$cmd"; }
 
+# Literal text can't run, so the hard stops below skip it: the bodies of heredocs fed to cat, tee,
+# git or gh that have a terminator line (an unquoted one only without $( or backticks), and quoted
+# -m/--message/--title/--body values and the words of an echo/printf command that have neither and
+# aren't piped on. A heredoc fed to anything else (bash, ssh …) is code.
+lit="$(perl -e '
+  my @l = split /\n/, do { local $/; <STDIN> }, -1; my @o;
+  for (my $i = 0; $i < @l; $i++) {
+    push @o, $l[$i];
+    next unless $l[$i] =~ /^(.*?)(?:^|\s)<<(-?)[ \t]*(["\x27]?)([A-Za-z_]\w*)\3/;
+    my ($pre, $dash, $q, $d) = ($1, $2, $3, $4); my $j = $i + 1;
+    next unless ((split /[;&|(]/, " $pre")[-1] // "") =~ /^\s*(?:\w+=\S*\s+)*(?:cat|tee|git|gh)(?:\s|$)/;
+    $j++ while $j < @l && $l[$j] !~ ($dash ? qr/^\t*\Q$d\E$/ : qr/^\Q$d\E$/);
+    next if $j >= @l || ($q eq "" && join("\n", @l[$i + 1 .. $j - 1]) =~ /\$\(|`/);
+    $i = $j;
+  }
+  $_ = join "\n", @o;
+  s/((?:^|\s)(?:-m|--message|--title|--body)(?:\s+|=))(\x27[^\x27]*\x27|"[^"`\$\\]*")/$1\x27\x27/g;
+  s{((?:^|[;&|(])[ \t]*)(echo|printf)([^;&|\n]*)(\|?)}{ my @m = ($1, $2, $3, $4); $m[3] || $m[2] =~ /\$\(|`/ ? join("", @m) : "$m[0]$m[1]" }ge;
+  print' <<<"$cmd")"
+
 # 1. Built-in hard stops: recursive delete of / or home, in any flag spelling.
 # 1b. Recursive delete of an unguarded variable: empty or wrong, it hits the wrong tree.
 #     ${VAR:?} aborts instead of expanding to nothing, so guarded targets pass.
@@ -27,15 +47,15 @@ while IFS= read -r seg; do
   if sed -E 's/\$\{[A-Za-z_0-9]+:\?[^}]*\}//g' <<<"$seg" | grep -Eq '\$\{?[A-Za-z_0-9@*]'; then
     pre_decide ask "flow guard: recursive rm on an unguarded variable ('$seg'). If it's empty or points elsewhere, this deletes the wrong tree. Check it first, then guard it: rm -rf \"\${VAR:?}\"."
   fi
-done < <(grep -Eo '(^|[;&|(`[:space:]])rm[[:space:]][^;&|]*' <<<"$cmd" || true)
+done < <(grep -Eo "(^|[;&|(\`[:space:]]|(-c|eval)[[:space:]]+[\"'])rm[[:space:]][^;&|)\`]*" <<<"$lit" || true)
 gopts='git([[:space:]]+(-[cC][[:space:]]+[^[:space:];&|]+|-[^[:space:];&|]+))*'
 force_push="" force_main=""
 while IFS= read -r seg; do
   rest="$(sed -E "s/^$gopts[[:space:]]+push//" <<<"$seg")"
   grep -Eq '(^|[[:space:]])(--force|-[A-Za-z]*f[A-Za-z]*([[:space:]]|$))|(^|[[:space:]:])\+[^[:space:]]' <<<"$rest" || continue
   force_push=1
-  grep -Eq '([[:space:]:+]|refs/heads/)(main|master)([[:space:]]|$)' <<<"$rest" && force_main=1
-done < <(grep -Eo "$gopts[[:space:]]+push([[:space:]][^;&|]*)?" <<<"$cmd" || true)
+  grep -Eq '([[:space:]:+]["'"'"']?|refs/heads/)(main|master)["'"'"']?([[:space:]]|$)' <<<"$rest" && force_main=1
+done < <(grep -Eo "$gopts[[:space:]]+push([[:space:]][^;&|)\`]*)?" <<<"$lit" || true)
 if [ -n "$force_main" ]; then
   pre_decide deny "flow guard: force-push to main/master is blocked. Push a branch and open a PR."
 fi
@@ -139,7 +159,19 @@ if [ -n "$FLOW_TASK_DIR" ] && flow_tdd && [ "$TDD_PHASE" = green ] && flow_enabl
             *) if [ "$script" = next ] || [ -z "$script" ]; then script=done; else targets="$targets"$'\n'"$a"; fi ;;
           esac
         done ;;
-      git) case "${2:-}" in checkout|restore|rm) shift 2; targets="$targets"$'\n'"$(printf '%s\n' "$@")" ;; esac ;;
+      git) case "${2:-}" in
+        restore|rm) shift 2; targets="$targets"$'\n'"$(printf '%s\n' "$@")" ;;
+        checkout) shift 2; skip="" dd="" # paths, not refs or the branch -b/-B/--orphan creates
+          for a in "$@"; do
+            a="${a//[\"\']/}"
+            if [ -n "$dd" ]; then targets="$targets"$'\n'"$a"; continue; fi
+            case "$a" in --) dd=1; continue ;; -b|-B|--orphan) skip=1; continue ;; -*) continue ;; esac
+            [ -z "$skip" ] || { skip=""; continue; }
+            git -C "$FLOW_CWD" rev-parse -q --verify "$a^{commit}" >/dev/null 2>&1 ||
+              [ -n "$(git -C "$FLOW_CWD" for-each-ref --count=1 "refs/remotes/*/$a" 2>/dev/null)" ] ||
+              targets="$targets"$'\n'"$a"
+          done ;;
+      esac ;;
     esac
   done < <(tr ';&|(){}' '\n' <<<"$cmd")
   while IFS= read -r t; do
