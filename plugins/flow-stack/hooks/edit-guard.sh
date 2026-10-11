@@ -32,14 +32,16 @@ case "$rel" in
     exit 0 ;;
   .flow/tasks/*/SLICES.md)
     # "done" goes through the proof gate (task.sh slice <id> done), never a direct edit.
-    count_done() { grep -c '^status: done' 2>/dev/null || true; }
-    new_text="$(flow_field '.tool_input.new_string // .tool_input.content // ([.tool_input.edits[]?.new_string] | join("\n"))')"
-    if [ "$(flow_field .tool_name)" = Write ]; then
-      before="$(count_done <"$epath/$rel")"
-    else
-      before="$(flow_field '.tool_input.old_string // ([.tool_input.edits[]?.old_string] | join("\n"))' | count_done)"
-    fi
-    after="$(printf '%s\n' "$new_text" | count_done)"
+    count_done() { grep -Ec '^status:[[:space:]]+done([[:space:]]|$)' 2>/dev/null || true; }
+    cur="$epath/$rel"; [ -f "$cur" ] || cur=/dev/null
+    after="$(jq -r --rawfile cur "$cur" '
+      def sub1($e): ($e.old_string // "") as $o | if $o == "" then . else
+        (split($o)) as $p | if ($p | length) < 2 then .
+        elif $e.replace_all == true then $p | join($e.new_string // "")
+        else $p[0] + ($e.new_string // "") + ($p[1:] | join($o)) end end;
+      .tool_input | if has("content") then .content
+      else reduce (.edits // [.])[] as $e ($cur; sub1($e)) end' <<<"$FLOW_INPUT" | count_done)"
+    before="$(count_done <"$cur")"
     if [ "${after:-0}" -gt "${before:-0}" ]; then
       pre_decide deny "flow gate: mark a slice done with '../flow/scripts/task.sh slice <id> done' (it checks red-first, green, teeth, and budget), not by editing SLICES.md. Missing proofs: 'task.sh proofs <id>'."
     fi

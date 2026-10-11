@@ -16,7 +16,7 @@ cd "$SB/repo"
 git init -q && git config user.email a@b && git config user.name a
 echo x >.flow/ACTIVE
 printf '# Intent\n## Goal\ng\n' >.flow/tasks/x/INTENT.md
-printf '## S1 a\nstatus: doing\nfence: src/**\n\n## S2 b\nstatus: todo\nfence: src/**\n' >.flow/tasks/x/SLICES.md
+printf '## S1 a\nstatus: doing\nfence: src/**\n\n## S2 b\nstatus: todo\nfence: src/**\n\n## S3 c\nstatus: todo\nfence: src/**\n\n## S4 d\nstatus: done\nfence: src/old\n' >.flow/tasks/x/SLICES.md
 git add -A && git commit -qm i
 SF="$PWD/.flow/tasks/x/SLICES.md"
 
@@ -36,10 +36,18 @@ echo "-- marking a slice done by hand is denied"
 want deny "Edit to done" Edit "$(jq -nc --arg f "$SF" '{file_path:$f, old_string:"status: todo", new_string:"status: done"}')"
 want deny "MultiEdit to done" MultiEdit "$(edits '[{"old_string":"status: todo","new_string":"status: done"}]')"
 want deny "MultiEdit, done in a later edit" MultiEdit "$(edits '[{"old_string":"fence: src/**","new_string":"fence: src/a"},{"old_string":"status: todo","new_string":"status: done"}]')"
+want deny "Edit with the fragment off line start" Edit "$(jq -nc --arg f "$SF" '{file_path:$f, old_string:"doing", new_string:"done"}')"
+want deny "MultiEdit assembling done across edits" MultiEdit "$(edits '[{"old_string":"status: doing","new_string":"status: dXoing"},{"old_string":"Xoing","new_string":"one"}]')"
+want deny "replace_all hides a revert behind a bigger gain" MultiEdit "$(edits '[{"old_string":"todo","new_string":"done","replace_all":true},{"old_string":"status: done\nfence: src/old","new_string":"status: doing\nfence: src/old"}]')"
+want deny "two spaces after the colon" Edit "$(jq -nc --arg f "$SF" '{file_path:$f, old_string:"status: todo", new_string:"status:  done"}')"
+want deny "tab after the colon" Edit "$(jq -nc --arg f "$SF" '{file_path:$f, old_string:"status: todo", new_string:"status:\tdone"}')"
+want deny "Write with a new done slice" Write "$(jq -nc --arg f "$SF" --rawfile c "$SF" '{file_path:$f, content:($c | sub("status: todo"; "status:  done"))}')"
 
 echo "-- other SLICES.md edits stay allowed"
+want allow "Write leaving the file as it was" Write "$(jq -nc --arg f "$SF" --rawfile c "$SF" '{file_path:$f, content:$c}')"
 want allow "Edit another field" Edit "$(jq -nc --arg f "$SF" '{file_path:$f, old_string:"fence: src/**", new_string:"fence: src/a"}')"
 want allow "MultiEdit another field" MultiEdit "$(edits '[{"old_string":"fence: src/**","new_string":"fence: src/a"}]')"
 want allow "MultiEdit leaving a done line as it was" MultiEdit "$(edits '[{"old_string":"status: done","new_string":"status: done"}]')"
+want allow "MultiEdit reopening a done slice" MultiEdit "$(edits '[{"old_string":"status: done","new_string":"status: doing"}]')"
 
 [ "$FAILS" = 0 ] && echo "== slice-done-multiedit · PASS" || { echo "== slice-done-multiedit · FAIL ($FAILS)"; exit 1; }
