@@ -43,6 +43,11 @@ echo 'H1 one' >src/a/b__c.sh; echo 'H2 two' >src/a__b/c.sh
 [ "$(cat src/a/b__c.sh)/$(cat src/a__b/c.sh)" = "H1 one/H2 two" ] && ok "both hollowed files restored" || bad "a hollowed file was lost"
 git checkout -q src
 
+echo "-- --hollow path escaping the repo is refused"
+printf 'USER\n' >"$SB/sib.sh"
+out="$("$P" S5 true --hollow ../sib.sh USER GONE 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] && [ "$(cat "$SB/sib.sh")" = USER ] && ok "../ path refused, file untouched" || bad "../ path was hollowed (rc=$rc)"
+
 echo "-- non-colliding edit still restored"
 echo EDIT >src/calc.sh
 "$P" S4 true >/dev/null 2>&1

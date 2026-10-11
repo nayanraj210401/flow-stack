@@ -22,6 +22,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --keep) keep+=("${2#./}"); shift 2 ;;
     --hollow) [ $# -ge 4 ] || { echo "probe: --hollow needs <file> <old text> <new text>" >&2; exit 2; }
+      case "/${2#./}/" in */../*|//*) echo "probe: --hollow path must be relative to the repo without '..': $2" >&2; exit 2 ;; esac
       hollow+=("${2#./}" "$3" "$4"); shift 4 ;;
     *) echo "probe: unknown arg $1" >&2; exit 2 ;;
   esac
@@ -69,7 +70,7 @@ if [ "${#hollow[@]}" -gt 0 ]; then
     [[ -n "$old" && "$c" == *"$old"* ]] || { echo "probe: --hollow text not found in $f" >&2; exit 2; }
     rest="${c#*"$old"}"
     [[ "$rest" != *"$old"* ]] || { echo "probe: --hollow text occurs more than once in $f; quote more of it" >&2; exit 2; }
-    [ -e "$stash/$f" ] || { stash_copy "$f"; reverted+=("M $f"); }
+    [ -e "$stash/$f" ] || { stash_copy "$f" && reverted+=("M $f"); } || { echo "probe: cannot stash $f" >&2; exit 2; }
     printf '%s' "${c%%"$old"*}$new$rest" >"$f"
   done
 else
