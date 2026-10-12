@@ -120,6 +120,31 @@ if [ -n "$FLOW_TASK_DIR" ] && [ -f "$FLOW_TASK_DIR/SEALS" ]; then
   if has '(SEALS|INTENT\.md)' && has '(sed[[:space:]]+-i|perl[[:space:]]+-p?i|>|tee|mv|rm|cp|truncate)'; then
     pre_decide ask "flow seal: task '$FLOW_TASK' is sealed; this command may change its acceptance contract."
   fi
+  # What the command writes, per segment: redirect targets, and the files of tee/rm/truncate/mv,
+  # the destination of cp, in-place sed/perl files, and git checkout/restore/rm paths. A sealed
+  # check that is only read, run or copied from is not a write.
+  wt="$(grep -Eo '>>?[[:space:]]*[^[:space:];&|<>]+' <<<"$cmd" | sed -E 's/^>>?[[:space:]]*//' || true)"
+  while IFS= read -r seg; do
+    set -f; set -- $seg; set +f
+    case "${1:-}" in sudo|command|env|xargs) shift ;; esac
+    case "${1:-}" in
+      tee|rm|truncate|mv) shift; wt="$wt"$'\n'"$(printf '%s\n' "$@")" ;;
+      cp) [ $# -lt 3 ] || wt="$wt"$'\n'"${@: -1}" ;;
+      sed|perl) printf '%s\n' "$@" | grep -Eq '^-[a-z]*i' && { shift; wt="$wt"$'\n'"$(printf '%s\n' "$@")"; } ;;
+      git) case "${2:-}" in checkout|restore|rm) shift 2; wt="$wt"$'\n'"$(printf '%s\n' "$@")" ;; esac ;;
+    esac
+  done < <(tr ';&|(){}' '\n' <<<"$cmd")
+  wt="${wt//[\"\']/}"
+  writes() { # writes <needle>: is the needle, as named or as a suffix of it, a write target?
+    local t
+    while IFS= read -r t; do
+      [ -n "$t" ] || continue
+      t="${t#./}"
+      case "$1" in *"$t"|*"/$t") return 0 ;; esac
+      case "$t" in *"$1"*) return 0 ;; esac
+    done <<<"$wt"
+    return 1
+  }
   # SEALS names "<path>" (home repo) or "<repo>:<path>"; match the absolute path from anywhere,
   # and the relative path only inside the repo that owns it.
   while read -r _ sealed; do
@@ -131,7 +156,7 @@ if [ -n "$FLOW_TASK_DIR" ] && [ -f "$FLOW_TASK_DIR/SEALS" ]; then
       [ -z "$FLOW_REPO_KEY" ] && own=1
     fi
     for needle in "$base/$rest" ${own:+"$rest"}; do
-      if grep -Fq -- "$needle" <<<"$cmd$paths" && has '(sed[[:space:]]+-i|perl[[:space:]]+-p?i|>[^&]|tee|mv|rm|cp|truncate|git[[:space:]]+(checkout|restore|rm))'; then
+      if grep -Fq -- "$needle" <<<"$cmd$paths" && writes "$needle"; then
         pre_decide ask "flow seal: this command may modify sealed check '$sealed'. Sealed checks change only with the human's approval."
       fi
     done
