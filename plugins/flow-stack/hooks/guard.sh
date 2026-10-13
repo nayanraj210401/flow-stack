@@ -270,7 +270,7 @@ if flow_enabled pkgcheck && command -v curl >/dev/null 2>&1; then
     sub names { my ($args, $eco) = @_; $args =~ s/\d*[<>]+&?\s*\S+//g; my ($skip, @n);
       for (split " ", $args) {
         if ($skip) { $skip = 0; next }
-        if (/^(?:-[rce]|--(?:requirement|constraint|editable|prefix|target|cwd|dir|registry|index-url|extra-index-url))$/) { $skip = 1; next }
+        if (/^(?:-[rceti]|--(?:requirement|constraint|editable|prefix|target|cwd|dir|registry|index-url|extra-index-url|find-links|root|python|workspace))$/) { $skip = 1; next }
         next if /^-/ || /^[.\/~]/ || /:\/\// || ($eco eq "pypi" && (m{/} || /\.(?:txt|toml|whl|in|zip|tar|tgz|gz)$/));
         push @n, "$eco $_";
       } @n }
