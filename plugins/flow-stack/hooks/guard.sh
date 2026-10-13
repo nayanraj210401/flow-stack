@@ -207,7 +207,7 @@ cend='([[:space:];&|)]|$)'
 gopt='([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*'
 pr_cmd="$(grep -Ei "$lead"'gh'"$gopt"'[[:space:]]+pr[[:space:]]+(create|ready)'"$cend" <<<"$code" || true)"
 if [ -d "$FLOW_DIR" ] && flow_enabled ready && [ -n "$pr_cmd" ] &&
-   ! sed -E "s/\"[^\"]*\"//g; s/'[^']*'//g; s/[\"'].*\$//" <<<"$pr_cmd" | grep -Eq '(--draft|--undo|[[:space:]]-d)([[:space:]=]|$)'; then
+   ! sed -E "s/\\\\.//g; s/\"[^\"]*\"//g; s/'[^']*'//g; s/[\"'].*\$//" <<<"$pr_cmd" | grep -Eq '(--draft|--undo|[[:space:]]-d)([[:space:]=]|$)'; then
   ready="$(cd "$(dirname "$0")/../skills/review/scripts" && pwd)/ready.sh"
   if [ "$(cd "$FLOW_ROOT" && "$ready" mode)" != yolo ] && ! (cd "$FLOW_ROOT" && "$ready" stamped); then
     pre_decide deny "flow ready-for-review: HEAD isn't stamped ready. Human review is the expensive step, so run $ready (it lists what's missing), or open a draft PR (--draft) meanwhile. review_gate: yolo in the profile or .flow/config.json turns this off."

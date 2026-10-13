@@ -29,6 +29,9 @@ expect deny  'gh pr create --title "fix -d flag handling" --body x'
 expect deny  "gh pr create --title x --body 'use -d here'"
 expect deny  'gh pr create --title x --body "multi-line with -d
   here"'
+expect deny  'gh pr create --title "a \" -d"'
+expect deny  "gh pr create --title \$'a\\' -d'"
+expect deny  'gh pr create --title fix\ -d'
 expect allow 'gh pr create --draft --title x'
 expect allow 'gh pr create -d --title x'
 expect allow 'gh pr create --title "fix -d" --draft'
