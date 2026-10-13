@@ -46,8 +46,9 @@ expand() {
 case "${1:-}" in
   add)
     shift; [ $# -gt 0 ] || { echo "usage: seal.sh add <path> ..." >&2; exit 2; }
-    touch "$seals"
+    touch "$seals"; rc=0
     for p in "$@"; do
+      [ -e "${p#./}" ] || rc=1
       while IFS= read -r f; do
         [ -n "$f" ] || continue
         q="$(flow_qual "$f")" awk 'substr($0, 67) != ENVIRON["q"]' "$seals" >"$seals.tmp"
@@ -56,6 +57,7 @@ case "${1:-}" in
         echo "sealed: $(flow_qual "$f")"
       done < <(expand "$p")
     done
+    exit "$rc"
     ;;
   verify)
     [ -f "$seals" ] || { echo "no seals"; exit 0; }
