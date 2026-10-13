@@ -73,10 +73,12 @@ mcp_user="$([ -f "$CJ" ] && jq -c '.mcpServers // {} | keys' "$CJ" || echo '[]')
 mcp_project="$([ -f "$CJ" ] && jq -c --arg r "$root" '.projects[$r].mcpServers // {} | keys' "$CJ" || echo '[]')"
 mcp_repo="$(jq -c '.mcpServers // {} | keys' "$root/.mcp.json" 2>/dev/null || echo '[]')"
 
-user_skills="$(ls -d "$C"/skills/*/ 2>/dev/null | xargs -n1 basename 2>/dev/null | jq -R . | jq -sc .)"
-repo_skills="$(ls -d "$root"/.claude/skills/*/ 2>/dev/null | xargs -n1 basename 2>/dev/null | jq -R . | jq -sc .)"
-user_agents="$(ls "$C"/agents/*.md 2>/dev/null | xargs -n1 basename 2>/dev/null | sed 's/\.md$//' | jq -R . | jq -sc .)"
-user_cmds="$(ls "$C"/commands/*.md 2>/dev/null | xargs -n1 basename 2>/dev/null | sed 's/\.md$//' | jq -R . | jq -sc .)"
+# base names of the glob's matches, one per line (names may contain spaces)
+names() { local p; for p in "$@"; do if [ -e "$p" ]; then basename "$p"; fi; done; }
+user_skills="$(names "$C"/skills/*/ | jq -R . | jq -sc .)"
+repo_skills="$(names "$root"/.claude/skills/*/ | jq -R . | jq -sc .)"
+user_agents="$(names "$C"/agents/*.md | sed 's/\.md$//' | jq -R . | jq -sc .)"
+user_cmds="$(names "$C"/commands/*.md | sed 's/\.md$//' | jq -R . | jq -sc .)"
 
 claude_md="$(
   for f in "$C/CLAUDE.md" "$root/CLAUDE.md" "$root/.claude/CLAUDE.md" "$root/AGENTS.md"; do
