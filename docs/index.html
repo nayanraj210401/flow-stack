@@ -4,76 +4,84 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>flow-stack</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%228%22 fill=%22%235b4cf0%22/%3E%3Cpath d=%22M10 16a6 6 0 1 0 2-4.5M10 9v3h3%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.4%22 stroke-linecap=%22round%22/%3E%3C/svg%3E">
+<script>document.documentElement.classList.add("js")</script>
 <meta name="description" content="A Claude Code plugin that makes the agent define done before coding, prove its work with evidence it can't fake, and keep a trail you can audit.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg: #f7f5f0;
-  --bg-2: #efebe3;
+  --bg: #f7f7fb;
+  --bg-2: #eeeef6;
   --surface: #ffffff;
-  --ink: #16140f;
-  --muted: #625d52;
-  --faint: #8d877a;
-  --line: #e0dacd;
-  --accent: #d0541a;
-  --accent-2: #e8a33d;
-  --accent-soft: #fbe8dc;
-  --ok: #2e7d4a;
+  --ink: #121218;
+  --muted: #4f4f5c;
+  --faint: #656573;
+  --line: #e1e1ec;
+  --accent: #5b4cf0;
+  --accent-2: #0891b2;
+  --accent-soft: #ecebfe;
+  --accent-ink: #4334d4;
+  --on-accent: #ffffff;
+  --ok: #1f7a45;
   --bad: #c2410c;
-  --glow: rgba(208, 84, 26, .18);
-  --grid: rgba(22, 20, 15, .05);
-  --term-bg: #15130f;
-  --term-bar: #201d18;
-  --term-ink: #ebe6db;
-  --term-dim: #7f786b;
-  --term-line: #2c2822;
+  --glow: rgba(91, 76, 240, .18);
+  --grid: rgba(18, 18, 24, .05);
+  --term-bg: #0d0d14;
+  --term-bar: #16161f;
+  --term-ink: #e9e9f2;
+  --term-dim: #8a8a9c;
+  --term-line: #262633;
   --term-ok: #7fd49a;
   --term-bad: #ff9a62;
-  --term-acc: #f2b25c;
-  --shadow: 0 30px 80px -30px rgba(40, 25, 10, .35);
+  --term-acc: #b4a8ff;
+  --shadow: 0 30px 80px -30px rgba(30, 20, 90, .35);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0e0d0b;
-    --bg-2: #15130f;
-    --surface: #17150f;
-    --ink: #f1ece2;
-    --muted: #a7a093;
-    --faint: #6f695e;
-    --line: #2a2620;
-    --accent: #ff7a3a;
-    --accent-2: #f5b54d;
-    --accent-soft: #2a1a10;
+    --bg: #0b0b10;
+    --bg-2: #111118;
+    --surface: #15151d;
+    --ink: #ededf3;
+    --muted: #a6a6b5;
+    --faint: #8b8b9b;
+    --line: #262631;
+    --accent: #9b8cff;
+    --accent-2: #5ad1ff;
+    --accent-soft: #1d1a36;
+    --accent-ink: #b4a8ff;
+    --on-accent: #0b0b10;
     --ok: #7fd49a;
     --bad: #ff9a62;
-    --glow: rgba(255, 122, 58, .22);
-    --grid: rgba(241, 236, 226, .04);
-    --term-bg: #0a0908;
-    --term-bar: #14120f;
-    --term-line: #24201b;
+    --glow: rgba(155, 140, 255, .2);
+    --grid: rgba(237, 237, 243, .04);
+    --term-bg: #08080c;
+    --term-bar: #111118;
+    --term-line: #22222c;
     --shadow: 0 30px 80px -30px rgba(0, 0, 0, .8);
   }
 }
 :root[data-theme="dark"] {
-  --bg: #0e0d0b;
-  --bg-2: #15130f;
-  --surface: #17150f;
-  --ink: #f1ece2;
-  --muted: #a7a093;
-  --faint: #6f695e;
-  --line: #2a2620;
-  --accent: #ff7a3a;
-  --accent-2: #f5b54d;
-  --accent-soft: #2a1a10;
+  --bg: #0b0b10;
+  --bg-2: #111118;
+  --surface: #15151d;
+  --ink: #ededf3;
+  --muted: #a6a6b5;
+  --faint: #8b8b9b;
+  --line: #262631;
+  --accent: #9b8cff;
+  --accent-2: #5ad1ff;
+  --accent-soft: #1d1a36;
+  --accent-ink: #b4a8ff;
+  --on-accent: #0b0b10;
   --ok: #7fd49a;
   --bad: #ff9a62;
-  --glow: rgba(255, 122, 58, .22);
-  --grid: rgba(241, 236, 226, .04);
-  --term-bg: #0a0908;
-  --term-bar: #14120f;
-  --term-line: #24201b;
+  --glow: rgba(155, 140, 255, .2);
+  --grid: rgba(237, 237, 243, .04);
+  --term-bg: #08080c;
+  --term-bar: #111118;
+  --term-line: #22222c;
   --shadow: 0 30px 80px -30px rgba(0, 0, 0, .8);
 }
 
@@ -88,7 +96,7 @@ body {
 }
 a { color: inherit; }
 code, pre, .mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
-code { font-size: .86em; background: var(--accent-soft); color: var(--accent); padding: .12em .4em; border-radius: 5px; }
+code { font-size: .86em; background: var(--accent-soft); color: var(--accent-ink); padding: .12em .4em; border-radius: 5px; }
 .serif { font-family: "Instrument Serif", Georgia, serif; font-weight: 400; }
 .wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
 @media (min-width: 720px) { .wrap { padding: 0 32px; } }
@@ -130,7 +138,7 @@ h1 em { font-family: "Instrument Serif", Georgia, serif; font-style: italic; fon
 /* terminal */
 .term { background: var(--term-bg); color: var(--term-ink); border: 1px solid var(--term-line); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; text-align: left; }
 .term-bar { display: flex; align-items: center; gap: 8px; padding: 12px 14px; background: var(--term-bar); border-bottom: 1px solid var(--term-line); }
-.term-bar i { width: 11px; height: 11px; border-radius: 50%; background: #3a352d; display: block; }
+.term-bar i { width: 11px; height: 11px; border-radius: 50%; display: block; }
 .term-bar i:nth-child(1) { background: #ff5f57; } .term-bar i:nth-child(2) { background: #febc2e; } .term-bar i:nth-child(3) { background: #28c840; }
 .term-bar .title { margin-left: 10px; font: 12px "JetBrains Mono", monospace; color: var(--term-dim); }
 .term-body { padding: 18px 20px 20px; font: 13.5px/1.75 "JetBrains Mono", monospace; overflow-x: auto; white-space: pre; min-height: 380px; }
@@ -160,7 +168,7 @@ h2 em { font-family: "Instrument Serif", Georgia, serif; font-style: italic; fon
 .vs { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 @media (max-width: 820px) { .vs { grid-template-columns: 1fr; } }
 .vs-col { border-radius: 16px; padding: 28px; border: 1px solid var(--line); background: var(--surface); }
-.vs-col h3 { margin: 0 0 18px; font-size: 14px; font: 600 13px "JetBrains Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
+.vs-col h3 { margin: 0 0 18px; font: 600 13px "JetBrains Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
 .vs-col.without h3 { color: var(--faint); }
 .vs-col.with { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); background: linear-gradient(180deg, var(--accent-soft), var(--surface) 70%); }
 .vs-col.with h3 { color: var(--accent); }
@@ -169,18 +177,18 @@ h2 em { font-family: "Instrument Serif", Georgia, serif; font-style: italic; fon
 .vs-col li:first-child { border-top: 0; }
 .vs-col .ic { flex: none; width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; font-size: 12px; font-weight: 700; margin-top: 1px; }
 .without .ic { background: var(--bg-2); color: var(--faint); }
-.with .ic { background: var(--accent); color: #fff; }
+.with .ic { background: var(--accent); color: var(--on-accent); }
 .without li { color: var(--muted); }
 
 /* pipeline */
-.flow-track { position: relative; display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; margin-bottom: 56px; }
+.flow-track { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 56px; }
 @media (max-width: 900px) { .flow-track { grid-template-columns: repeat(2, 1fr); } }
 .stage { position: relative; border: 1px solid var(--line); background: var(--surface); border-radius: 14px; padding: 16px 14px 18px; min-height: 140px; transition: border-color .2s, transform .2s; }
 .stage:hover { transform: translateY(-3px); border-color: var(--accent); }
 .stage .num { font: 600 11.5px "JetBrains Mono", monospace; color: var(--faint); }
 .stage h4 { margin: 8px 0 6px; font-size: 16px; }
 .stage p { margin: 0; font-size: 13.5px; color: var(--muted); line-height: 1.45; }
-.stage .gate-tag { position: absolute; top: -10px; right: 12px; font: 600 10.5px "JetBrains Mono", monospace; letter-spacing: .06em; background: var(--accent); color: #fff; padding: 3px 8px; border-radius: 999px; box-shadow: 0 6px 16px var(--glow); }
+.stage .gate-tag { position: absolute; top: -10px; right: 12px; font: 600 10.5px "JetBrains Mono", monospace; letter-spacing: .06em; background: var(--accent); color: var(--on-accent); padding: 3px 8px; border-radius: 999px; box-shadow: 0 6px 16px var(--glow); }
 .stage.gated { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); }
 
 .loop-grid { display: grid; grid-template-columns: 1.05fr 1fr; gap: 40px; align-items: center; }
@@ -203,9 +211,9 @@ h2 em { font-family: "Instrument Serif", Georgia, serif; font-style: italic; fon
 .mod { border: 1px solid var(--line); background: var(--surface); border-radius: 14px; padding: 18px 20px; cursor: pointer; transition: border-color .2s, box-shadow .2s; text-align: left; font: inherit; color: inherit; width: 100%; }
 .mod:hover { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); }
 .mod.active { border-color: var(--accent); box-shadow: 0 10px 30px -14px var(--glow); }
-.mod h4 { margin: 0 0 4px; font-size: 16px; display: flex; align-items: center; gap: 10px; }
-.mod h4 .tag { font: 500 11px "JetBrains Mono", monospace; color: var(--faint); border: 1px solid var(--line); border-radius: 6px; padding: 1px 7px; }
-.mod p { margin: 0; color: var(--muted); font-size: 14.5px; }
+.mod .mh { display: flex; margin: 0 0 4px; font-size: 16px; font-weight: 600; align-items: center; gap: 10px; }
+.mod .mh .tag { font: 500 11px "JetBrains Mono", monospace; color: var(--faint); border: 1px solid var(--line); border-radius: 6px; padding: 1px 7px; }
+.mod .mp { display: block; margin: 0; color: var(--muted); font-size: 14.5px; }
 .cc { font: 13px/1.7 "JetBrains Mono", monospace; }
 .cc .term-body { min-height: 0; padding: 0; white-space: normal; }
 .cc-chat { padding: 18px 20px 6px; white-space: pre-wrap; }
@@ -214,7 +222,7 @@ h2 em { font-family: "Instrument Serif", Georgia, serif; font-style: italic; fon
 .cc-band { margin: 0 14px; padding: 6px 10px; color: var(--term-dim); border-top: 1px solid var(--term-line); white-space: nowrap; overflow-x: auto; }
 .cc-band .hl { color: var(--term-ink); }
 .cc-prompt { margin: 0 14px 14px; padding: 10px 12px; border: 1px solid var(--term-line); border-radius: 8px; color: var(--term-dim); }
-.cc-pane { margin: 14px; border: 1px solid #3a342b; border-radius: 10px; padding: 12px 14px; }
+.cc-pane { margin: 14px; border: 1px solid var(--term-line); border-radius: 10px; padding: 12px 14px; }
 .cc-pane .ph { color: var(--term-acc); font-weight: 600; margin-bottom: 8px; display: flex; justify-content: space-between; }
 .cc-pane .row { display: grid; grid-template-columns: 1fr auto auto; gap: 14px; white-space: nowrap; }
 .cc-pane .sec { color: var(--term-dim); margin: 12px 0 4px; letter-spacing: .08em; font-size: 11.5px; }
@@ -224,8 +232,8 @@ h2 em { font-family: "Instrument Serif", Georgia, serif; font-style: italic; fon
 .cc-btns button.ap { background: var(--term-ok); color: #0a0908; border-color: var(--term-ok); }
 .cc-decided { color: var(--term-ok); margin-top: 8px; display: none; }
 .cc .flash { animation: flash 1.2s ease; }
-@keyframes flash { 0% { background: rgba(242,178,92,.25); } 100% { background: transparent; } }
-.toast { position: absolute; right: 14px; top: 52px; background: #26221c; border: 1px solid #3a342b; color: var(--term-ink); border-radius: 8px; padding: 8px 12px; font: 12px "JetBrains Mono", monospace; box-shadow: 0 10px 30px rgba(0,0,0,.4); opacity: 0; transform: translateY(-6px); transition: all .3s ease; pointer-events: none; }
+@keyframes flash { 0% { background: rgba(180,168,255,.22); } 100% { background: transparent; } }
+.toast { position: absolute; right: 14px; top: 52px; background: var(--term-bar); border: 1px solid var(--term-line); color: var(--term-ink); border-radius: 8px; padding: 8px 12px; font: 12px "JetBrains Mono", monospace; box-shadow: 0 10px 30px rgba(0,0,0,.4); opacity: 0; transform: translateY(-6px); transition: all .3s ease; pointer-events: none; }
 .toast.show { opacity: 1; transform: none; }
 .mods-note { margin-top: 18px; font-size: 13.5px; color: var(--faint); }
 
@@ -273,11 +281,11 @@ footer { border-top: 1px solid var(--line); padding: 32px 0 48px; font-size: 14p
 footer .wrap { display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; }
 footer a { color: var(--muted); }
 
-.reveal { opacity: 0; transform: translateY(18px); transition: opacity .7s ease, transform .7s ease; }
-.reveal.in { opacity: 1; transform: none; }
+.js .reveal { opacity: 0; transform: translateY(18px); transition: opacity .7s ease, transform .7s ease; }
+.js .reveal.in { opacity: 1; transform: none; }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  .reveal { opacity: 1; transform: none; transition: none; }
+  .js .reveal { opacity: 1; transform: none; transition: none; }
   .caret { animation: none; }
 }
 </style>
@@ -308,11 +316,12 @@ footer a { color: var(--muted); }
       <a class="btn" href="https://github.com/nayanraj210401/flow-stack#readme">Read the docs</a>
     </div>
 
-    <div class="hero-term term reveal" aria-label="Example flow-stack session">
+    <div class="hero-term term reveal">
       <div class="term-bar"><i></i><i></i><i></i><span class="title">claude · ~/acme-api</span></div>
       <button class="replay" id="replay" type="button">↻ replay</button>
       <div class="term-body" id="demo"></div>
     </div>
+    <p class="mods-note">An illustrative session, condensed.</p>
   </div>
 </header>
 
@@ -352,7 +361,7 @@ footer a { color: var(--muted); }
           <li><span class="ic">✓</span>Probes each check: revert the source, and the check must fail.</li>
           <li><span class="ic">✓</span>Looks for code to delete, reuse, or configure before adding any.</li>
           <li><span class="ic">✓</span>Circuit breaker: after 3 identical failures, it rethinks the approach.</li>
-          <li><span class="ic">✓</span>A hook rejects "done" unless a check passed after the last edit.</li>
+          <li><span class="ic">✓</span>A hook sends "done" back unless a check passed after the last edit.</li>
         </ul>
       </div>
     </div>
@@ -373,8 +382,9 @@ footer a { color: var(--muted); }
       <div class="stage"><div class="num">03</div><h4>Challenge</h4><p>A blind advocate designs it too. The do-nothing option is always on the table.</p></div>
       <div class="stage"><div class="num">04</div><h4>Slice</h4><p>Small steps, each with a check, a file fence, and a line budget.</p></div>
       <div class="stage"><div class="num">05</div><h4>Loop</h4><p>Red, subtract, build, verify, probe, proof gate.</p></div>
-      <div class="stage gated"><span class="gate-tag">GATE</span><div class="num">06</div><h4>Prove</h4><p>Blind checks, review, deslop, and a risk-ranked tour of the diff.</p></div>
-      <div class="stage gated"><span class="gate-tag">GATE</span><div class="num">07</div><h4>Close</h4><p>Trace, reflect, and profile updates for you to approve.</p></div>
+      <div class="stage"><div class="num">06</div><h4>Prove</h4><p>Blind checks, review, deslop, and the debt ledger.</p></div>
+      <div class="stage gated"><span class="gate-tag">GATE</span><div class="num">07</div><h4>Present &amp; merge</h4><p>A risk-ranked tour of the diff and tagged claims, then you approve the merge.</p></div>
+      <div class="stage gated"><span class="gate-tag">GATE</span><div class="num">08</div><h4>Close</h4><p>Trace, reflect, and profile updates for you to approve.</p></div>
     </div>
 
     <div class="loop-grid">
@@ -389,7 +399,7 @@ footer a { color: var(--muted); }
         </ol>
       </div>
       <div class="term reveal">
-        <div class="term-bar"><i></i><i></i><i></i><span class="title">slice gate</span></div>
+        <div class="term-bar"><i></i><i></i><i></i><span class="title">slice gate · illustrative</span></div>
         <div class="term-body"><span class="d">$ task.sh slice S2 done</span>
 <span class="ok">✓ red</span>      failed before the change
 <span class="ok">✓ green</span>    passed after the last edit
@@ -415,21 +425,21 @@ mul() { echo 6; } fooled one, not both.</span></div>
     </div>
     <div class="mods-grid">
       <div class="mod-list reveal" id="modList">
-        <button class="mod active" data-mod="band" type="button">
-          <h4>Flow band <span class="tag">above the prompt</span></h4>
-          <p>One dim line with the task, slice, progress, TDD phase, last verdict, and whether you've edited since. It also shows which file another session holds.</p>
+        <button class="mod active" data-mod="band" type="button" aria-pressed="true">
+          <span class="mh">Flow band <span class="tag">above the prompt</span></span>
+          <span class="mp">One dim line with the task, slice, progress, TDD phase, last verdict, and whether you've edited since. It also shows which file another session holds.</span>
         </button>
-        <button class="mod" data-mod="spin" type="button">
-          <h4>Slice-aware spinner <span class="tag">while working</span></h4>
-          <p>The spinner shows the slice and phase it's working on: <code>Thinking · S2 · red…</code></p>
+        <button class="mod" data-mod="spin" type="button" aria-pressed="false">
+          <span class="mh">Slice-aware spinner <span class="tag">while working</span></span>
+          <span class="mp">The spinner shows the slice and phase it's working on: <code>Thinking · S2 · red…</code></span>
         </button>
-        <button class="mod" data-mod="pane" type="button">
-          <h4>/flow-pane <span class="tag">0 tokens</span></h4>
-          <p>Slices, open gates with Approve and Reject, and the repo's other tasks. It's a command, so it opens instantly without a Claude turn.</p>
+        <button class="mod" data-mod="pane" type="button" aria-pressed="false">
+          <span class="mh">/flow-pane <span class="tag">0 tokens</span></span>
+          <span class="mp">Slices, open gates with Approve and Reject, and the repo's other tasks. It's a command, so it opens instantly without a Claude turn.</span>
         </button>
-        <button class="mod" data-mod="model" type="button">
-          <h4>Model per role <span class="tag">from your budget</span></h4>
-          <p>The advocate and reviewer get your design model, and workers get your build model. A toast names the model the first time each role spawns.</p>
+        <button class="mod" data-mod="model" type="button" aria-pressed="false">
+          <span class="mh">Model per role <span class="tag">from your budget</span></span>
+          <span class="mp">The advocate and reviewer get your design model, and workers get your build model. A toast names the model the first time each role spawns.</span>
         </button>
       </div>
 
@@ -484,7 +494,7 @@ mul() { echo 6; } fooled one, not both.</span></div>
 <span class="bad">no evidence</span> <span class="d">· verify or say ~ assumed</span></div></div>
       <div class="guard"><h4>circuit <span class="ev">PostToolUse</span></h4><p>After the same failing check three times, the agent stops, rethinks its approach, and asks you.</p>
         <div class="sample"><span class="bad">C2 FAIL ×3</span> <span class="d">· attack the premise</span></div></div>
-      <div class="guard"><h4>holds <span class="ev">multi-session</span></h4><p>When two sessions edit the same file, the second is told who holds it and pointed at SendMessage.</p>
+      <div class="guard"><h4>holds <span class="ev">Edit · Write</span></h4><p>When two sessions edit the same file, the second is told who holds it and pointed at SendMessage.</p>
         <div class="sample"><span class="acc">⚡</span> <span class="d">api.ts · held by session login</span></div></div>
     </div>
   </div>
@@ -538,7 +548,7 @@ mul() { echo 6; } fooled one, not both.</span></div>
       </div>
       <div class="b-d">
         <h4>Agent hosts</h4>
-        <p>In herdr, Orca, and cmux, the host's sidebar shows the task, slice, and open gates. Workers can run in panes you can watch.</p>
+        <p>In herdr, Orca, and cmux, the host's sidebar shows the task, slice, and open gates. In herdr, you can opt in to run workers in panes you can watch.</p>
       </div>
       <div class="b-e">
         <h4>Resume cold</h4>
@@ -602,7 +612,7 @@ mul() { echo 6; } fooled one, not both.</span></div>
   var lines = [
     ['<span class="you">› /flow-stack:flow add per-key rate limiting to /api</span>', 600],
     ['<span class="d">  ⏺ Skill(flow-stack:flow)</span>', 450],
-    ['<span class="acc b">flow</span><span class="d">: feature · task rate-limit · rigor standard · features: api.auth</span>', 700],
+    ['<span class="acc b">flow</span><span class="d">: feature · task rate-limit · rigor strict · features: api.auth</span>', 700],
     ['<span class="d">  understand  map · how · features.sh impact</span>', 450],
     ['<span class="d">  intent      </span>INTENT.md · 3 checks <span class="d">· C1 429 · C2 per-key · C3 headers</span>', 650],
     ['<span class="acc">  ⚑ GATE</span>      approve intent? <span class="you">yes</span>  <span class="d">→ checks sealed</span>', 900],
@@ -646,7 +656,7 @@ mul() { echo 6; } fooled one, not both.</span></div>
   var band = document.getElementById('ccBand'), spin = document.getElementById('ccSpin'), pane = document.getElementById('ccPane'), toast = document.getElementById('toast');
   function flash(el) { el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
   function show(mod) {
-    document.querySelectorAll('.mod').forEach(function (m) { m.classList.toggle('active', m.dataset.mod === mod); });
+    document.querySelectorAll('.mod').forEach(function (m) { m.classList.toggle('active', m.dataset.mod === mod); m.setAttribute('aria-pressed', String(m.dataset.mod === mod)); });
     pane.hidden = mod !== 'pane';
     toast.classList.toggle('show', mod === 'model');
     if (mod === 'band') flash(band);
@@ -668,7 +678,7 @@ mul() { echo 6; } fooled one, not both.</span></div>
   // copy
   function copier(btn, text) {
     btn.addEventListener('click', function () {
-      try { navigator.clipboard.writeText(text).then(function () { btn.textContent = 'copied'; setTimeout(function () { btn.textContent = 'copy'; }, 1500); }); } catch (e) {}
+      try { navigator.clipboard.writeText(text).then(function () { btn.textContent = 'copied'; setTimeout(function () { btn.textContent = 'copy'; }, 1500); }).catch(function () {}); } catch (e) {}
     });
   }
   copier(document.getElementById('copyAll'), '/plugin marketplace add nayanraj210401/flow-stack\n/plugin install flow-stack@flow-stack\n/flow-stack:setup');
