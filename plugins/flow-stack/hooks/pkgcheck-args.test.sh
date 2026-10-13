@@ -40,5 +40,9 @@ expect deny  'npm install notreal-pkg'
 expect deny  'npm install notreal-pkg > install.log'
 expect deny  'pip install -r reqs.txt notreal-pkg'
 expect deny  'pip install left-pad notreal-pkg 2>&1'
+expect allow 'npm install left-pad &>install.log'
+expect deny  'pnpm add -r notreal-pkg'
+expect deny  'npm install -t notreal-pkg'
+expect deny  'pip install -t vendor notreal-pkg'
 
 [ "$FAILS" -eq 0 ] && echo ok || { echo "$FAILS failed"; exit 1; }

@@ -267,10 +267,13 @@ if flow_enabled pkgcheck && command -v curl >/dev/null 2>&1; then
   pkgs="$(perl -ne '
     # Package names of one install segment: redirections are dropped, and so are flags with their
     # value (-r reqs.in), paths and archives (pip install dist/x.tar.gz).
-    sub names { my ($args, $eco) = @_; $args =~ s/\d*[<>]+&?\s*\S+//g; my ($skip, @n);
+    # Only flags that take a value in that ecosystem: a boolean one (pnpm -r) would swallow a name.
+    sub names { my ($args, $eco) = @_; $args =~ s/&?\d*[<>]+&?\s*\S+//g; my ($skip, @n);
+      my $val = $eco eq "npm" ? qr/^(?:-C|--(?:prefix|cwd|dir|registry))$/
+        : qr/^(?:-[rceti]|--(?:requirement|constraint|editable|target|prefix|index-url|extra-index-url|find-links|root|python))$/;
       for (split " ", $args) {
         if ($skip) { $skip = 0; next }
-        if (/^(?:-[rceti]|--(?:requirement|constraint|editable|prefix|target|cwd|dir|registry|index-url|extra-index-url|find-links|root|python|workspace))$/) { $skip = 1; next }
+        if ($_ =~ $val) { $skip = 1; next }
         next if /^-/ || /^[.\/~]/ || /:\/\// || ($eco eq "pypi" && (m{/} || /\.(?:txt|toml|whl|in|zip|tar|tgz|gz)$/));
         push @n, "$eco $_";
       } @n }
