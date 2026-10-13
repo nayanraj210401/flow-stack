@@ -123,14 +123,15 @@ if [ -n "$FLOW_TASK_DIR" ] && [ -f "$FLOW_TASK_DIR/SEALS" ]; then
   # What the command writes, per segment: redirect targets, and the files of tee/rm/truncate/mv,
   # the destination of cp, in-place sed/perl files, and git checkout/restore/rm paths. A sealed
   # check that is only read, run or copied from is not a write.
-  wt="$(grep -Eo '>>?[[:space:]]*[^[:space:];&|<>]+' <<<"$cmd" | sed -E 's/^>>?[[:space:]]*//' || true)"
+  wt="$(grep -Eo '>[>|]?[[:space:]]*[^[:space:];&|<>]+' <<<"$cmd" | sed -E 's/^>[>|]?[[:space:]]*//' || true)"
   while IFS= read -r seg; do
     set -f; set -- $seg; set +f
     case "${1:-}" in sudo|command|env|xargs) shift ;; esac
     case "${1:-}" in
       tee|rm|truncate|mv) shift; wt="$wt"$'\n'"$(printf '%s\n' "$@")" ;;
-      cp) [ $# -lt 3 ] || wt="$wt"$'\n'"${@: -1}" ;;
-      sed|perl) printf '%s\n' "$@" | grep -Eq '^-[a-z]*i' && { shift; wt="$wt"$'\n'"$(printf '%s\n' "$@")"; } ;;
+      cp|install|ln) [ $# -lt 3 ] || wt="$wt"$'\n'"${@: -1}" ;;
+      sed|perl) printf '%s\n' "$@" | grep -Eq '^(-[a-z]*i|--in-place)' && { shift; wt="$wt"$'\n'"$(printf '%s\n' "$@")"; } ;;
+      dd) wt="$wt"$'\n'"$(printf '%s\n' "$@" | sed -n 's/^of=//p')" ;;
       git) case "${2:-}" in checkout|restore|rm) shift 2; wt="$wt"$'\n'"$(printf '%s\n' "$@")" ;; esac ;;
     esac
   done < <(tr ';&|(){}' '\n' <<<"$cmd")

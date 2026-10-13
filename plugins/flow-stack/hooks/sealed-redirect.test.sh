@@ -41,6 +41,10 @@ expect ask   'rm tests/a.test.sh'
 expect ask   'sed -i s/a/b/ tests/a.test.sh'
 expect ask   'cat x | tee tests/a.test.sh'
 expect ask   'git checkout tests/a.test.sh'
+expect ask   'echo x >| tests/a.test.sh'
+expect ask   'install /tmp/x tests/a.test.sh'
+expect ask   'dd if=/tmp/x of=tests/a.test.sh'
+expect ask   'sed --in-place s/a/b/ tests/a.test.sh'
 expect ask   'cd tests && echo x > a.test.sh'
 
 [ "$FAILS" -eq 0 ] && echo ok || { echo "$FAILS failed"; exit 1; }
