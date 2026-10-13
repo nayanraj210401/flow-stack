@@ -50,7 +50,15 @@ files() { # newest first, within --days, minus --skip
     { if [ -n "$skip" ]; then grep -v "/$skip[^/]*\.jsonl$" || true; else cat; fi; }
 }
 id8() { basename "$1" .jsonl | cut -c1-8; }
-oneline() { awk -v w="$1" '{ gsub(/\\[nt]/, " "); if (w > 0 && length($0) > w) $0 = substr($0, 1, w) "…"; print }'; }
+# jq @tsv escapes \\ \n \t \r; undo it in one left-to-right pass so a literal backslash-n is kept.
+unesc() { awk '{ o = ""; n = length($0)
+  for (i = 1; i <= n; i++) { c = substr($0, i, 1)
+    if (c != "\\") { o = o c; continue }
+    i++; c = substr($0, i, 1)
+    if (c == "n" || c == "t") o = o " "; else if (c != "r") o = o c }
+  print o }'; }
+trunc() { awk -v w="$1" '{ if (w > 0 && length($0) > w) $0 = substr($0, 1, w) "…"; print }'; }
+oneline() { unesc | trunc "$1"; }
 
 case "$cmd" in
   sessions)
@@ -67,8 +75,8 @@ case "$cmd" in
   grep)
     [ -n "$arg" ] || { echo "usage: recall.sh grep <regex> [--days N]" >&2; exit 2; }
     files | while IFS= read -r f; do
-      { jq -r "$lines" "$f" 2>/dev/null || true; } | redact | grep -Ei -- "$arg" | while IFS=$'\t' read -r ts who text; do
-        printf '%s · %s · %s: %s\n' "$ts" "$(id8 "$f")" "$who" "$(printf '%s' "$text" | oneline 240)"
+      { jq -r "$lines" "$f" 2>/dev/null || true; } | redact | unesc | grep -Ei -- "$arg" | while IFS=$'\t' read -r ts who text; do
+        printf '%s · %s · %s: %s\n' "$ts" "$(id8 "$f")" "$who" "$(printf '%s' "$text" | trunc 240)"
       done || true
     done ;;
   show)
