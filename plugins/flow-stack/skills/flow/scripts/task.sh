@@ -195,6 +195,8 @@ case "$cmd" in
         *) playbook="$1"; shift ;;
       esac
     done
+    [[ "$playbook" =~ ^[a-z0-9][a-z0-9-]*$ ]] || die "bad playbook name: $playbook"
+    [ -f "$here/../playbooks/$playbook.md" ] || [ -f "$flow/playbooks/$playbook.md" ] || die "no playbook '$playbook' (looked in $here/../playbooks and $flow/playbooks)"
     repos_tsv=""
     if [ -n "$names" ]; then
       home=""; first=""
@@ -390,6 +392,7 @@ $out"
     ;;
   estimate)
     [ $# -eq 3 ] || die "usage: task.sh estimate <usd> <ctx_pct> <human_min>"
+    for v in "$1" "$2" "$3"; do [[ "$v" =~ ^[0-9]+(\.[0-9]+)?$ ]] || die "estimate needs numbers, got '$v'"; done
     printf 'usd=%s ctx_pct=%s human_min=%s at=%s\n' "$1" "$2" "$3" "$(date -u +%FT%TZ)" >"$(active_dir)/ESTIMATE"
     echo "estimate saved"
     ;;
