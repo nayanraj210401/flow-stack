@@ -10,7 +10,9 @@ for base in "${dirs[@]}"; do
     last="$(git -C "$r" log -1 --format=%cs 2>/dev/null || echo '-')"
     kind=""; test=""; run=""
     if [ -f "$r/package.json" ]; then kind=node
-      test="$(jq -r '.scripts.test // empty' "$r/package.json" 2>/dev/null | cut -c1-40)"; [ -n "$test" ] && test="npm test"
+      test="$(jq -r '.scripts.test // empty' "$r/package.json" 2>/dev/null | cut -c1-40)"
+      case "$test" in *"no test specified"*) test="" ;; esac  # npm init's placeholder always fails
+      [ -n "$test" ] && test="npm test"
       jq -e '.scripts.dev' "$r/package.json" >/dev/null 2>&1 && run="npm run dev"
     elif [ -f "$r/pyproject.toml" ] || [ -f "$r/requirements.txt" ]; then kind=python; test="pytest"
     elif [ -f "$r/go.mod" ]; then kind=go; test="go test ./..."
