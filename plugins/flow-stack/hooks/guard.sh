@@ -193,7 +193,8 @@ fi
 # 3c. Ready for review: in a flow-stack repo, a non-draft PR or `gh pr ready` needs ready.sh's stamp for HEAD.
 #     Only a real invocation counts: heredoc bodies are dropped, and gh must start a command:
 #     line start, ; && || | (, if/then/!, VAR=x prefixes, or behind a wrapper (eval, sh/bash/zsh/dash, command, env, time,
-#     nohup, xargs, sudo, exec) with any flags of its own. Case-insensitive: case-insensitive
+#     nohup, xargs, sudo, exec) with any flags of its own. Quoted strings are dropped before the draft flag is
+#     looked for, so a title saying "-d" isn't a draft. Case-insensitive: case-insensitive
 #     filesystems run GH as gh. A commit message that mentions it mid-sentence passes.
 code="$(awk -v q="'" '
   hd != "" { if ($0 == hd) hd = ""; next }
@@ -206,7 +207,7 @@ cend='([[:space:];&|)]|$)'
 gopt='([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*'
 pr_cmd="$(grep -Ei "$lead"'gh'"$gopt"'[[:space:]]+pr[[:space:]]+(create|ready)'"$cend" <<<"$code" || true)"
 if [ -d "$FLOW_DIR" ] && flow_enabled ready && [ -n "$pr_cmd" ] &&
-   ! grep -Eq '(--draft|--undo|[[:space:]]-d)([[:space:]=]|$)' <<<"$pr_cmd"; then
+   ! sed -E "s/\\\\.//g; s/\"[^\"]*\"//g; s/'[^']*'//g; s/[\"'].*\$//" <<<"$pr_cmd" | grep -Eq '(--draft|--undo|[[:space:]]-d)([[:space:]=]|$)'; then
   ready="$(cd "$(dirname "$0")/../skills/review/scripts" && pwd)/ready.sh"
   if [ "$(cd "$FLOW_ROOT" && "$ready" mode)" != yolo ] && ! (cd "$FLOW_ROOT" && "$ready" stamped); then
     pre_decide deny "flow ready-for-review: HEAD isn't stamped ready. Human review is the expensive step, so run $ready (it lists what's missing), or open a draft PR (--draft) meanwhile. review_gate: yolo in the profile or .flow/config.json turns this off."
