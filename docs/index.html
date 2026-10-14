@@ -488,16 +488,16 @@ mul() { echo 6; } fooled one, not both.</span></div>
     <div class="reveal">
       <div class="kicker">Autonomous mode</div>
       <h2>Go to bed. <em>Wake up to a queue.</em></h2>
-      <p class="sub">Put <code>--auto</code> anywhere in a prompt, or say "going to bed" or "run until done". The agent stops asking you questions. It takes the reversible decisions itself and queues the irreversible ones for your return.</p>
+      <p class="sub">Put <code>--auto</code> anywhere in a prompt and the hooks hold the agent to it. Saying "going to bed" or "run until done" switches the agent to the same behavior, without the hook enforcement. The agent stops asking you questions. It takes the reversible decisions itself and queues the irreversible ones for your return.</p>
     </div>
     <div class="auto-grid">
       <div class="reveal">
         <div class="modes">
           <div class="amode"><div class="flag">--auto</div><p>Approves its own intent and seals, takes its recommended option at every reversible gate, and logs each choice as <code>who=agent</code>. Hooks deny questions, push, PR, and publish commands, and the agent queues them instead.</p></div>
-          <div class="amode"><div class="flag">--auto ship</div><p>Same as <code>--auto</code>, but the agent may also push its branch, open the PR, and merge it once <code>ready.sh</code> has stamped HEAD after review. Deploys and publishing still wait for you.</p></div>
+          <div class="amode"><div class="flag">--auto ship</div><p>Same as <code>--auto</code>, but the agent may also push its branch (never main), open the PR, and merge it once <code>ready.sh</code> has stamped HEAD after review. Deploys and publishing still wait for you.</p></div>
           <div class="amode"><div class="flag">--no-auto</div><p>You're back, and gates ask you again. Approve or reject what's queued from <code>/flow-pane</code>, or read it in the handoff.</p></div>
         </div>
-        <p class="never"><b>Irreversible actions never happen while you're away.</b> They wait in <code>GATES.md</code>, each with its options and a recommendation. At the end, the agent notifies you and writes a trace and a handoff that lists the open gates first.</p>
+        <p class="never"><b>Unless you grant <code>--auto ship</code>, irreversible actions wait for you.</b> Hooks block push, PR, and publish commands; a deploy script is on the agent to hold back. Each queued item waits in <code>GATES.md</code>, each with its options and a recommendation. At the end, the agent notifies you and writes a trace and a handoff that lists the open gates first.</p>
       </div>
       <div class="term reveal">
         <div class="term-bar"><i></i><i></i><i></i><span class="title">overnight · illustrative</span></div>
