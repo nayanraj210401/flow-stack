@@ -497,7 +497,7 @@ mul() { echo 6; } fooled one, not both.</span></div>
           <div class="amode"><div class="flag">--auto ship</div><p>Same as <code>--auto</code>, but the agent may also push its branch (never main), open the PR, and merge it once <code>ready.sh</code> has stamped HEAD after review. Deploys and publishing still wait for you.</p></div>
           <div class="amode"><div class="flag">--no-auto</div><p>You're back, and gates ask you again. Approve or reject what's queued from <code>/flow-pane</code>, or read it in the handoff.</p></div>
         </div>
-        <p class="never"><b>Unless you grant <code>--auto ship</code>, irreversible actions wait for you.</b> Hooks block push, PR, and publish commands; a deploy script is on the agent to hold back. Each queued item waits in <code>GATES.md</code>, each with its options and a recommendation. At the end, the agent notifies you and writes a trace and a handoff that lists the open gates first.</p>
+        <p class="never"><b>Unless you grant <code>--auto ship</code>, irreversible actions wait for you.</b> Hooks block push, PR, and publish commands; a deploy script is on the agent to hold back. Each queued item waits in <code>GATES.md</code> with its options and a recommendation. At the end, the agent notifies you and writes a trace and a handoff that lists the open gates first.</p>
       </div>
       <div class="term reveal">
         <div class="term-bar"><i></i><i></i><i></i><span class="title">overnight · illustrative</span></div>
