@@ -55,7 +55,7 @@ quality_json() { # quality_json <repo> <features-json> <debt-json>: 0-100 per di
       awk -v t="$(basename "$(dirname "$e")")" -F' · ' '/^### /{r[$2]=$3} END{for(l in r) print t":"l"\t"r[l]}' "$e"; done |
     jq -Rsc 'split("\n") | map(select(length>0) | split("\t") | {label:.[0], result:.[1]})')"
   [ -f "$fd/ready.tsv" ] && ready="$(awk -F'\t' -v h="$(git -C "$r" rev-parse HEAD 2>/dev/null)" '$2==h && $3=="ready" && $4=="pass"{f=1} END{print f?"true":"false"}' "$fd/ready.tsv")"
-  code="$(git -C "$r" ls-files 2>/dev/null | grep -E '\.(sh|bash|zsh|js|mjs|cjs|ts|tsx|jsx|py|go|rs|rb|java|kt|swift|c|h|cc|cpp|hpp|cs|php|scala|lua|ex|exs|vue|svelte)$' || true)"
+  code="$(git -C "$r" -c core.quotepath=off ls-files 2>/dev/null | grep -E '\.(sh|bash|zsh|js|mjs|cjs|ts|tsx|jsx|py|go|rs|rb|java|kt|swift|c|h|cc|cpp|hpp|cs|php|scala|lua|ex|exs|vue|svelte)$' || true)"
   if [ -n "$code" ]; then
     code_n="$(printf '%s\n' "$code" | wc -l | tr -d ' ')"
     read -r lines tests big < <(cd "$r" && printf '%s\n' "$code" | tr '\n' '\0' | xargs -0 wc -l 2>/dev/null |
