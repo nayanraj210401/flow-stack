@@ -236,6 +236,17 @@ h2 em { font-family: "Instrument Serif", Georgia, serif; font-style: italic; fon
 .toast.show { opacity: 1; transform: none; }
 .mods-note { margin-top: 18px; font-size: 13.5px; color: var(--faint); }
 
+/* auto mode */
+.auto-grid { display: grid; grid-template-columns: 1fr 1.1fr; gap: 48px; align-items: start; }
+@media (max-width: 960px) { .auto-grid { grid-template-columns: 1fr; } }
+.modes { display: grid; gap: 12px; margin-top: 8px; }
+.amode { border: 1px solid var(--line); background: var(--surface); border-radius: 14px; padding: 16px 18px; }
+.amode .flag { font: 600 13px "JetBrains Mono", monospace; color: var(--accent-ink); }
+.amode p { margin: 6px 0 0; color: var(--muted); font-size: 14.5px; }
+.never { margin-top: 20px; border-left: 3px solid var(--accent); padding: 4px 0 4px 16px; color: var(--muted); font-size: 15px; }
+.never b { color: var(--ink); }
+.auto-grid .term-body { min-height: 0; }
+
 /* guardrails */
 .guard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
 .guard { border: 1px solid var(--line); background: var(--surface); border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
@@ -297,6 +308,7 @@ footer a { color: var(--muted); }
     <div class="nav-links">
       <a class="opt" href="#how">How it works</a>
       <a class="opt" href="#mods">Mods</a>
+      <a class="opt" href="#auto">Auto</a>
       <a class="opt" href="#guardrails">Guardrails</a>
       <a class="opt" href="#cost">Cost</a>
       <button class="theme-btn" id="theme" type="button" aria-label="Toggle theme">◐</button>
@@ -468,6 +480,44 @@ mul() { echo 6; } fooled one, not both.</span></div>
       </div>
     </div>
     <p class="mods-note">The mod changes no guard. In VS Code chat and <code>claude -p</code> it draws nothing, but model-per-role still applies. The demo is a mockup: click the mods on the left.</p>
+  </div>
+</section>
+
+<section id="auto">
+  <div class="wrap">
+    <div class="reveal">
+      <div class="kicker">Autonomous mode</div>
+      <h2>Go to bed. <em>Wake up to a queue.</em></h2>
+      <p class="sub">Put <code>--auto</code> anywhere in a prompt and the hooks hold the agent to it. Saying "going to bed" or "run until done" switches the agent to the same behavior, without the hook enforcement. The agent stops asking you questions. It takes the reversible decisions itself and queues the irreversible ones for your return.</p>
+    </div>
+    <div class="auto-grid">
+      <div class="reveal">
+        <div class="modes">
+          <div class="amode"><div class="flag">--auto</div><p>Approves its own intent and seals, takes its recommended option at every reversible gate, and logs each choice as <code>who=agent</code>. Hooks deny questions, push, PR, and publish commands, and the agent queues them instead.</p></div>
+          <div class="amode"><div class="flag">--auto ship</div><p>Same as <code>--auto</code>, but the agent may also push its branch (never main), open the PR, and merge it once <code>ready.sh</code> has stamped HEAD after review. Deploys and publishing still wait for you.</p></div>
+          <div class="amode"><div class="flag">--no-auto</div><p>You're back, and gates ask you again. Approve or reject what's queued from <code>/flow-pane</code>, or read it in the handoff.</p></div>
+        </div>
+        <p class="never"><b>Unless you grant <code>--auto ship</code>, irreversible actions wait for you.</b> Hooks block push, PR, and publish commands; a deploy script is on the agent to hold back. Each queued item waits in <code>GATES.md</code> with its options and a recommendation. At the end, the agent notifies you and writes a trace and a handoff that lists the open gates first.</p>
+      </div>
+      <div class="term reveal">
+        <div class="term-bar"><i></i><i></i><i></i><span class="title">overnight · illustrative</span></div>
+        <div class="term-body"><span class="you">› finish the export feature, going to bed --auto</span>
+<span class="acc b">flow auto</span><span class="d">: never wait on the human</span>
+
+<span class="d">23:04</span>  intent approved     <span class="d">who=agent · logged</span>
+<span class="d">23:06</span>  challenge → reuse csv writer   <span class="d">who=agent</span>
+<span class="d">23:41</span>  S1 S2 S3 <span class="ok">done</span>       <span class="d">probe teeth · review ship</span>
+<span class="d">23:43</span>  git push           <span class="bad">denied</span> <span class="d">→ queued</span>
+<span class="d">23:43</span>  gh pr create       <span class="bad">denied</span> <span class="d">→ queued</span>
+<span class="d">23:44</span>  trace · handoff · <span class="acc">notify</span>
+
+<span class="d">── .flow/tasks/export/GATES.md ──</span>
+<span class="acc">⚑ 1</span> push export-csv and open a PR
+    <span class="d">A) push + PR  B) hold · recommend A</span>
+<span class="acc">⚑ 2</span> drop the legacy /export.xml route?
+    <span class="d">A) drop  B) keep  · recommend B</span></div>
+      </div>
+    </div>
   </div>
 </section>
 
