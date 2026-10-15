@@ -33,8 +33,14 @@ hides 'password: "my secret pw"' 'secret pw'
 hides "token='two words'" 'words'
 hides 'export API_KEY=abc123def' abc123def
 hides 'Authorization: Bearer abcdefgh12345' abcdefgh12345
+hides 'password: "my secret' secret
+hides 'export PASSWORD="abc def' abc
+hides 'psql postgres://u:p@ss@host/db' '@ss@'
+hides 'curl -uadmin:pass1234 http://x' pass1234
 keeps 'git clone https://github.com/a/b.git'
 keeps 'ssh git@github.com'
 keeps 'ls -u foo'
+keeps 'git commit -m "Add basic validation for users"'
+keeps 'docker run -u 1000:1000 img'
 
 [ "$FAILS" -eq 0 ] && echo "PASS" || { echo "FAIL: $FAILS"; exit 1; }
