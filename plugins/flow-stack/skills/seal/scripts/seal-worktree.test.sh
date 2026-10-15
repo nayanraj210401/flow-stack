@@ -20,7 +20,7 @@ cd "$SB/main"
 toy_repo
 git worktree add -q ../lead -b fix/lead; W="$(cd ../lead && pwd -P)"
 cd "$W"
-"$T" new wtdemo bugfix >/dev/null
+"$T" new wtdemo bug >/dev/null
 S="$SB/main/.flow/tasks/wtdemo/SEALS"
 [ -d "$SB/main/.flow/tasks/wtdemo" ] && ok "task folder lives in the main checkout" || bad "task folder not in main"
 echo 'echo new check' >tests/test_new.sh   # a test the slice adds: main has no copy
