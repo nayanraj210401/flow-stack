@@ -14,11 +14,12 @@ here="$(cd "$(dirname "$0")" && pwd)"
 
 cmd="${1:-sessions}"; [ $# -gt 0 ] && shift
 arg=""; days=7; repo=""; skip=""; full=0
+need() { [ $# -ge 2 ] || { echo "recall.sh: $1 needs a value" >&2; exit 2; }; }
 while [ $# -gt 0 ]; do
   case "$1" in
-    --days) days="$2"; shift 2 ;;
-    --repo) repo="$2"; shift 2 ;;
-    --skip) skip="$2"; shift 2 ;;
+    --days) need "$@"; days="$2"; shift 2 ;;
+    --repo) need "$@"; repo="$2"; shift 2 ;;
+    --skip) need "$@"; skip="$2"; shift 2 ;;
     --full) full=1; shift ;;
     --) arg="${2:-}"; shift $(( $# > 1 ? 2 : 1 )) ;;
     *) arg="$1"; shift ;;
