@@ -16,9 +16,9 @@ cmd="${1:-sessions}"; [ $# -gt 0 ] && shift
 arg=""; days=7; repo=""; skip=""; full=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    --days) days="$2"; shift 2 ;;
-    --repo) repo="$2"; shift 2 ;;
-    --skip) skip="$2"; shift 2 ;;
+    --days) [ $# -ge 2 ] || { echo "recall.sh: --days needs a value" >&2; exit 2; }; days="$2"; shift 2 ;;
+    --repo) [ $# -ge 2 ] || { echo "recall.sh: --repo needs a value" >&2; exit 2; }; repo="$2"; shift 2 ;;
+    --skip) [ $# -ge 2 ] || { echo "recall.sh: --skip needs a value" >&2; exit 2; }; skip="$2"; shift 2 ;;
     --full) full=1; shift ;;
     --) arg="${2:-}"; shift $(( $# > 1 ? 2 : 1 )) ;;
     *) arg="$1"; shift ;;
