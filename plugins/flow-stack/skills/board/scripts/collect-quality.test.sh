@@ -7,8 +7,8 @@ export FLOW_STACK_HOME="$SB/home" HOME="$SB/hm"; mkdir -p "$HOME" "$FLOW_STACK_H
 cd "$SB/r" && git init -q && git config user.email t@e.x && git config user.name t
 printf 'a() { :; }\n' >a.sh; printf '# TODO x\n' >'é.sh'; printf 'ok\n' >'tests/t_ü.sh'
 git add -A && git commit -qm init
-out="$("$H/collect.sh" --no-cost --no-prs "$SB/r" 2>/dev/null | jq -c '.repos[0].quality' 2>/dev/null)"
-case "$out" in
-  *"3 source files"*|*"1 test files"*|*"1 TODO"*) echo "  ✓ non-ASCII files counted: $out"; echo PASS ;;
-  *) echo "  ✗ quality: $out"; exit 1 ;;
-esac
+out="$("$H/collect.sh" --no-cost --no-prs "$SB/r" 2>/dev/null | jq -r '.repos[0].quality.dims[]|select(.id=="tests" or .id=="markers")|.detail' 2>/dev/null)"
+want="1 test files for 2 source files
+1 TODO/FIXME/HACK/XXX in 3 lines"
+if [ "$out" = "$want" ]; then echo "  ✓ non-ASCII files counted"; echo PASS
+else echo "  ✗ quality: want [$want] got [$out]"; exit 1; fi
