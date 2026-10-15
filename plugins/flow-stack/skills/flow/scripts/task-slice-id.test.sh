@@ -12,14 +12,14 @@ mkdir -p "$FLOW_STACK_HOME" "$CLAUDE_CONFIG_DIR/sessions" "$SB/repo"
 cd "$SB/repo" && git init -q && git config user.email a@b && git config user.name a && git commit -q --allow-empty -m i
 "$T" new t bug >/dev/null || { echo "setup failed"; exit 1; }
 F=.flow/tasks/t/SLICES.md
-printf '# Slices\n\n## S1 · first\nstatus: todo\n\n## S2 · second\nstatus: todo\n' >"$F"
+printf '# Slices\n\n## S1 · first\nstatus: todo\n\n## S2 · second\nstatus: todo\n\n ## S3 · indented\nstatus: todo\n' >"$F"
 before="$(cat "$F")"
 
-for id in 'S.' 'S[0-9]' '.*'; do
-  out="$("$T" slice "$id" doing 2>&1)" && bad "slice '$id' exited 0: $out" || ok "slice '$id' rejected"
+for id in 'S.' 'S[0-9]' '.*' S3; do
+  out="$("$T" slice "$id" doing 2>&1)" && bad "slice '$id' exited 0: $out" || { grep -q 'no slice' <<<"$out" && ok "slice '$id' rejected" || bad "slice '$id' failed for another reason: $out"; }
   [ "$(cat "$F")" = "$before" ] && ok "SLICES.md unchanged for '$id'" || bad "SLICES.md changed for '$id'"
 done
-"$T" tdd 'S.' red >/dev/null 2>&1 && bad "tdd 'S.' accepted" || ok "tdd 'S.' rejected"
+out="$("$T" tdd 'S.' red 2>&1)" && bad "tdd 'S.' accepted" || { grep -q 'no slice' <<<"$out" && ok "tdd 'S.' rejected" || bad "tdd 'S.' failed for another reason: $out"; }
 "$T" slice S2 doing >/dev/null 2>&1 && grep -A1 '^## S2' "$F" | grep -q 'status: doing' && ok "a real id still works" || bad "S2 doing failed"
 [ "$FAILS" = 0 ] || { echo "$FAILS failed"; exit 1; }
 echo "all passed"

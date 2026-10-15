@@ -57,7 +57,7 @@ flow="$FLOW_DIR"
 profile="${FLOW_STACK_HOME:-$HOME/.flow-stack}/profile.md"
 
 die() { echo "task.sh: $*" >&2; exit 1; }
-has_slice() { awk -v id="$1" '$1 == "##" && $2 == id { f = 1 } END { exit !f }' "$2"; }  # literal id, never a regex
+has_slice() { awk -v id="$1" '/^## / && $2 == id { f = 1 } END { exit !f }' "$2"; }  # literal id, never a regex
 active() { printf '%s' "$FLOW_TASK"; }
 active_dir() {
   [ -n "$FLOW_TASK_DIR" ] || die "no active task (run: task.sh new <slug>)"
