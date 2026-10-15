@@ -34,5 +34,5 @@ echo "## estimate"
 cat "$d/ESTIMATE" 2>/dev/null || echo "none"
 echo "## git"
 git -C "$root" diff --stat HEAD 2>/dev/null | tail -n 1
-since="$([ -f "$t" ] && jq -rs '.[0].ts // empty' "$t" 2>/dev/null)"
+since="$(jq -rs '.[0].ts // empty' "$t" 2>/dev/null)"
 [ -z "$since" ] || git -C "$root" log --oneline --since="$since" 2>/dev/null | head -n 20
