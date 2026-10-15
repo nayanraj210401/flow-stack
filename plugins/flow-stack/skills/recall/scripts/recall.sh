@@ -51,12 +51,7 @@ files() { # newest first, within --days, minus --skip
 }
 id8() { basename "$1" .jsonl | cut -c1-8; }
 # jq @tsv escapes \\ \n \t \r; undo it in one left-to-right pass so a literal backslash-n is kept.
-unesc() { awk '{ o = ""; n = length($0)
-  for (i = 1; i <= n; i++) { c = substr($0, i, 1)
-    if (c != "\\") { o = o c; continue }
-    i++; c = substr($0, i, 1)
-    if (c == "n" || c == "t") o = o " "; else if (c != "r") o = o c }
-  print o }'; }
+unesc() { perl -pe 's/\\(.)/$1 eq "n" || $1 eq "t" ? " " : $1 eq "r" ? "" : $1/ge'; }
 trunc() { awk -v w="$1" '{ if (w > 0 && length($0) > w) $0 = substr($0, 1, w) "…"; print }'; }
 oneline() { unesc | trunc "$1"; }
 

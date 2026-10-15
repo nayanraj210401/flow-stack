@@ -14,13 +14,13 @@ dir="$CLAUDE_CONFIG_DIR/projects/$(printf '%s' "$PWD" | sed 's/[^A-Za-z0-9]/-/g'
 mkdir -p "$dir"
 msg='use printf "a\nb" and path C:\temp\new'
 jq -nc --arg m "$msg" '{type:"user",timestamp:"2026-10-13T00:00:00Z",message:{content:$m}}' >"$dir/abcd1234.jsonl"
-jq -nc --arg m $'line one\nline two\tafter tab' '{type:"assistant",timestamp:"2026-10-13T00:01:00Z",message:{content:[{type:"text",text:$m}]}}' >>"$dir/abcd1234.jsonl"
+jq -nc --arg m $'line one\nline two\tafter tab\r\nend' '{type:"assistant",timestamp:"2026-10-13T00:01:00Z",message:{content:[{type:"text",text:$m}]}}' >>"$dir/abcd1234.jsonl"
 
 out="$("$R" show abcd)"
 grep -qF "you: $msg" <<<"$out" && ok "show keeps literal \\n and \\t" || bad "show: $out"
-grep -qF 'claude: line one line two after tab' <<<"$out" && ok "real newline/tab still become spaces" || bad "newline: $out"
+grep -qF 'claude: line one line two after tab end' <<<"$out" && ok "real newline/tab/CRLF still become spaces" || bad "newline: $out"
 out="$("$R" grep 'temp\\new')"
-grep -qF "$msg" <<<"$out" && ok "grep finds what was typed" || bad "grep: $out"
+[[ "$out" == *" · abcd1234 · you: $msg" ]] && ok "grep finds what was typed" || bad "grep: $out"
 out="$("$R" sessions)"
 grep -qF "first: $msg" <<<"$out" && ok "sessions shows the prompt as written" || bad "sessions: $out"
 [ "$FAILS" = 0 ] || { echo "$FAILS failed"; exit 1; }
