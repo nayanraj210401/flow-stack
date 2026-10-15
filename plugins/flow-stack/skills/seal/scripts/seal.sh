@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # seal.sh: lock the acceptance checks of the active task.
-#   seal.sh add <path> [path ...]   seal files (directories expand to their files)
+#   seal.sh add <path> [path ...]   seal files (directories expand to their files); exit 1 if any path sealed nothing
 #   seal.sh verify                  exit 1 if any sealed file changed or vanished
 #   seal.sh list                    show sealed files
 #   seal.sh reseal                  re-hash every sealed file (after an approved change)
@@ -48,14 +48,15 @@ case "${1:-}" in
     shift; [ $# -gt 0 ] || { echo "usage: seal.sh add <path> ..." >&2; exit 2; }
     touch "$seals"; rc=0
     for p in "$@"; do
-      [ -e "${p#./}" ] || rc=1
+      n=0
       while IFS= read -r f; do
         [ -n "$f" ] || continue
         q="$(flow_qual "$f")" awk 'substr($0, 67) != ENVIRON["q"]' "$seals" >"$seals.tmp"
         mv "$seals.tmp" "$seals"
         hash_file "$f" >>"$seals"
-        echo "sealed: $(flow_qual "$f")"
+        echo "sealed: $(flow_qual "$f")"; n=$((n + 1))
       done < <(expand "$p")
+      [ "$n" -gt 0 ] || rc=1
     done
     exit "$rc"
     ;;

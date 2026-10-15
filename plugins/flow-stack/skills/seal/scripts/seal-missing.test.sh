@@ -16,6 +16,7 @@ git add -A && git commit -qm i
 "$S" add nope.sh >/dev/null 2>&1 && bad "missing file exited 0" || ok "missing file exits non-zero"
 "$S" add t.sh >/dev/null 2>&1 && ok "existing file seals, exit 0" || bad "existing file failed"
 "$S" add t.sh nope.sh >/dev/null 2>&1 && bad "mixed list exited 0" || ok "mixed list exits non-zero"
+mkdir empty; "$S" add empty >/dev/null 2>&1 && bad "empty dir exited 0" || ok "empty dir (nothing sealed) exits non-zero"
 "$S" verify | grep -q 'seals intact (1 files)' && ok "the existing file stays sealed" || bad "seal lost"
-[ "$FAILS" = 0 ] || { echo "$FAILS failed"; exit 1; }
-echo "all passed"
+[ "$FAILS" = 0 ] || { echo "== seal-missing · FAIL ($FAILS)"; exit 1; }
+echo "== seal-missing · PASS"
