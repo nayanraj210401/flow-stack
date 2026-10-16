@@ -184,10 +184,13 @@ redact() {
   perl -pe '
     s/(sk-[A-Za-z0-9_-]{4})[A-Za-z0-9_-]{8,}/$1-REDACTED/g;
     s/(gh[pousr]_)[A-Za-z0-9]{10,}/$1REDACTED/g;
+    s/github_pat_[A-Za-z0-9_]{10,}/github_pat_REDACTED/g;
     s/AKIA[0-9A-Z]{16}/AKIA-REDACTED/g;
     s/(xox[abpr]-)[A-Za-z0-9-]+/$1REDACTED/g;
-    s/(Bearer\s+)[A-Za-z0-9._~+\/=-]{8,}/$1REDACTED/gi;
-    s/(\w*(?:api[_-]?key|token|secret|passw(?:or)?d|pwd)\w*["\x27]?\s*[:=]\s*["\x27]?)[^"\x27\s&]+/$1REDACTED/gi;
+    s/((?:Bearer|Authorization:\s*Basic)\s+)[A-Za-z0-9._~+\/=-]{8,}/$1REDACTED/gi;
+    s/(\b[A-Za-z][A-Za-z0-9+.-]*:\/\/[^\s:\/@"\x27]*:)[^\s\/"\x27]+(?=@[^\s@\/"\x27]*(?:[\/\s"\x27]|$))/$1REDACTED/g;
+    s/((?:^|\s)(?:-u\s*|--user(?:\s+|=))[^\s:]+:)(?!\d+(?:\s|$))\S+/$1REDACTED/g;
+    s/(\w*(?:api[_-]?key|token|secret|passw(?:or)?d|pwd)\w*["\x27]?\s*[:=]\s*)(?:"[^"\n]*"?|\x27[^\x27\n]*\x27?|[^"\x27\s&]+)/$1REDACTED/gi;
   '
 }
 
