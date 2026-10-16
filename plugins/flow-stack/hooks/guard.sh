@@ -61,14 +61,18 @@ if [ -n "$force_main" ]; then
 fi
 # Judge each argument of a reader on its own: quotes and dirs stripped, the example/sample/template
 # names exempt per path, so a second .env.example arg doesn't waive the check.
+env_deny() { pre_decide deny "flow guard: reading .env files puts secrets in the transcript. Read .env.example or ask the user which variable matters."; }
+env_file() { # env_file <word>: a real .env file, not an example/sample/template
+  local a="$1"; a="${a//[\"\']/}"; a="${a%%[<>]*}"; a="${a##*/}"
+  grep -Eiq '^\.env(\.[A-Za-z0-9_.-]+)?$' <<<"$a" && ! grep -Eiq '^\.env\.(example|sample|template)$' <<<"$a"
+}
 while IFS= read -r seg; do
+  seg="${seg//</ }"
   set -f; set -- $seg; set +f
-  for a in "$@"; do
-    a="${a//[\"\']/}"; a="${a%%[<>]*}"; a="${a##*/}"
-    grep -Eiq '^\.env(\.[A-Za-z0-9_.-]+)?$' <<<"$a" && ! grep -Eiq '^\.env\.(example|sample|template)$' <<<"$a" &&
-      pre_decide deny "flow guard: reading .env files puts secrets in the transcript. Read .env.example or ask the user which variable matters."
-  done
-done < <(grep -Eio '(^|[;&|[:space:]])(cat|less|more|head|tail|bat|strings|xxd)[[:space:]][^;&|]*' <<<"$cmd" || true)
+  for a in "$@"; do env_file "$a" && env_deny; done
+done < <(grep -Eio '(^|[;&|[:space:]])(cat|less|more|head|tail|bat|strings|xxd|hexdump|od|tac|nl|rev|fold|column|cut|sort|uniq|paste|base64|grep|egrep|fgrep|rg|ag|sed|awk|gawk|diff|cmp|comm)([[:space:]<][^;&|]*)' <<<"$cmd" || true)
+# `< .env` feeds the file to any command.
+while IFS= read -r a; do env_file "${a#<}" && env_deny; done < <(grep -Eo '(^|[^<])<[[:space:]]*[^[:space:];&|<>]+' <<<"$cmd" | sed -E 's/^[^<]*<[[:space:]]*//' || true)
 
 # Gates are the human's: the /flow-pane decides them through task.sh gate, never the agent.
 # A speed bump, not a boundary: an agent could still edit GATES.md by hand.
