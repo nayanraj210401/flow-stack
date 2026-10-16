@@ -3,7 +3,7 @@
 # language and run by a runner it already has. Prints one "key  value  (evidence)" line each:
 #   ecosystem, pm, install, exec, runner, scenario, browser; then nested manifests (monorepos).
 set -uo pipefail
-r="${1:-.}"
+r="${1:-.}"; [ "$r" = / ] || r="${r%/}"
 has() { [ -e "$r/$1" ]; }
 dep() { # dep <name>: declared in a root manifest
   grep -qsE "[\"' ]$1[\"'=<>~ \[]|^$1[=<>~ ]|^$1\$" "$r/package.json" "$r/pyproject.toml" "$r/requirements.txt" "$r/requirements-dev.txt" "$r/Gemfile" "$r/deno.json" 2>/dev/null
@@ -61,6 +61,6 @@ line scenario "$scen"
 line browser "$browser"
 
 # Monorepo: manifests below the root. Each deployable may need its own section.
-find "$r" -maxdepth 3 \( -name node_modules -o -name '.?*' -o -name vendor -o -name target -o -name dist \) -prune -o \
+find "$r" -mindepth 1 -maxdepth 3 \( -name node_modules -o -name '.?*' -o -name vendor -o -name target -o -name dist \) -prune -o \
   \( -name package.json -o -name pyproject.toml -o -name go.mod -o -name Cargo.toml -o -name Gemfile -o -name deno.json \) -print 2>/dev/null |
   sed "s|^$r/||" | grep / | sort | head -20 | while read -r m; do printf '%-10s %s\n' nested "$m"; done
