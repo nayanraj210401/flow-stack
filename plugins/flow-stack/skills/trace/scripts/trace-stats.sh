@@ -6,7 +6,7 @@ set -uo pipefail
 root="$FLOW_ROOT"
 slug="${1:-$FLOW_TASK}"
 d="${FLOW_TASK_HOME:-$FLOW_MAIN}/.flow/tasks/$slug"
-[ -d "$d" ] || { echo "trace-stats: no task '$slug'" >&2; exit 2; }
+[ -n "$slug" ] && [ -d "$d" ] || { echo "trace-stats: no task '$slug'" >&2; exit 2; }
 t="$(mktemp)"; trap 'rm -f "$t"' EXIT
 cat "$d"/trail.jsonl "$d"/lanes/*/trail.jsonl 2>/dev/null | jq -sc 'sort_by(.ts) | .[]' >"$t" 2>/dev/null || true
 [ -s "$t" ] || rm -f "$t"
@@ -34,4 +34,5 @@ echo "## estimate"
 cat "$d/ESTIMATE" 2>/dev/null || echo "none"
 echo "## git"
 git -C "$root" diff --stat HEAD 2>/dev/null | tail -n 1
-git -C "$root" log --oneline --since="$(jq -rs '.[0].ts // empty' "$t" 2>/dev/null)" 2>/dev/null | head -n 20
+since="$(jq -rs '.[0].ts // empty' "$t" 2>/dev/null)"
+[ -z "$since" ] || git -C "$root" log --oneline --since="$since" 2>/dev/null | head -n 20
