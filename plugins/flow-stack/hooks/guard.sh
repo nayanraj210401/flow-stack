@@ -290,7 +290,7 @@ if flow_enabled pkgcheck && command -v curl >/dev/null 2>&1; then
       for (split " ", $args) {
         if ($skip) { $skip = 0; next }
         if ($_ =~ $val) { $skip = 1; next }
-        next if /^-/ || /^[.\/~]/ || /:\/\// || ($eco eq "pypi" && (m{/} || /\.(?:txt|toml|whl|in|zip|tar|tgz|gz)$/));
+        next if /^-/ || /^[.\/~]/ || /:\/\// || ($eco eq "pypi" && (m{/} || /\.(?:txt|toml|whl|in|zip)$/)) || /\.(?:tar|tgz|gz)$/;
         push @n, "$eco $_";
       } @n }
     for my $seg (split /&&|\|\||;|\|/) {
