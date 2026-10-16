@@ -27,8 +27,10 @@ mode() {
 }
 custom() { # custom [<do-id>]: the repo's ready entries as id<TAB>run|do<TAB>body, or test one do id
   if [ -n "${1:-}" ]; then jq -e --arg k "$1" '.ready // [] | any(.id == $k and has("do"))' "$FLOW_DIR/config.json" >/dev/null 2>&1; return; fi
-  jq -r '.ready // [] | .[] | select(.id) | [.id, (if .run then "run" else "do" end), (.run // .do // "")] | @tsv' "$FLOW_DIR/config.json" 2>/dev/null
+  # The body is fetched by index: @tsv would double backslashes and flatten newlines.
+  jq -r '.ready // [] | to_entries[] | select(.value.id) | [.value.id, (if .value.run then "run" else "do" end), .key] | @tsv' "$FLOW_DIR/config.json" 2>/dev/null
 }
+custom_body() { jq -r --argjson i "$1" '.ready[$i] | .run // .do // ""' "$FLOW_DIR/config.json" 2>/dev/null; }
 latest() { awk -F'\t' -v s="$1" -v k="$2" '$2 == s && $3 == k { r = $4 } END { print r }' "$ledger" 2>/dev/null; }
 
 case "${1:-}" in
@@ -72,6 +74,7 @@ for c in lint typecheck; do
 done
 
 while IFS=$'\t' read -r id kind body; do
+  body="$(custom_body "$body")"
   if [ "$kind" = run ]; then
     if run "ready:$id" "$body"; then pass "$id"; else miss "$id fails: $body"; fi
   elif [ "$(latest "$head" "$id")" = done ]; then pass "$id"
