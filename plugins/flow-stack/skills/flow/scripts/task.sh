@@ -57,6 +57,7 @@ flow="$FLOW_DIR"
 profile="${FLOW_STACK_HOME:-$HOME/.flow-stack}/profile.md"
 
 die() { echo "task.sh: $*" >&2; exit 1; }
+has_slice() { awk -v id="$1" '/^## / && $2 == id { f = 1 } END { exit !f }' "$2"; }  # literal id, never a regex
 active() { printf '%s' "$FLOW_TASK"; }
 active_dir() {
   [ -n "$FLOW_TASK_DIR" ] || die "no active task (run: task.sh new <slug>)"
@@ -275,7 +276,7 @@ case "$cmd" in
     fi
     id="${1:-}"; ph="${2:-}"
     [[ "$ph" =~ ^(red|green)$ ]] || die "usage: task.sh tdd <id> red|green [--force \"<reason>\"] | task.sh tdd off [reason]"
-    grep -q "^## $id " "$(active_dir)/SLICES.md" || die "no slice $id"
+    has_slice "$id" "$(active_dir)/SLICES.md" || die "no slice $id"
     reds="$(grep -cE "^### [^ ]+ · $id:(red|before) · FAIL " "$st/EVIDENCE.md" 2>/dev/null || true)"; reds="${reds:-0}"
     if [ "$ph" = green ]; then
       read -r pid pph pn _ <"$pf" 2>/dev/null || true
@@ -317,7 +318,7 @@ case "$cmd" in
     id="${1:-}"; st="${2:-}"
     [[ "$st" =~ ^(todo|doing|done|blocked)$ ]] || die "usage: task.sh slice <id> <todo|doing|done|blocked> [--force \"<reason>\"]"
     f="$(active_dir)/SLICES.md"
-    grep -q "^## $id " "$f" || die "no slice $id in $f"
+    has_slice "$id" "$f" || die "no slice $id in $f"
     if [ "$st" = done ]; then
       if [ "${3:-}" = --force ]; then
         [ -n "${4:-}" ] || die "--force needs a reason"
