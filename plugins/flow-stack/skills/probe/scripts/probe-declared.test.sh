@@ -18,7 +18,7 @@ cd "$SB/repo"
 . "$PLUGIN/evals/_lib/toy.sh"
 toy_repo
 echo 1 >a.txt; git add -A; git commit -qm a
-"$T" new pd bugfix --goal g --check "grep -q 2 a.txt" >/dev/null
+"$T" new pd bug --goal g --check "grep -q 2 a.txt" >/dev/null
 printf '## S1 · a\nstatus: doing\ncheck: grep -q 2 a.txt\nfence: a.txt\n' >.flow/tasks/pd/SLICES.md
 EV=.flow/tasks/pd/EVIDENCE.md
 echo 2 >a.txt

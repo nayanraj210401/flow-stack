@@ -18,7 +18,7 @@ cd "$SB/repo"
 # shellcheck source=/dev/null
 . "$PLUGIN/evals/_lib/toy.sh"
 toy_repo
-"$T" new bs bugfix >/dev/null
+"$T" new bs bug >/dev/null
 S=".flow/tasks/bs/SEALS"
 f='src/a\nb.txt'
 echo old >"$f"; git add -A; git commit -qm f
