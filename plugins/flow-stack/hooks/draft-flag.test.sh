@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# draft-flag.test.sh: the ready gate exempts a real draft flag, not "-d" inside a quoted title/body (#60).
+# draft-flag.test.sh: the ready gate exempts a real draft flag, not "-d" inside a quoted title/body (#60), nor --draft=false (#122).
 set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)"
 FAILS=0
@@ -35,5 +35,9 @@ expect deny  'gh pr create --title fix\ -d'
 expect allow 'gh pr create --draft --title x'
 expect allow 'gh pr create -d --title x'
 expect allow 'gh pr create --title "fix -d" --draft'
+expect allow 'gh pr create --draft=true --title x'
+expect deny  'gh pr create --draft=false'
+expect deny  'gh pr create --title x --draft=false'
+expect deny  'gh pr create --draft=false --title x'
 
 [ "$FAILS" -eq 0 ] && echo "ok" || { echo "$FAILS failed"; exit 1; }
