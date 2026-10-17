@@ -24,6 +24,13 @@ keeps() {
   if [ "$out" = "$1" ]; then ok "unchanged: $1"; else bad "changed: $1 → $out"; fi
 }
 
+hides 'docker login -u me --password hunter2' hunter2
+hides 'cli --token abc12345xyz run' abc12345xyz
+hides 'cli --api-key "my secret value" run' 'secret value'
+hides 'mysql -u root -phunter2 db' hunter2
+keeps 'cli --password --verbose'
+keeps 'mysql -u root -p db'
+keeps 'grep --token-file x'
 hides 'curl -H "Authorization: Basic dXNlcjpwYXNz" x' dXNlcjpwYXNz
 hides 'psql postgres://u:p4ssw0rd@host/db' p4ssw0rd
 hides 'curl -u admin:pass1234 http://x' pass1234
