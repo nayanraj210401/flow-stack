@@ -77,10 +77,18 @@ case "${1:-}" in
   reseal)
     [ -f "$seals" ] || { echo "no seals"; exit 0; }
     awk '{print $2}' "$seals" >"$seals.list"
+    cp "$seals" "$seals.old"
     : >"$seals"
-    while IFS= read -r f; do a="$(abs_of "$f")"; [ -f "$a" ] && printf '%s  %s\n' "$(sha "$a")" "$f" >>"$seals"; done <"$seals.list"
-    rm -f "$seals.list"
-    echo "resealed"
+    # A vanished file keeps its old seal line: dropping it would launder a deleted check. Unseal it with `rm`.
+    bad=0
+    while IFS= read -r f; do
+      a="$(abs_of "$f")"
+      if [ -f "$a" ]; then printf '%s  %s\n' "$(sha "$a")" "$f" >>"$seals"
+      else grep -F -- "  $f" "$seals.old" >>"$seals" || true; echo "MISSING $f (not resealed; seal.sh rm to unseal)" >&2; bad=1; fi
+    done <"$seals.list"
+    rm -f "$seals.list" "$seals.old"
+    [ "$bad" = 0 ] && echo "resealed" || echo "resealed, except missing files"
+    exit "$bad"
     ;;
   rm)
     [ -n "${2:-}" ] || { echo "usage: seal.sh rm <path>" >&2; exit 2; }
