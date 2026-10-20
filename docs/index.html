@@ -205,6 +205,7 @@ h2 em { font-family: "Instrument Serif", Georgia, serif; font-style: italic; fon
 .mods, #board { background: var(--bg-2); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); overflow: hidden; }
 .mods::before, #board::before { content: ""; position: absolute; right: -200px; top: -200px; width: 600px; height: 600px; background: radial-gradient(closest-side, var(--glow), transparent); pointer-events: none; }
 .mods-grid { display: grid; grid-template-columns: 1fr 1.1fr; gap: 48px; align-items: start; }
+.mods-grid > div { min-width: 0; }
 @media (max-width: 960px) { .mods-grid { grid-template-columns: 1fr; } }
 .mod-list { display: grid; gap: 12px; }
 .mod { border: 1px solid var(--line); background: var(--surface); border-radius: 14px; padding: 18px 20px; cursor: pointer; transition: border-color .2s, box-shadow .2s; text-align: left; font: inherit; color: inherit; width: 100%; }
@@ -248,9 +249,6 @@ h2 em { font-family: "Instrument Serif", Georgia, serif; font-style: italic; fon
 .auto-grid .term-body { min-height: 0; }
 
 /* board */
-.bd-grid { display: grid; grid-template-columns: 1fr 1.15fr; gap: 48px; align-items: start; }
-.bd-grid > div { min-width: 0; }
-@media (max-width: 960px) { .bd-grid { grid-template-columns: 1fr; } }
 .bd-ask { margin-top: 20px; color: var(--muted); font-size: 15px; }
 .bd-ask q { color: var(--ink); font-style: italic; }
 .bd-switch { display: inline-flex; gap: 4px; padding: 3px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); margin-bottom: 14px; }
@@ -568,12 +566,12 @@ mul() { echo 6; } fooled one, not both.</span></div>
       <h2>Every repo, <em>one page.</em></h2>
       <p class="sub">Run <code>/flow-stack:board</code> and it gathers what flow-stack already records across your repos, then publishes it as one private Artifact. Each run updates the same link, so the board is always the same place to check. Panels draw only real data, and an empty panel says it's empty.</p>
     </div>
-    <div class="bd-grid">
+    <div class="mods-grid">
       <div class="reveal">
         <div class="modes">
           <div class="amode"><div class="flag">Needs you</div><p>Open gates, blocked slices, tasks ready to close, PRs waiting on your review, and stale features, across every repo, at the top.</p></div>
-          <div class="amode"><div class="flag">Quality per repo</div><p>A 0–100 score from features verified, checks that pass and have teeth, open debt, the review stamp on HEAD, and test coverage by file. A row with no data shows n/a, never 0.</p></div>
-          <div class="amode"><div class="flag">Tasks, decisions, debt, spend</div><p>Every open task and its slices, each <code>who=agent</code> decision, the debt ledger, shipped work, and cost from ccusage.</p></div>
+          <div class="amode"><div class="flag">Quality per repo</div><p>A 0–100 score from features verified, checks that pass and have teeth, open debt, the review stamp on HEAD, and test files per source file. A row with no data shows n/a, never 0.</p></div>
+          <div class="amode"><div class="flag">Tasks, decisions, debt, spend</div><p>Every open task and its slices, recent agent decisions, the debt ledger, shipped work, and cost from ccusage.</p></div>
         </div>
         <p class="never"><b>Make it yours.</b> Your layout lives in the <code># Board</code> section of your profile: theme, the tab it opens on, hidden and reordered panels, wide panels, an accent color, and custom panels written as jq over the board's data. Every session renders the same board from it, and plugin updates leave it alone.</p>
         <p class="bd-ask">You don't have to edit the profile yourself. Ask <q>hide spend</q>, <q>open on All repos</q>, or <q>add a panel of my PRs</q>, and the agent edits <code># Board</code>, shows you the diff, and republishes.</p>
@@ -592,7 +590,7 @@ mul() { echo 6; } fooled one, not both.</span></div>
               <div class="bd-item"><span class="bd-pill warn">close</span><span>api/export · every slice done</span></div>
               <div class="bd-item"><span class="bd-pill warn">stale</span><span>web · feature auth.login</span></div>
             </div>
-            <div class="p-quality"><h5>Quality</h5><div class="bd-row"><b>api</b><span>86</span></div><div class="bd-row"><b>web</b><span>71</span></div><div class="bd-row"><span class="d">lowest</span><span class="d">debt</span></div></div>
+            <div class="p-quality"><h5>Quality</h5><div class="bd-row"><b>api</b><span>86</span></div><div class="bd-row"><b>web</b><span>71</span></div><div class="bd-row"><b>docs</b><span class="d">n/a</span></div></div>
             <div class="p-tasks"><h5>Tasks</h5><div class="bd-num">5</div><div class="d">2 doing · 1 blocked</div></div>
             <div class="p-spend"><h5>Spend · 7d</h5><div class="bd-num">$18</div><div class="d">ccusage</div></div>
             <div class="p-view"><h5>My PRs · view</h5><div class="bd-row"><span class="d">#3</span><span>rate limiting</span></div><div class="bd-row"><span class="d">#42</span><span>settings page</span></div></div>
@@ -609,7 +607,7 @@ mul() { echo 6; } fooled one, not both.</span></div>
         </div>
       </div>
     </div>
-    <p class="mods-note">The board preview is a mockup. The real board is a private claude.ai Artifact. It shows repo names, PR titles, and commit subjects, so check it before you share the link.</p>
+    <p class="mods-note">The board preview is a mockup. The real board is a private claude.ai Artifact. It shows repo names, PR titles, commit subjects, and debt and decision text, so check it before you share the link.</p>
   </div>
 </section>
 
