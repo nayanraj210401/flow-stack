@@ -30,12 +30,13 @@ cd "$root"
 # Paths reach awk through ENVIRON, never -v, which unescapes backslashes.
 # Hash from stdin: shasum prefixes "\" to the hash of a file whose name has a backslash.
 sha() { shasum -a 256 <"$1" | cut -d' ' -f1; }
-hash_file() { printf '%s  %s\n' "$(sha "$1")" "$(flow_qual "$1")"; }
 
 expand() {
   local p="${1#./}"
   if [ -d "$p" ]; then
-    { git ls-files -- "$p"; git ls-files --others --exclude-standard -- "$p"; } | sort -u
+    # git ls-files still lists files that are tracked but deleted in the working tree
+    { git ls-files -- "$p"; git ls-files --others --exclude-standard -- "$p"; } | sort -u |
+      while IFS= read -r f; do [ -f "$f" ] && printf '%s\n' "$f"; done
   elif [ -f "$p" ]; then
     printf '%s\n' "$p"
   else
@@ -51,9 +52,11 @@ case "${1:-}" in
       n=0
       while IFS= read -r f; do
         [ -n "$f" ] || continue
+        # hash first: a seal line is never written without one
+        h="$(sha "$f")" && [ -n "$h" ] || { echo "seal.sh: cannot hash: $f" >&2; exit 1; }
         q="$(flow_qual "$f")" awk 'substr($0, 67) != ENVIRON["q"]' "$seals" >"$seals.tmp"
         mv "$seals.tmp" "$seals"
-        hash_file "$f" >>"$seals"
+        printf '%s  %s\n' "$h" "$(flow_qual "$f")" >>"$seals"
         echo "sealed: $(flow_qual "$f")"; n=$((n + 1))
       done < <(expand "$p")
       [ "$n" -gt 0 ] || rc=1
