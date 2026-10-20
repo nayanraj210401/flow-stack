@@ -31,6 +31,13 @@ hides 'mysql -u root -phunter2 db' hunter2
 keeps 'cli --password --verbose'
 keeps 'mysql -u root -p db'
 keeps 'grep --token-file x'
+hides 'mysql -u root -p"my pass" db' 'pass'
+hides "mysql -u root -p'my pass' db" 'pass'
+hides 'cli --client-secret s3cr3tval run' s3cr3tval
+hides 'cli --access-token abc12345xyz run' abc12345xyz
+hides 'cli --private-key k3yvalue99 run' k3yvalue99
+hides 'cli --private-key=k3yvalue99 run' k3yvalue99
+keeps 'cli --access-token-file x'
 hides 'curl -H "Authorization: Basic dXNlcjpwYXNz" x' dXNlcjpwYXNz
 hides 'psql postgres://u:p4ssw0rd@host/db' p4ssw0rd
 hides 'curl -u admin:pass1234 http://x' pass1234
