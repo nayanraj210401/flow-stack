@@ -190,6 +190,8 @@ redact() {
     s/((?:Bearer|Authorization:\s*Basic)\s+)[A-Za-z0-9._~+\/=-]{8,}/$1REDACTED/gi;
     s/(\b[A-Za-z][A-Za-z0-9+.-]*:\/\/[^\s:\/@"\x27]*:)[^\s\/"\x27]+(?=@[^\s@\/"\x27]*(?:[\/\s"\x27]|$))/$1REDACTED/g;
     s/((?:^|\s)(?:-u\s*|--user(?:\s+|=))[^\s:]+:)(?!\d+(?:\s|$))\S+/$1REDACTED/g;
+    s/(--(?:password|passwd|pwd|token|secret|api[-_]?key|auth[-_]?token|client[-_]?secret|access[-_]?token|private[-_]?key)(?:\s+|=))(?!-)(?:"[^"\n]*"?|\x27[^\x27\n]*\x27?|\S+)/$1REDACTED/gi;
+    s/((?:^|[;&|])\s*(?:(?:sudo|env|\w+=\S*)\s+)*(?:[^\s;&|]*\/)?(?:mysql\w*|mariadb[\w-]*)\b(?:"[^"\n]*"|\x27[^\x27\n]*\x27|[^|;&\n"\x27])*?\s-p)(?!\s)(?:"[^"\n]*"?|\x27[^\x27\n]*\x27?|\S+)/$1REDACTED/g;
     s/(\w*(?:api[_-]?key|token|secret|passw(?:or)?d|pwd)\w*["\x27]?\s*[:=]\s*)(?:"[^"\n]*"?|\x27[^\x27\n]*\x27?|[^"\x27\s&]+)/$1REDACTED/gi;
   '
 }
