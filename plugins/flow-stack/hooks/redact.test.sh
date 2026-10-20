@@ -33,6 +33,11 @@ keeps 'mysql -u root -p db'
 keeps 'grep --token-file x'
 hides 'mysql -u root -p"my pass" db' 'pass'
 hides "mysql -u root -p'my pass' db" 'pass'
+hides 'mysqladmin -u root -pS3cr3t status' S3cr3t
+hides 'mariadb-admin -u root -pS3cr3t status' S3cr3t
+keeps 'psql -h db -p 5432 app'
+keeps 'ssh -p 2222 host'
+keeps 'find . -name "*.sh" -print'
 hides 'cli --client-secret s3cr3tval run' s3cr3tval
 hides 'cli --access-token abc12345xyz run' abc12345xyz
 hides 'cli --private-key k3yvalue99 run' k3yvalue99
