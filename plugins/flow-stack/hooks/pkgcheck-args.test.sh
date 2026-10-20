@@ -50,4 +50,27 @@ expect deny  'pnpm add -r notreal-pkg'
 expect deny  'npm install -t notreal-pkg'
 expect deny  'pip install -t vendor notreal-pkg'
 
+# a value-taking flag's value is not a package, before or after the name (#144)
+expect allow 'npm install -w zzq-ws left-pad'
+expect allow 'npm install --workspace zzq-ws left-pad'
+expect allow 'npm install --workspace=zzq-ws left-pad'
+expect allow 'npm install --tag beta left-pad'
+expect allow 'pnpm add -F zzq-filter left-pad'
+expect allow 'pnpm add --filter zzq-filter left-pad'
+expect allow 'poetry add --group dev pkg'
+expect allow 'poetry add pkg -G zzqgroup'
+expect allow 'uv add --group zzqgroup pkg'
+expect allow 'uv add pkg --optional zzqextra'
+expect allow 'pip install --no-binary :all: pkg'
+expect allow 'pip install --only-binary :all: pkg'
+expect allow 'pip install --python-version 3.9 pkg'
+expect allow 'pip install "pkg >= 2.0"'
+expect allow "pip install 'pkg>=2.0' left-pad"
+expect allow 'npm install "left-pad@^1.3"'
+expect deny  'pnpm add -w notreal-pkg'
+expect deny  'pnpm add --filter zzq-filter notreal-pkg'
+expect deny  'poetry add --group dev notreal-pkg'
+expect deny  'pip install "notreal-pkg >= 2.0"'
+expect deny  'npm install -w zzq-ws notreal-pkg'
+
 [ "$FAILS" -eq 0 ] && echo ok || { echo "$FAILS failed"; exit 1; }

@@ -284,9 +284,14 @@ if flow_enabled pkgcheck && command -v curl >/dev/null 2>&1; then
     # Package names of one install segment: redirections are dropped, and so are flags with their
     # value (-r reqs.in), paths and archives (pip install dist/x.tar.gz).
     # Only flags that take a value in that ecosystem: a boolean one (pnpm -r) would swallow a name.
-    sub names { my ($args, $eco) = @_; $args =~ s/&?\d*[<>]+&?\s*\S+//g; my ($skip, @n);
-      my $val = $eco eq "npm" ? qr/^(?:-C|--(?:prefix|cwd|dir|registry))$/
-        : qr/^(?:-[rceti]|--(?:requirement|constraint|editable|target|prefix|index-url|extra-index-url|find-links|root|python))$/;
+    # A quoted spec ("requests >= 2.0") counts as its first word.
+    sub names { my ($args, $eco, $npm) = @_; my ($skip, @n);
+      $args =~ s/"\s*([^"\s]*)[^"]*"|\x27\s*([^\x27\s]*)[^\x27]*\x27/defined $1 ? $1 : $2/ge;
+      $args =~ s/&?\d*[<>]+&?\s*\S+//g;
+      my $val = $eco eq "npm"
+        ? ($npm ? qr/^(?:-[Cw]|--(?:prefix|cwd|dir|registry|workspace|tag|omit|include|cache|userconfig))$/
+                : qr/^(?:-F|--(?:prefix|cwd|dir|registry|filter|cache-dir))$/)
+        : qr/^(?:-[rcetiGEp]|--(?:requirement|constraint|editable|target|prefix|index-url|extra-index-url|find-links|root|python|python-version|platform|implementation|abi|no-binary|only-binary|src|cache-dir|upgrade-strategy|config-settings|group|optional|extra|extras|source|index|default-index|package|rev|tag|branch))$/;
       for (split " ", $args) {
         if ($skip) { $skip = 0; next }
         if ($_ =~ $val) { $skip = 1; next }
@@ -295,7 +300,7 @@ if flow_enabled pkgcheck && command -v curl >/dev/null 2>&1; then
       } @n }
     for my $seg (split /&&|\|\||;|\|/) {
       if ($seg =~ /\b(?:npm\s+(?:i|install|add)|pnpm\s+(?:add|i|install)|yarn\s+add|bun\s+add)\s+(.*)/) {
-        print "$_\n" for names($1, "npm");
+        my $a = $1; print "$_\n" for names($a, "npm", scalar($seg =~ /\bnpm\s/));
       } elsif ($seg =~ /\b(?:pip3?\s+install|uv\s+(?:add|pip\s+install)|poetry\s+add)\s+(.*)/) {
         print "$_\n" for names($1, "pypi");
       }
