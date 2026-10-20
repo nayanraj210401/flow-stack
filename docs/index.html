@@ -230,7 +230,7 @@ h2 em { font-family: "Instrument Serif", Georgia, serif; font-style: italic; fon
 .cc-btns button { font: 600 12px "JetBrains Mono", monospace; border-radius: 6px; padding: 5px 12px; cursor: pointer; border: 1px solid var(--term-line); background: var(--term-bar); color: var(--term-ink); }
 .cc-btns button.ap { background: var(--term-ok); color: #0a0908; border-color: var(--term-ok); }
 .cc-decided { color: var(--term-ok); margin-top: 8px; display: none; }
-.cc .flash { animation: flash 1.2s ease; }
+.flash { animation: flash 1.2s ease; }
 @keyframes flash { 0% { background: rgba(180,168,255,.22); } 100% { background: transparent; } }
 .toast { position: absolute; right: 14px; top: 52px; background: var(--term-bar); border: 1px solid var(--term-line); color: var(--term-ink); border-radius: 8px; padding: 8px 12px; font: 12px "JetBrains Mono", monospace; box-shadow: 0 10px 30px rgba(0,0,0,.4); opacity: 0; transform: translateY(-6px); transition: all .3s ease; pointer-events: none; }
 .toast.show { opacity: 1; transform: none; }
@@ -258,7 +258,7 @@ h2 em { font-family: "Instrument Serif", Georgia, serif; font-style: italic; fon
 .mc-cmds button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
 .mc-cmds button[aria-pressed="true"]::before { content: "✓ "; }
 .mc .term-body { min-height: 0; font-size: 12.5px; padding: 14px 16px; }
-.mc-log { height: 206px; overflow: hidden; }
+.mc-log { height: 172px; overflow-y: hidden; }
 .mc-prefs { margin-top: 12px; }
 .mc-prefs .ok { animation: flash 1.2s ease; }
 .mc-how { margin: 14px 0 0; color: var(--muted); font-size: 14.5px; }
@@ -282,7 +282,6 @@ h2 em { font-family: "Instrument Serif", Georgia, serif; font-style: italic; fon
 .bd.view .p-view { display: block; }
 .bd.no-spend .p-quality, .bd.no-spend .p-tasks { grid-column: span 3; }
 @media (max-width: 560px) { .bd .p-quality, .bd .p-tasks, .bd .p-spend, .bd.no-spend .p-quality, .bd.no-spend .p-tasks { grid-column: span 6; } }
-.bd .pop { animation: flash 1.2s ease; }
 .bd-item { display: flex; gap: 8px; align-items: baseline; margin-top: 6px; }
 .bd-pill { font: 600 10.5px "JetBrains Mono", monospace; padding: 1px 6px; border-radius: 5px; border: 1px solid color-mix(in srgb, var(--bd-acc) 45%, var(--line)); color: var(--bd-acc); flex: none; }
 .bd-pill.warn { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); }
@@ -301,7 +300,7 @@ h2 em { font-family: "Instrument Serif", Georgia, serif; font-style: italic; fon
 .bd .d { color: var(--faint); }
 .mc-legend { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 20px; }
 @media (max-width: 820px) { .mc-legend { grid-template-columns: 1fr; } }
-@media (prefers-reduced-motion: reduce) { .bd-live, .bd .pop, .mc-prefs .ok { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .bd-live, .mc-prefs .ok { animation: none; } }
 
 /* guardrails */
 .guard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
@@ -862,7 +861,7 @@ mul() { echo 6; } fooled one, not both.</span></div>
   var busy = false;
   function log(html) {
     var lines = (mcLog.innerHTML + '\n' + html).split('\n');
-    mcLog.innerHTML = lines.slice(-8).join('\n');
+    mcLog.innerHTML = lines.slice(-6).join('\n');
   }
   function type(text, done) {
     var full = '› /flow-stack:board ' + text;
@@ -887,8 +886,7 @@ mul() { echo 6; } fooled one, not both.</span></div>
         log((on ? '<span class="ok">  + ' : '<span class="bad">  − ') + c.pref + '</span>');
         bd.classList.toggle(c.cls, on);
         renderPrefs(on ? b.dataset.cmd : null);
-        var target = bd.querySelector(c.panel);
-        target.classList.remove('pop'); void target.offsetWidth; target.classList.add('pop');
+        flash(bd.querySelector(c.panel));
         log('<span class="ok">  ✓ republished</span><span class="d"> · same link</span>');
         busy = false;
       });
