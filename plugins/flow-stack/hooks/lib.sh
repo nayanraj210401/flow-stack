@@ -119,9 +119,15 @@ flow_rel() {
   esac
 }
 
-# glob_match <path> <glob>: ** and * both cross directories; good enough for fences.
+# glob_match <path> <glob>: ** and * both cross directories, and **/ also matches zero
+# directories (src/**/*.ts matches src/a.ts); good enough for fences.
 glob_match() {
-  local path="$1" glob="${2//\*\*/*}"
+  local path="$1" glob="$2"
+  if [[ "$glob" == *'**/'* ]]; then
+    glob_match "$path" "${glob/\*\*\//}" || glob_match "$path" "${glob/\*\*\//*/}"
+    return
+  fi
+  glob="${glob//\*\*/*}"
   # shellcheck disable=SC2053
   [[ "$path" == $glob ]]
 }
