@@ -299,7 +299,7 @@ if flow_enabled pkgcheck && command -v curl >/dev/null 2>&1; then
       } elsif ($seg =~ /\b(?:pip3?\s+install|uv\s+(?:add|pip\s+install)|poetry\s+add)\s+(.*)/) {
         print "$_\n" for names($1, "pypi");
       }
-    }' <<<"$cmd" | head -n 5)"
+    }' <<<"$lit" | head -n 5)"
   while read -r eco name; do
     [ -n "$name" ] || continue
     name="${name//[\"\']/}"
