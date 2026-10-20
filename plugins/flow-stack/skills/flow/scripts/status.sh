@@ -81,11 +81,11 @@ clash="$([ -f "$st/.clash" ] && cut -f1 "$st/.clash" | sort -u | while read -r p
   done | jq -sc "$clean"' map(map_values(clean))')"
 jq -nc --argjson extra "$extra" --arg task "$FLOW_TASK" --arg where "$where" --arg slice "$slice" --arg owner "$owner" --argjson clash "${clash:-[]}" \
   --arg done "${done_n:-0}" --arg total "${total:-0}" --arg tdd "$tdd" \
-  --arg ts "${ev_ts:-}" --arg label "${ev_label:-}" --arg verdict "${ev_verdict:-}" --argjson stale "$stale" '
+  --arg ts "${ev_ts:-}" --arg ev_label "${ev_label:-}" --arg verdict "${ev_verdict:-}" --argjson stale "$stale" '
   # repo files are untrusted: no control characters (terminal escapes) reach the band or spinner
   def clean: gsub("[\u0001-\u001f\u007f-\u009f]"; "");
   {task: ($task | clean), where: $where, owner: $owner,
    slice: ($slice | if . == "" then null else {id: (split(" · ")[0] | clean), title: (split(" · ")[1:] | join(" · ") | clean)} end),
    done: ($done | tonumber), total: ($total | tonumber), tdd: ($tdd | clean),
-   evidence: (if $ts == "" then null else {label: ($label | clean), verdict: ($verdict | clean), ts: ($ts | clean)} end),
+   evidence: (if $ts == "" then null else {label: ($ev_label | clean), verdict: ($verdict | clean), ts: ($ts | clean)} end),
    stale: $stale} + (if $clash == [] then {} else {clash: $clash} end) + $extra'

@@ -29,7 +29,7 @@ It is built from skills, bash + jq hooks, and existing tools. There is no new ru
 
 For local development: `claude --plugin-dir ./plugins/flow-stack`.
 
-Requirements: `jq`, `git`, `perl`, `curl`, and `shasum` (standard on macOS and most Linux). Optional tools `setup` can install: rtk, serena, headroom, graphify, ccusage, Playwright MCP, and ntfy.
+Requirements: `jq` 1.6 or later, `git`, `perl`, `curl`, and `shasum` (standard on macOS and most Linux). Optional tools `setup` can install: rtk, serena, headroom, graphify, ccusage, Playwright MCP, and ntfy.
 
 ## Architecture
 
