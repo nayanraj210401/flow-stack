@@ -57,7 +57,7 @@ head="$(sha)"; fails=0
 pass() { echo "  ✓ $*"; }
 miss() { echo "  ✗ $*"; fails=$((fails + 1)); }
 run() { # run <label> <cmd>: through evidence.sh so an active task records it
-  ( cd "$FLOW_ROOT" && "$sk/verify/scripts/evidence.sh" "$1" "$2" >/dev/null 2>&1 )
+  ( cd "$FLOW_ROOT" && "$sk/verify/scripts/evidence.sh" "$1" "$2" >/dev/null 2>&1 </dev/null )
 }
 echo "ready for review? $(echo "$head" | cut -c1-7)${base:+ vs $(echo "$base" | cut -c1-7)}"
 
