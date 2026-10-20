@@ -84,7 +84,7 @@ case "${1:-}" in
     while IFS= read -r f; do
       a="$(abs_of "$f")"
       if [ -f "$a" ]; then printf '%s  %s\n' "$(sha "$a")" "$f" >>"$seals"
-      else grep -F -- "  $f" "$seals.old" >>"$seals" || true; echo "MISSING $f (not resealed; seal.sh rm to unseal)" >&2; bad=1; fi
+      else f="$f" awk '$2 == ENVIRON["f"] {print; exit}' "$seals.old" >>"$seals"; echo "MISSING $f (not resealed; seal.sh rm to unseal)" >&2; bad=1; fi
     done <"$seals.list"
     rm -f "$seals.list" "$seals.old"
     [ "$bad" = 0 ] && echo "resealed" || echo "resealed, except missing files"

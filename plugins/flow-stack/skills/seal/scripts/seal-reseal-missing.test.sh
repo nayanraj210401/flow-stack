@@ -22,5 +22,13 @@ v="$("$S" verify 2>&1)"
 grep -Eq 'MISSING +b.sh' <<<"$v" && ok "verify still reports MISSING" || bad "seal was laundered"
 grep -Eq 'CHANGED +a.sh' <<<"$v" && bad "a.sh not resealed" || ok "the existing file is resealed"
 "$S" rm b.sh >/dev/null 2>&1; "$S" reseal >/dev/null 2>&1 && ok "after rm, reseal exits 0" || bad "reseal still fails after rm"
+# A deleted file's old seal is found by exact path: a.sh must not drag in a.sh.bak's stale seal.
+echo a >a.sh; echo old >a.sh.bak; "$S" add a.sh a.sh.bak >/dev/null 2>&1
+rm a.sh; echo new >a.sh.bak
+"$S" reseal >/dev/null 2>&1
+[ "$("$S" list | grep -c 'a\.sh\.bak$')" = 1 ] && ok "a.sh.bak has one seal line" || bad "a.sh.bak's stale seal came back: $("$S" list | tr '\n' ' ')"
+v="$("$S" verify 2>&1)"
+grep -Eq 'CHANGED +a.sh.bak' <<<"$v" && bad "verify flags a.sh.bak: $v" || ok "verify does not flag a.sh.bak"
+grep -Eq 'MISSING +a.sh$' <<<"$v" && ok "verify still reports a.sh MISSING" || bad "a.sh seal lost: $v"
 [ "$FAILS" = 0 ] || { echo "== seal-reseal-missing · FAIL ($FAILS)"; exit 1; }
 echo "== seal-reseal-missing · PASS"
