@@ -202,8 +202,8 @@ h2 em { font-family: "Instrument Serif", Georgia, serif; font-style: italic; fon
 .loop-grid .term-body { min-height: 0; }
 
 /* mods */
-.mods { background: var(--bg-2); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); overflow: hidden; }
-.mods::before { content: ""; position: absolute; right: -200px; top: -200px; width: 600px; height: 600px; background: radial-gradient(closest-side, var(--glow), transparent); pointer-events: none; }
+.mods, #board { background: var(--bg-2); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); overflow: hidden; }
+.mods::before, #board::before { content: ""; position: absolute; right: -200px; top: -200px; width: 600px; height: 600px; background: radial-gradient(closest-side, var(--glow), transparent); pointer-events: none; }
 .mods-grid { display: grid; grid-template-columns: 1fr 1.1fr; gap: 48px; align-items: start; }
 @media (max-width: 960px) { .mods-grid { grid-template-columns: 1fr; } }
 .mod-list { display: grid; gap: 12px; }
@@ -246,6 +246,45 @@ h2 em { font-family: "Instrument Serif", Georgia, serif; font-style: italic; fon
 .never { margin-top: 20px; border-left: 3px solid var(--accent); padding: 4px 0 4px 16px; color: var(--muted); font-size: 15px; }
 .never b { color: var(--ink); }
 .auto-grid .term-body { min-height: 0; }
+
+/* board */
+.bd-grid { display: grid; grid-template-columns: 1fr 1.15fr; gap: 48px; align-items: start; }
+.bd-grid > div { min-width: 0; }
+@media (max-width: 960px) { .bd-grid { grid-template-columns: 1fr; } }
+.bd-ask { margin-top: 20px; color: var(--muted); font-size: 15px; }
+.bd-ask q { color: var(--ink); font-style: italic; }
+.bd-switch { display: inline-flex; gap: 4px; padding: 3px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); margin-bottom: 14px; }
+.bd-switch button { font: 500 13px Inter, system-ui, sans-serif; color: var(--muted); background: none; border: 0; padding: 6px 12px; border-radius: 7px; cursor: pointer; }
+.bd-switch button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-ink); }
+.bd { --bd-acc: var(--accent); border: 1px solid var(--line); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); overflow: hidden; font-size: 13.5px; }
+.bd.custom { --bd-acc: var(--accent-2); }
+.bd-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.bd-bar b { font-size: 15px; }
+.bd-tabs { display: flex; gap: 2px; background: var(--bg-2); padding: 3px; border-radius: 8px; font-size: 12.5px; }
+.bd-tabs span { padding: 3px 9px; border-radius: 6px; color: var(--muted); }
+.bd-tabs .on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.bd-body { display: grid; grid-template-columns: repeat(6, 1fr); gap: 1px; background: var(--line); }
+.bd-body > div { background: var(--surface); padding: 14px 16px; }
+.bd h5 { margin: 0 0 8px; font: 600 11.5px "JetBrains Mono", monospace; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
+.bd .p-needs { grid-column: span 6; order: 1; }
+.bd .p-quality, .bd .p-tasks, .bd .p-spend { grid-column: span 2; }
+.bd .p-quality { order: 2; } .bd .p-tasks { order: 3; } .bd .p-spend { order: 4; }
+.bd .p-view { grid-column: span 6; order: 5; display: none; }
+.bd.custom .p-spend { display: none; }
+.bd.custom .p-quality, .bd.custom .p-tasks { grid-column: span 3; }
+.bd.custom .p-view { display: block; }
+.bd-item { display: flex; gap: 8px; align-items: baseline; margin-top: 6px; }
+.bd-pill { font: 600 10.5px "JetBrains Mono", monospace; padding: 1px 6px; border-radius: 5px; border: 1px solid color-mix(in srgb, var(--bd-acc) 45%, var(--line)); color: var(--bd-acc); flex: none; }
+.bd-pill.warn { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); }
+.bd-num { font: 600 24px/1.1 "JetBrains Mono", monospace; color: var(--bd-acc); }
+.bd-row { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); }
+.bd-row b { color: var(--ink); font-weight: 600; }
+.bd .d { color: var(--faint); }
+@media (max-width: 560px) { .bd .p-quality, .bd .p-tasks, .bd .p-spend, .bd.custom .p-quality, .bd.custom .p-tasks { grid-column: span 6; } }
+.bd-prefs { margin-top: 14px; }
+.bd-prefs .term-body { min-height: 0; }
+.bd-prefs .ln { transition: color .3s; }
+.bd-prefs:not(.custom) .ln { color: var(--term-dim); }
 
 /* guardrails */
 .guard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
@@ -309,6 +348,7 @@ footer a { color: var(--muted); }
       <a class="opt" href="#how">How it works</a>
       <a class="opt" href="#mods">Mods</a>
       <a class="opt" href="#auto">Auto</a>
+      <a class="opt" href="#board">Board</a>
       <a class="opt" href="#guardrails">Guardrails</a>
       <a class="opt" href="#cost">Cost</a>
       <button class="theme-btn" id="theme" type="button" aria-label="Toggle theme">◐</button>
@@ -521,6 +561,58 @@ mul() { echo 6; } fooled one, not both.</span></div>
   </div>
 </section>
 
+<section id="board">
+  <div class="wrap">
+    <div class="reveal">
+      <div class="kicker">Flow Board · mission control</div>
+      <h2>Every repo, <em>one page.</em></h2>
+      <p class="sub">Run <code>/flow-stack:board</code> and it gathers what flow-stack already records across your repos, then publishes it as one private Artifact. Each run updates the same link, so the board is always the same place to check. Panels draw only real data, and an empty panel says it's empty.</p>
+    </div>
+    <div class="bd-grid">
+      <div class="reveal">
+        <div class="modes">
+          <div class="amode"><div class="flag">Needs you</div><p>Open gates, blocked slices, tasks ready to close, PRs waiting on your review, and stale features, across every repo, at the top.</p></div>
+          <div class="amode"><div class="flag">Quality per repo</div><p>A 0–100 score from features verified, checks that pass and have teeth, open debt, the review stamp on HEAD, and test coverage by file. A row with no data shows n/a, never 0.</p></div>
+          <div class="amode"><div class="flag">Tasks, decisions, debt, spend</div><p>Every open task and its slices, each <code>who=agent</code> decision, the debt ledger, shipped work, and cost from ccusage.</p></div>
+        </div>
+        <p class="never"><b>Make it yours.</b> Your layout lives in the <code># Board</code> section of your profile: theme, the tab it opens on, hidden and reordered panels, wide panels, an accent color, and custom panels written as jq over the board's data. Every session renders the same board from it, and plugin updates leave it alone.</p>
+        <p class="bd-ask">You don't have to edit the profile yourself. Ask <q>hide spend</q>, <q>open on All repos</q>, or <q>add a panel of my PRs</q>, and the agent edits <code># Board</code>, shows you the diff, and republishes.</p>
+      </div>
+      <div class="reveal">
+        <div class="bd-switch" role="group" aria-label="Board preview">
+          <button type="button" data-bd="default" aria-pressed="true">Default</button>
+          <button type="button" data-bd="custom" aria-pressed="false">With your # Board</button>
+        </div>
+        <div class="bd" id="bd">
+          <div class="bd-bar"><b>Flow Board</b><div class="bd-tabs"><span class="t-cur on">api</span><span>web</span><span class="t-all">All repos</span></div></div>
+          <div class="bd-body">
+            <div class="p-needs"><h5>Needs you · 4</h5>
+              <div class="bd-item"><span class="bd-pill">gate</span><span>api/rate-limit · merge PR #3</span></div>
+              <div class="bd-item"><span class="bd-pill">review</span><span>web · #42 settings page</span></div>
+              <div class="bd-item"><span class="bd-pill warn">close</span><span>api/export · every slice done</span></div>
+              <div class="bd-item"><span class="bd-pill warn">stale</span><span>web · feature auth.login</span></div>
+            </div>
+            <div class="p-quality"><h5>Quality</h5><div class="bd-row"><b>api</b><span>86</span></div><div class="bd-row"><b>web</b><span>71</span></div><div class="bd-row"><span class="d">lowest</span><span class="d">debt</span></div></div>
+            <div class="p-tasks"><h5>Tasks</h5><div class="bd-num">5</div><div class="d">2 doing · 1 blocked</div></div>
+            <div class="p-spend"><h5>Spend · 7d</h5><div class="bd-num">$18</div><div class="d">ccusage</div></div>
+            <div class="p-view"><h5>My PRs · view</h5><div class="bd-row"><span class="d">#3</span><span>rate limiting</span></div><div class="bd-row"><span class="d">#42</span><span>settings page</span></div></div>
+          </div>
+        </div>
+        <div class="term bd-prefs" id="bdPrefs">
+          <div class="term-bar"><i></i><i></i><i></i><span class="title">~/.flow-stack/profile.md</span></div>
+          <div class="term-body"><span class="acc"># Board</span>
+<span class="ln">- tab: all
+- hide: spend
+- order: needs, quality, tasks
+- accent: #0891b2
+- view: My PRs · [.repos[] | .prs.mine[]? | {number, title}] · table</span></div>
+        </div>
+      </div>
+    </div>
+    <p class="mods-note">The board preview is a mockup. The real board is a private claude.ai Artifact. It shows repo names, PR titles, and commit subjects, so check it before you share the link.</p>
+  </div>
+</section>
+
 <section id="guardrails">
   <div class="wrap">
     <div class="reveal center">
@@ -723,6 +815,19 @@ mul() { echo 6; } fooled one, not both.</span></div>
   }
   document.getElementById('approve').addEventListener('click', function () { decide('approve'); });
   document.getElementById('reject').addEventListener('click', function () { decide('reject'); });
+
+  // board preview
+  var bd = document.getElementById('bd'), bdPrefs = document.getElementById('bdPrefs');
+  document.querySelectorAll('[data-bd]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var custom = b.dataset.bd === 'custom';
+      document.querySelectorAll('[data-bd]').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+      bd.classList.toggle('custom', custom);
+      bdPrefs.classList.toggle('custom', custom);
+      bd.querySelector('.t-cur').classList.toggle('on', !custom);
+      bd.querySelector('.t-all').classList.toggle('on', custom);
+    });
+  });
 
   // copy
   function copier(btn, text) {
