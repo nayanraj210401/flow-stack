@@ -275,8 +275,12 @@ while IFS= read -r seg; do
   case "$rest" in
     reset*) grep -Eq '(^|[[:space:]])--hard([[:space:]]|$)' <<<"$rest" && discard=1 ;;
     clean*) grep -Eq '(^|[[:space:]])(--force|-[A-Za-z]*f[A-Za-z]*)([[:space:]]|$)' <<<"$rest" && discard=1 ;;
+    restore*) grep -Eq '(^|[[:space:]])(--staged|-S)([[:space:]]|$)' <<<"$rest" \
+        && ! grep -Eq '(^|[[:space:]])(--worktree|-W)([[:space:]]|$)' <<<"$rest" || discard=1 ;;
+    checkout*) grep -Eq '[[:space:]](--|\.)([[:space:]]|$)' <<<"$rest" && discard=1 ;;
+    stash*) grep -Eq '^stash[[:space:]]+(drop|clear)([[:space:]]|$)' <<<"$rest" && discard=1 ;;
   esac
-done < <(grep -Eio "$gopts[[:space:]]+(reset|clean)([[:space:]][^;&|)\`]*)?" <<<"$cmd" || true)
+done < <(grep -Eio "$gopts[[:space:]]+(reset|clean|restore|checkout|stash)([[:space:]][^;&|)\`]*)?" <<<"$cmd" || true)
 if [ -n "$discard" ]; then
   pre_decide ask "flow guard: this discards uncommitted work."
 fi
