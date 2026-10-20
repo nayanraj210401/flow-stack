@@ -202,8 +202,8 @@ h2 em { font-family: "Instrument Serif", Georgia, serif; font-style: italic; fon
 .loop-grid .term-body { min-height: 0; }
 
 /* mods */
-.mods { background: var(--bg-2); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); overflow: hidden; }
-.mods::before { content: ""; position: absolute; right: -200px; top: -200px; width: 600px; height: 600px; background: radial-gradient(closest-side, var(--glow), transparent); pointer-events: none; }
+.mods, #board { background: var(--bg-2); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); overflow: hidden; }
+.mods::before, #board::before { content: ""; position: absolute; right: -200px; top: -200px; width: 600px; height: 600px; background: radial-gradient(closest-side, var(--glow), transparent); pointer-events: none; }
 .mods-grid { display: grid; grid-template-columns: 1fr 1.1fr; gap: 48px; align-items: start; }
 @media (max-width: 960px) { .mods-grid { grid-template-columns: 1fr; } }
 .mod-list { display: grid; gap: 12px; }
@@ -230,7 +230,7 @@ h2 em { font-family: "Instrument Serif", Georgia, serif; font-style: italic; fon
 .cc-btns button { font: 600 12px "JetBrains Mono", monospace; border-radius: 6px; padding: 5px 12px; cursor: pointer; border: 1px solid var(--term-line); background: var(--term-bar); color: var(--term-ink); }
 .cc-btns button.ap { background: var(--term-ok); color: #0a0908; border-color: var(--term-ok); }
 .cc-decided { color: var(--term-ok); margin-top: 8px; display: none; }
-.cc .flash { animation: flash 1.2s ease; }
+.flash { animation: flash 1.2s ease; }
 @keyframes flash { 0% { background: rgba(180,168,255,.22); } 100% { background: transparent; } }
 .toast { position: absolute; right: 14px; top: 52px; background: var(--term-bar); border: 1px solid var(--term-line); color: var(--term-ink); border-radius: 8px; padding: 8px 12px; font: 12px "JetBrains Mono", monospace; box-shadow: 0 10px 30px rgba(0,0,0,.4); opacity: 0; transform: translateY(-6px); transition: all .3s ease; pointer-events: none; }
 .toast.show { opacity: 1; transform: none; }
@@ -246,6 +246,61 @@ h2 em { font-family: "Instrument Serif", Georgia, serif; font-style: italic; fon
 .never { margin-top: 20px; border-left: 3px solid var(--accent); padding: 4px 0 4px 16px; color: var(--muted); font-size: 15px; }
 .never b { color: var(--ink); }
 .auto-grid .term-body { min-height: 0; }
+
+/* board */
+.mc { margin-top: 8px; display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); gap: 32px; align-items: start; padding: 28px; border: 1px solid var(--line); border-radius: 22px; background-color: var(--surface);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px); background-size: 28px 28px; }
+@media (max-width: 960px) { .mc { grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 16px; } .mc-side { display: contents; } .mc-label, .mc-cmds { order: -2; margin: 0; } .mc .bd { order: -1; } .mc-prefs { margin-top: 0; } }
+.mc-label { font: 600 12px "JetBrains Mono", monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin-bottom: 10px; }
+.mc-cmds { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.mc-cmds button { font: 500 13px "JetBrains Mono", monospace; color: var(--accent-ink); background: var(--accent-soft); border: 1px solid transparent; border-radius: 999px; padding: 6px 12px; cursor: pointer; transition: border-color .2s; }
+.mc-cmds button:hover { border-color: var(--accent); }
+.mc-cmds button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+.mc-cmds button[aria-pressed="true"]::before { content: "✓ "; }
+.mc .term-body { min-height: 0; font-size: 12.5px; padding: 14px 16px; }
+.mc-log { height: 172px; overflow-y: hidden; }
+.mc-prefs { margin-top: 12px; }
+.mc-prefs .ok { animation: flash 1.2s ease; }
+.mc-how { margin: 14px 0 0; color: var(--muted); font-size: 14.5px; }
+.bd { --bd-acc: var(--accent); border: 1px solid var(--line); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); overflow: hidden; font-size: 13.5px; }
+.bd.teal { --bd-acc: var(--accent-2); }
+.bd-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.bd-title { display: flex; align-items: center; gap: 10px; }
+.bd-title b { font-size: 15px; }
+.bd-title small { color: var(--faint); font-size: 12px; }
+.bd-live { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); animation: live 2s infinite; }
+@keyframes live { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 55%, transparent); } 70%, 100% { box-shadow: 0 0 0 8px transparent; } }
+.bd-tabs { display: flex; gap: 2px; background: var(--bg-2); padding: 3px; border-radius: 8px; font-size: 12.5px; }
+.bd-tabs span { padding: 3px 9px; border-radius: 6px; color: var(--muted); transition: background .3s; }
+.bd:not(.all) .t-cur, .bd.all .t-all { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.bd-body { display: grid; grid-template-columns: repeat(6, 1fr); gap: 1px; background: var(--line); }
+.bd-body > div { background: var(--surface); padding: 14px 16px; }
+.bd h5 { margin: 0 0 8px; font: 600 11.5px "JetBrains Mono", monospace; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
+.bd .p-needs, .bd .p-view { grid-column: span 6; }
+.bd .p-quality, .bd .p-tasks, .bd .p-spend { grid-column: span 2; }
+.bd .p-view, .bd.no-spend .p-spend { display: none; }
+.bd.view .p-view { display: block; }
+.bd.no-spend .p-quality, .bd.no-spend .p-tasks { grid-column: span 3; }
+@media (max-width: 560px) { .bd .p-quality, .bd .p-tasks, .bd .p-spend, .bd.no-spend .p-quality, .bd.no-spend .p-tasks { grid-column: span 6; } }
+.bd-item { display: flex; gap: 8px; align-items: baseline; margin-top: 6px; }
+.bd-pill { font: 600 10.5px "JetBrains Mono", monospace; padding: 1px 6px; border-radius: 5px; border: 1px solid color-mix(in srgb, var(--bd-acc) 45%, var(--line)); color: var(--bd-acc); flex: none; }
+.bd-pill.warn { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); }
+.bd-q { display: grid; grid-template-columns: 3.2em 1fr 2.2em; gap: 8px; align-items: center; margin-top: 4px; }
+.bd-q b { font-weight: 600; }
+.bd-q span:last-child { text-align: right; font-family: "JetBrains Mono", monospace; font-size: 12.5px; }
+.bd-meter { height: 6px; border-radius: 3px; background: var(--bg-2); overflow: hidden; }
+.bd-meter i { display: block; height: 100%; width: var(--w); background: var(--bd-acc); border-radius: 3px; transition: background .3s; }
+.bd-meter.na { background: repeating-linear-gradient(90deg, var(--line) 0 4px, transparent 4px 8px); }
+.bd-num { font: 600 24px/1.1 "JetBrains Mono", monospace; color: var(--bd-acc); transition: color .3s; }
+.bd-t { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; color: var(--muted); font-size: 12.5px; }
+.bd-dots i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-left: 3px; background: var(--line); }
+.bd-dots i.on { background: var(--bd-acc); } .bd-dots i.blk { background: var(--bad); }
+.bd-spark { display: block; width: 100%; height: 34px; margin-top: 6px; color: var(--bd-acc); }
+.bd-row { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); }
+.bd .d { color: var(--faint); }
+.mc-legend { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 20px; }
+@media (max-width: 820px) { .mc-legend { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .bd-live, .mc-prefs .ok { animation: none; } }
 
 /* guardrails */
 .guard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
@@ -309,6 +364,7 @@ footer a { color: var(--muted); }
       <a class="opt" href="#how">How it works</a>
       <a class="opt" href="#mods">Mods</a>
       <a class="opt" href="#auto">Auto</a>
+      <a class="opt" href="#board">Board</a>
       <a class="opt" href="#guardrails">Guardrails</a>
       <a class="opt" href="#cost">Cost</a>
       <button class="theme-btn" id="theme" type="button" aria-label="Toggle theme">◐</button>
@@ -521,6 +577,76 @@ mul() { echo 6; } fooled one, not both.</span></div>
   </div>
 </section>
 
+<section id="board">
+  <div class="wrap">
+    <div class="reveal">
+      <div class="kicker">Flow Board · mission control</div>
+      <h2>Every repo, <em>one screen.</em></h2>
+      <p class="sub">Run <code>/flow-stack:board</code> and it gathers what flow-stack already records across your repos (gates, tasks, feature health, agent decisions, debt, shipped work, spend) and publishes one private Artifact. Every run refreshes the same link. Panels draw only real data, and an empty panel says it's empty.</p>
+    </div>
+    <div class="mc reveal">
+      <div class="mc-side">
+        <div class="mc-label">Make it yours · try one</div>
+        <div class="mc-cmds" role="group" aria-label="Board commands">
+          <button type="button" data-cmd="spend" aria-pressed="false">hide spend</button>
+          <button type="button" data-cmd="tab" aria-pressed="false">open on All repos</button>
+          <button type="button" data-cmd="view" aria-pressed="false">add a panel of my PRs</button>
+          <button type="button" data-cmd="accent" aria-pressed="false">accent teal</button>
+        </div>
+        <div class="term">
+          <div class="term-bar"><i></i><i></i><i></i><span class="title">claude</span></div>
+          <div class="term-body mc-log" id="mcLog"><span class="you">› /flow-stack:board</span>
+<span class="d">  collected 3 repos · rendered the board</span>
+<span class="ok">  ✓ published</span><span class="d"> · same link as last time</span></div>
+        </div>
+        <div class="term mc-prefs">
+          <div class="term-bar"><i></i><i></i><i></i><span class="title">~/.flow-stack/profile.md</span></div>
+          <div class="term-body"><span class="acc"># Board</span>
+<span id="mcPrefs"><span class="d">(empty: the default board)</span></span></div>
+        </div>
+        <p class="mc-how">To change it, run <code>/flow-stack:board</code> with what you want. The agent edits <code># Board</code> in your profile, shows you the diff, and republishes. Every session renders the same board from it, and plugin updates leave it alone.</p>
+      </div>
+      <div class="bd" id="bd">
+        <div class="bd-bar">
+          <div class="bd-title"><span class="bd-live" aria-hidden="true"></span><b>Flow Board</b><small>refreshed just now</small></div>
+          <div class="bd-tabs"><span class="t-cur">api</span><span>web</span><span class="t-all">All repos</span></div>
+        </div>
+        <div class="bd-body">
+          <div class="p-needs"><h5>Needs you · 4</h5>
+            <div class="bd-item"><span class="bd-pill">gate</span><span>api/rate-limit · merge PR #3</span></div>
+            <div class="bd-item"><span class="bd-pill">review</span><span>web · #42 settings page</span></div>
+            <div class="bd-item"><span class="bd-pill warn">close</span><span>api/export · every slice done</span></div>
+            <div class="bd-item"><span class="bd-pill warn">stale</span><span>web · feature auth.login</span></div>
+          </div>
+          <div class="p-quality"><h5>Quality</h5>
+            <div class="bd-q"><b>api</b><span class="bd-meter"><i style="--w:86%"></i></span><span>86</span></div>
+            <div class="bd-q"><b>web</b><span class="bd-meter"><i style="--w:71%"></i></span><span>71</span></div>
+            <div class="bd-q"><b>docs</b><span class="bd-meter na"></span><span class="d">n/a</span></div>
+          </div>
+          <div class="p-tasks"><h5>Tasks · 3</h5>
+            <div class="bd-t"><span>rate-limit</span><span class="bd-dots"><i class="on"></i><i class="on"></i><i></i></span></div>
+            <div class="bd-t"><span>export</span><span class="bd-dots"><i class="on"></i><i class="on"></i><i class="on"></i></span></div>
+            <div class="bd-t"><span>login</span><span class="bd-dots"><i class="on"></i><i class="blk"></i><i></i></span></div>
+          </div>
+          <div class="p-spend"><h5>Spend · 7d</h5><div class="bd-num">$18</div>
+            <svg class="bd-spark" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true"><polyline points="0,24 14,20 28,22 42,12 56,16 70,8 84,14 100,6" fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>
+          </div>
+          <div class="p-view"><h5>My PRs · your view</h5>
+            <div class="bd-row"><span class="d">#3</span><span>rate limiting</span></div>
+            <div class="bd-row"><span class="d">#42</span><span>settings page</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="mc-legend reveal">
+      <div class="amode"><div class="flag">Needs you</div><p>Open gates, blocked slices, tasks ready to close, PRs waiting on your review, and stale features, from every repo, at the top.</p></div>
+      <div class="amode"><div class="flag">Quality per repo</div><p>A 0–100 score from features verified, checks that pass and have teeth, open debt, the review stamp on HEAD, and test files per source file. No data shows n/a, never 0.</p></div>
+      <div class="amode"><div class="flag">Everything else</div><p>Open tasks and their slices, recent agent decisions, the debt ledger, shipped work, and spend from ccusage. Custom panels are jq over the same data.</p></div>
+    </div>
+    <p class="mods-note">The board is a mockup and the commands are a demo. The real board is a private claude.ai Artifact. It shows repo names, PR titles, commit subjects, and debt and decision text, so check it before you share the link.</p>
+  </div>
+</section>
+
 <section id="guardrails">
   <div class="wrap">
     <div class="reveal center">
@@ -723,6 +849,49 @@ mul() { echo 6; } fooled one, not both.</span></div>
   }
   document.getElementById('approve').addEventListener('click', function () { decide('approve'); });
   document.getElementById('reject').addEventListener('click', function () { decide('reject'); });
+
+  // board demo
+  var bd = document.getElementById('bd'), mcLog = document.getElementById('mcLog'), mcPrefs = document.getElementById('mcPrefs');
+  var cmds = {
+    spend: { cls: 'no-spend', pref: '- hide: spend', on: 'hide spend', off: 'show spend again', panel: '.p-quality' },
+    tab: { cls: 'all', pref: '- tab: all', on: 'open on All repos', off: 'open on the current repo', panel: '.bd-tabs' },
+    view: { cls: 'view', pref: '- view: My PRs · [.repos[] | .prs.mine[]? | {number, title}] · table', on: 'add a panel of my PRs', off: 'drop the My PRs panel', panel: '.p-view' },
+    accent: { cls: 'teal', pref: '- accent: #0891b2', on: 'accent teal', off: 'default accent', panel: '.p-needs' }
+  };
+  var busy = false;
+  function log(html) {
+    var lines = (mcLog.innerHTML + '\n' + html).split('\n');
+    mcLog.innerHTML = lines.slice(-6).join('\n');
+  }
+  function type(text, done) {
+    var full = '› /flow-stack:board ' + text;
+    if (reduce) { log('<span class="you">' + full + '</span>'); return done(); }
+    log('<span class="you"></span>');
+    var el = mcLog.lastElementChild, i = 0;
+    (function t() { el.textContent = full.slice(0, ++i); if (i < full.length) setTimeout(t, 20); else setTimeout(done, 250); })();
+  }
+  function renderPrefs(changed) {
+    var lines = Object.keys(cmds).filter(function (k) { return bd.classList.contains(cmds[k].cls); }).map(function (k) {
+      return k === changed ? '<span class="ok">' + cmds[k].pref + '</span>' : cmds[k].pref;
+    });
+    mcPrefs.innerHTML = lines.length ? lines.join('\n') : '<span class="d">(empty: the default board)</span>';
+  }
+  document.querySelectorAll('[data-cmd]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      if (busy) return;
+      busy = true;
+      var c = cmds[b.dataset.cmd], on = !bd.classList.contains(c.cls);
+      b.setAttribute('aria-pressed', String(on));
+      type(on ? c.on : c.off, function () {
+        log((on ? '<span class="ok">  + ' : '<span class="bad">  − ') + c.pref + '</span>');
+        bd.classList.toggle(c.cls, on);
+        renderPrefs(on ? b.dataset.cmd : null);
+        flash(bd.querySelector(c.panel));
+        log('<span class="ok">  ✓ republished</span><span class="d"> · same link</span>');
+        busy = false;
+      });
+    });
+  });
 
   // copy
   function copier(btn, text) {
