@@ -52,9 +52,10 @@ stale=false
 
 extra='{}'
 if [ -n "$full" ]; then
+  # (awk hands rows to read with US, not tab: tab is IFS whitespace, so an empty title would collapse)
   # per slice: "<id>\t<title>\t<status>\t<verdict of its newest evidence labelled <id> or <id>:…>"
-  slices="$(awk '/^## /{if(id!="")print id "\t" t "\t" s; id=$2; t=substr($0,4); sub(/^[^ ]+ · /,"",t); s=""} /^status:/{s=$2} END{if(id!="")print id "\t" t "\t" s}' "$d/SLICES.md" 2>/dev/null |
-    while IFS=$'\t' read -r id title status; do
+  slices="$(awk '/^## /{if(id!="")print id "\037" t "\037" s; id=$2; t=substr($0,4); sub(/^[^ ]+ · /,"",t); s=""} /^status:/{s=$2} END{if(id!="")print id "\037" t "\037" s}' "$d/SLICES.md" 2>/dev/null |
+    while IFS=$'\037' read -r id title status; do
       v="$(grep -E "^### [^ ]+ · $id(:[^ ]+)? · [A-Z]+ · exit=" "$st/EVIDENCE.md" 2>/dev/null | tail -n1 | awk -F' · ' '{print $3}')"
       printf '%s\t%s\t%s\t%s\n' "$id" "$title" "$status" "$v"
     done)"
