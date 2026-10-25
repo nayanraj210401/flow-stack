@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # routines.sh: flow-stack routines on GitHub Actions. Run from the target repo's root.
 #   routines.sh list                                  the catalog: each template routine and when to use it
-#   routines.sh add <name> [--cron "<m h d M w>"] [--preset <p>] [--force]
+#   routines.sh add <name> [--cron "<m h d M w>"] [--tz <zone>] [--preset <p>] [--force]
 #                                                     write .github/routines/<name>.md (from the catalog when the
 #                                                     name is in it, else a stub) and render it
-#   routines.sh schedule <name> "<m h d M w>"         change a scheduled routine's cron (UTC) and re-render it
+#   routines.sh schedule <name> "<m h d M w>" [--tz <zone>]
+#                                                     change a scheduled routine's cron (in its timezone) and re-render it
 #   routines.sh render                                .github/routines/*.md → .github/workflows/flow-<name>.yml
 #   routines.sh check                                 every routine's workflow matches a fresh render; no orphans
-# Frontmatter: trigger (schedule | pull_request), cron (schedule only), timeout (minutes), labels, auth
+# Frontmatter: trigger (schedule | pull_request), cron and timezone (schedule only; an IANA zone, default UTC), timeout (minutes), labels, auth
 # (oauth | api-key), grants (token scopes it may write: issues pull-requests contents; the rest are read),
 # flow_ref (pin the plugin to a tag or branch; empty = the default branch, fresh each run). The body is the prompt.
 set -euo pipefail
@@ -26,25 +27,33 @@ field() { # field <file> <key> <default>
 }
 
 valid_cron() { [[ "$1" =~ ^[0-9*/,-]+( [0-9*/,A-Za-z-]+){4}$ ]]; }
+# An IANA zone (Asia/Kolkata, America/New_York, UTC); checked against this machine's tz database when it has one.
+valid_tz() { [[ "$1" =~ ^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+){0,2}$ ]] && { [ ! -d /usr/share/zoneinfo ] || [ -f "/usr/share/zoneinfo/$1" ]; }; }
 
-set_cron() { # set_cron <name> <cron>: put the cron in the routine's frontmatter
+set_key() { # set_key <name> <key> <value>: put key: "value" in the routine's frontmatter
   local f="$dir/$1.md"
-  valid_cron "$2" || die "cron must be five fields (minute hour day month weekday, UTC), got '$2'"
-  [ "$(field "$f" trigger schedule)" = schedule ] || die "$f: trigger is $(field "$f" trigger schedule), which takes no cron"
+  [ "$(field "$f" trigger schedule)" = schedule ] || die "$f: trigger is $(field "$f" trigger schedule), which takes no $2"
   local tmp; tmp="$(mktemp)"
-  # Only the frontmatter (between the first two --- lines) is touched: replace its cron, or add one before the
+  # Only the frontmatter (between the first two --- lines) is touched: replace the key, or add it before the
   # closing ---. The line ending of the --- line is kept, so CRLF files stay CRLF.
-  C="$2" perl -ne '
+  K="$2" V="$3" perl -ne '
     if ($. == 1) { /^---(\r?)$/ or exit; $eol = $1; $fm = 1; print; next }
-    if ($fm && /^---\r?$/) { print qq{cron: "$ENV{C}"$eol\n} unless $done; $fm = 0; $done = 1; print; next }
-    if ($fm && /^cron:/) { print qq{cron: "$ENV{C}"$eol\n}; $done = 1; next }
-    print; END { exit 4 unless $done }' "$f" >"$tmp" || { rm -f "$tmp"; die "$f: no frontmatter to put a cron in"; }
-  [ "$(field "$tmp" cron "")" = "$2" ] || { rm -f "$tmp"; die "$f: the cron didn't land in the frontmatter"; }
+    if ($fm && /^---\r?$/) { print qq{$ENV{K}: "$ENV{V}"$eol\n} unless $done; $fm = 0; $done = 1; print; next }
+    if ($fm && /^\Q$ENV{K}\E:/) { print qq{$ENV{K}: "$ENV{V}"$eol\n}; $done = 1; next }
+    print; END { exit 4 unless $done }' "$f" >"$tmp" || { rm -f "$tmp"; die "$f: no frontmatter to put a $2 in"; }
+  [ "$(field "$tmp" "$2" "")" = "$3" ] || { rm -f "$tmp"; die "$f: the $2 didn't land in the frontmatter"; }
   mv "$tmp" "$f"
 }
 
+set_schedule() { # set_schedule <name> <cron> <tz or "">
+  valid_cron "$2" || die "cron must be five fields (minute hour day month weekday), got '$2'"
+  [ -z "$3" ] || valid_tz "$3" || die "timezone must be an IANA zone like Asia/Kolkata or America/New_York, got '$3'"
+  set_key "$1" cron "$2"
+  [ -z "$3" ] || set_key "$1" timezone "$3"
+}
+
 render_one() { # render_one <name>: the workflow on stdout
-  local f="$dir/$1.md" auth trigger cron timeout labels grants ref g s on="" iff="" group="" cancel=false ctx="" mode="--auto"
+  local f="$dir/$1.md" auth trigger cron tz timeout labels grants ref g s on="" iff="" group="" cancel=false ctx="" mode="--auto"
   case "$(field "$f" auth oauth)" in
     oauth) auth='claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}' ;;
     api-key) auth='anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}' ;;
@@ -56,7 +65,11 @@ render_one() { # render_one <name>: the workflow on stdout
     schedule)
       cron="$(field "$f" cron "0 3 * * *")"
       valid_cron "$cron" || die "$f: cron must be five fields, got '$cron'"
-      on=$'  schedule:\n    - cron: "'"$cron"$'"\n  workflow_dispatch:' ;;
+      tz="$(field "$f" timezone "")"
+      [ -z "$tz" ] || valid_tz "$tz" || die "$f: timezone must be an IANA zone, got '$tz'"
+      on=$'  schedule:\n    - cron: "'"$cron"'"'
+      [ -z "$tz" ] || on+=$'\n      timezone: "'"$tz"'"'
+      on+=$'\n  workflow_dispatch:' ;;
     pull_request)
       on='  pull_request:'$'\n''    types: [opened, synchronize, ready_for_review]'
       # drafts aren't ready, fork PRs get no secrets, and Dependabot runs get only Dependabot's secrets
@@ -124,12 +137,14 @@ profile() { # profile <preset>: a headless profile for CI runs, notifications of
 }
 
 add() {
-  local name="${1:-}" preset=solo-hacker force="" cron=""; shift || true
+  local name="${1:-}" preset=solo-hacker force="" cron="" tz=""; shift || true
   [[ "$name" =~ $name_re ]] || die "add <name>: lowercase letters, digits, dashes"
   while [ $# -gt 0 ]; do
-    case "$1" in --preset) preset="$2"; shift 2 ;; --cron) cron="$2"; shift 2 ;; --force) force=1; shift ;; *) die "unknown flag $1" ;; esac
+    case "$1" in --preset) preset="$2"; shift 2 ;; --cron) cron="$2"; shift 2 ;; --tz) tz="$2"; shift 2 ;; --force) force=1; shift ;; *) die "unknown flag $1" ;; esac
   done
-  [ -z "$cron" ] || valid_cron "$cron" || die "--cron must be five fields (minute hour day month weekday, UTC), got '$cron'"
+  [ -z "$tz" ] || [ -n "$cron" ] || die "--tz needs --cron"
+  [ -z "$cron" ] || valid_cron "$cron" || die "--cron must be five fields (minute hour day month weekday), got '$cron'"
+  [ -z "$tz" ] || valid_tz "$tz" || die "--tz must be an IANA zone like Asia/Kolkata or America/New_York, got '$tz'"
   local f="$dir/$name.md"
   [ ! -f "$f" ] || [ -n "$force" ] || die "$f exists (--force replaces it)"
   if [ -n "$cron" ] && [ -f "$tpl/$name.md" ] && [ "$(field "$tpl/$name.md" trigger schedule)" != schedule ]; then
@@ -139,15 +154,18 @@ add() {
   if [ -f "$tpl/$name.md" ]; then cp "$tpl/$name.md" "$f"
   else printf -- '---\nabout: TODO one line: what it does and when to use it\ntrigger: schedule\ncron: "0 3 * * *"\ntimeout: 60\ngrants: issues\n---\n# %s\n\nTODO: what this routine does, its caps, and what it must never do.\n' "$name" >"$f"
   fi
-  [ -z "$cron" ] || set_cron "$name" "$cron"
+  [ -z "$cron" ] || set_schedule "$name" "$cron" "$tz"
   echo "wrote $f"
   write_one "$name"
 }
 
-schedule() { # schedule <name> <cron>: change an existing routine's schedule and re-render it
+schedule() { # schedule <name> <cron> [--tz <zone>]: change an existing routine's schedule and re-render it
   [ -f "$dir/${1:-}.md" ] || die "schedule <name> <cron>: no routine $dir/${1:-}.md"
+  local tz=""
+  [ "${3:-}" != --tz ] || tz="${4:-}"; [ "${3:-}" != --tz ] || [ -n "$tz" ] || die "--tz needs a zone"
+  [ -z "${3:-}" ] || [ "$3" = --tz ] || die "unknown flag $3"
   local f="$dir/$1.md" bak; bak="$(mktemp)"; cp "$f" "$bak"
-  set_cron "$1" "${2:-}"
+  (set_schedule "$1" "${2:-}" "$tz") || { cp "$bak" "$f"; rm -f "$bak"; exit 2; }
   (write_one "$1") || { cp "$bak" "$f"; rm -f "$bak"; die "$f: render failed, schedule left as it was"; }
   rm -f "$bak"
 }

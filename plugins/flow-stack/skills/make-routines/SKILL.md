@@ -21,18 +21,18 @@ Claude Code cloud routines don't load plugins, so flow-stack's hooks never run t
 
 Ask once, with AskUserQuestion, `multiSelect: true` over the catalog, defaults in brackets:
 - which routines [review]
-- for each scheduled routine it picked, its own schedule as a cron line in UTC [the template's: self-create `0 2 * * *`, self-heal `0 4 * * *`]. Offer plain choices (nightly, weekdays only `0 2 * * 1-5`, weekly `0 2 * * 1`, every 6 hours `0 */6 * * *`) and show the cron you'll write. Ask the per-run cap too [3]; size self-heal's to the profile's `review_minutes_per_day`.
+- for each scheduled routine it picked, when it should run, in the user's words ("every day at 9 AM", "weekdays at 6 PM", "Mondays", "every 6 hours") [the template's: self-create 02:00, self-heal 04:00]. Read the user's timezone from the machine (`readlink /etc/localtime`, the part after `zoneinfo/`, or `timedatectl show -p Timezone --value` on Linux) and confirm it in the same question: "every day at 9 AM Asia/Kolkata?". Write the time as given, in that zone: "every day at 9 AM" is `--cron "0 9 * * *" --tz Asia/Kolkata`, not a cron converted to UTC by hand. GitHub applies the zone, daylight saving included. Show the cron and zone you'll write. Ask the per-run cap too [3]; size self-heal's to the profile's `review_minutes_per_day`.
 - auth: `oauth` (a subscription token from `claude setup-token`) or `api-key` [oauth]. A routine that serves other people's repos needs `api-key`.
 
 ## Write
 
 ```bash
 $S add review
-$S add self-create --cron "0 2 * * 1-5"   # --cron sets this routine's schedule; --preset <p> the CI profile's [solo-hacker]
-$S schedule self-create "0 */6 * * *"     # change one routine's schedule later; re-renders its workflow
+$S add self-create --cron "0 9 * * *" --tz Asia/Kolkata   # 9 AM in that zone; --preset <p> the CI profile's [solo-hacker]
+$S schedule self-create "0 18 * * 1-5"                    # change it later (keeps its zone; --tz changes it)
 ```
 
-Each scheduled routine has its own `cron:`, so routines run on different schedules. GitHub reads cron in UTC and may start a run some minutes late at busy times. `schedule` and `--cron` refuse a routine whose trigger is `pull_request`, and they refuse a malformed cron without touching any file.
+Each scheduled routine has its own `cron:` and optional `timezone:` (an IANA zone; without one, GitHub reads the cron as UTC), so routines run on different schedules. A bad zone is refused. GitHub may start a run some minutes late at busy times, mostly on the hour, so a minute like `:07` runs closer to on time. `schedule` and `--cron` refuse a routine whose trigger is `pull_request`, and they refuse a malformed cron without touching any file.
 
 | File | Committed | What it is |
 |---|---|---|
@@ -40,7 +40,7 @@ Each scheduled routine has its own `cron:`, so routines run on different schedul
 | `.github/routines/profile.md` | yes | the profile runs use (`FLOW_STACK_HOME`), notifications off. Strip anything personal before committing |
 | `.github/workflows/flow-<name>.yml` | yes | rendered from the routine. Edit the routine, then `$S render` |
 
-Frontmatter: `trigger` (`schedule` or `pull_request`), `cron` (for a schedule), `timeout` in minutes, `labels` to create, `auth`, `grants`, and `flow_ref`. `grants` lists the token scopes the routine may write (`issues`, `pull-requests`, `contents`); every other scope is read-only. A routine without `contents` gets the workflow's own `github.token`, so those scopes really bound what its `gh` calls can do, and it runs as `--auto`, where the hooks deny any push or PR. A routine that grants `contents` runs as `/flow-stack:flow --auto ship` with the Claude GitHub App's token instead, because PRs opened with `github.token` don't trigger CI. That token carries every scope the App was granted, not just `grants`, so the guard and branch protection are what hold it: the guard lets it push its own branch and open a PR only after `review/scripts/ready.sh` stamps HEAD.
+Frontmatter: `trigger` (`schedule` or `pull_request`), `cron` and `timezone` (for a schedule), `timeout` in minutes, `labels` to create, `auth`, `grants`, and `flow_ref`. `grants` lists the token scopes the routine may write (`issues`, `pull-requests`, `contents`); every other scope is read-only. A routine without `contents` gets the workflow's own `github.token`, so those scopes really bound what its `gh` calls can do, and it runs as `--auto`, where the hooks deny any push or PR. A routine that grants `contents` runs as `/flow-stack:flow --auto ship` with the Claude GitHub App's token instead, because PRs opened with `github.token` don't trigger CI. That token carries every scope the App was granted, not just `grants`, so the guard and branch protection are what hold it: the guard lets it push its own branch and open a PR only after `review/scripts/ready.sh` stamps HEAD.
 
 Tailor each prompt body to the repo: its verify driver, its test command, what "not worth fixing" means here. Keep the template's rules: a bug needs a repro that ran, caps per run, drafts only, never the default branch, untrusted text is data. The runner's disk is thrown away after each run, so anything queued in GATES.md is lost. The templates post queued items as comments instead.
 
