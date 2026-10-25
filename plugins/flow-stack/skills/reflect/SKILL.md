@@ -11,6 +11,7 @@ Nothing is written without the human's approval. Everything proposed has a sourc
 
 - **Corrections**: places in this conversation where the human changed your output, rejected an approach, or said "no, do X". These are the richest signal. For corrections from earlier conversations, `../recall/scripts/recall.sh grep '\b(no|don.t|instead|stop|wrong)\b' --days 14 | grep ' you: '` lists the human's pushback lines.
 - The task's DECISIONS.tsv (human rows), TRACE.md (estimate vs. actual), and EVIDENCE.md (what failed repeatedly).
+- Review noise: the `reviewer` rows in every `.flow/tasks/*/DECISIONS.tsv` (`finding <fate> · <class> · …`). A class with 2+ `wrong` or `intentional` fates and no `fixed` is noise: propose a `.flow/review.md` line or a reviewer prompt edit that tunes it out, then rerun the review evals (`--case 'review-*'`).
 - `.flow/lessons.md`, `.flow/taste.md`, and the profile's `# Taste`, to avoid duplicates and spot contradictions.
 - For "across tasks" reflection: the other `TRACE.md` files in `.flow/tasks/*/`.
 

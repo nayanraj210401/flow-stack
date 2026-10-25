@@ -43,10 +43,15 @@ claude plugin eval . --tag needs-bash --scaffold --allow-tools Bash Edit Write -
 | design, routing | devils-advocate-on-request | "Is there a better way?" gets a comparison with the simplest option, not a defense |
 | quality, design | least-code-reuses-helper | A small edit reuses an existing helper found by search; no duplicated logic, no new files |
 | loop, needs-bash | slice-gate-refuses-unproven | The slice-done gate refuses unproven work; the agent produces proofs or forces with an honest reason |
+| review, needs-bash | review-catches-gaming | A diff that special-cases the sealed check's inputs passes the check but is blocked by review |
+| review, needs-bash | review-clean-ships | A correct one-line diff ships with no invented blockers or shoulds (false-positive guard) |
+| review, needs-bash | review-pre-existing-not-blocker | An old bug the diff didn't touch is reported as pre-existing at most, never a blocker |
 | self, needs-bash | setup-profile-preset | Profile init from a preset, then the lint |
 | self, adapt, needs-bash | setup-adapts-to-toolchain | Against a fake toolchain (pstack, rtk hook, status line, unused review plugin, usage transcripts), `setup adapt` makes pstack the router, delegates `how`, chains the status line, and ignores the unused plugin |
 
 Graders marked `tool_used: Skill` are with-only indicators (did the skill fire?), not part of the score.
+
+The `review` cases are the reviewer's regression set: rerun them (`--tag review`) on every change to `agents/reviewer.md` or `skills/review/`, and drop a change that lowers the score. Add a case when a real bug got past review.
 
 ## Adding a case
 
