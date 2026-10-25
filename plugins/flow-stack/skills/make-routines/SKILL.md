@@ -42,7 +42,7 @@ Tailor each prompt body to the repo: its verify driver, its test command, what "
 
 ## Which flow-stack a run uses
 
-Every run starts on a fresh runner, so `claude-code-action` installs the plugin each time. With no `flow_ref`, that is the marketplace's default branch as it stands at that run, which can include commits not yet in a release. Set `flow_ref: v1.3.0` (or any tag or branch) to pin it: the action accepts only marketplace URLs that end in `.git`, so the workflow clones flow-stack at that ref into `$RUNNER_TEMP` and adds the clone by path. Pin when you want a change to reach CI only after you've tried it locally, and bump the pin in that same change.
+Every run starts on a fresh runner, so `claude-code-action` installs the plugin each time. With no `flow_ref`, that is the marketplace's default branch as it stands at that run, which can include commits not yet in a release. Set `flow_ref: <tag or branch>` (a commit SHA won't work: the clone uses `--branch`) to pin it: the action accepts only marketplace URLs that end in `.git`, so the workflow clones flow-stack at that ref into `$RUNNER_TEMP` and adds the clone by path. Pin when you want a change to reach CI only after you've tried it locally, and bump the pin in that same change.
 
 ## Ask before the workflows leave the machine
 
