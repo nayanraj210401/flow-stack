@@ -35,7 +35,7 @@ set_cron() { # set_cron <name> <cron>: put the cron in the routine's frontmatter
   # Only the frontmatter (between the first two --- lines) is touched: replace its cron, or add one before the
   # closing ---. The line ending of the --- line is kept, so CRLF files stay CRLF.
   C="$2" perl -ne '
-    if ($. == 1) { /^---(\r?)$/ or exit 3; $eol = $1; $fm = 1; print; next }
+    if ($. == 1) { /^---(\r?)$/ or exit; $eol = $1; $fm = 1; print; next }
     if ($fm && /^---\r?$/) { print qq{cron: "$ENV{C}"$eol\n} unless $done; $fm = 0; $done = 1; print; next }
     if ($fm && /^cron:/) { print qq{cron: "$ENV{C}"$eol\n}; $done = 1; next }
     print; END { exit 4 unless $done }' "$f" >"$tmp" || { rm -f "$tmp"; die "$f: no frontmatter to put a cron in"; }
