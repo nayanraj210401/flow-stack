@@ -21,14 +21,18 @@ Claude Code cloud routines don't load plugins, so flow-stack's hooks never run t
 
 Ask once, with AskUserQuestion, `multiSelect: true` over the catalog, defaults in brackets:
 - which routines [review]
-- the schedule and the per-run cap for scheduled ones [3]. Size self-heal's cap to the profile's `review_minutes_per_day`.
+- for each scheduled routine it picked, its own schedule as a cron line in UTC [the template's: self-create `0 2 * * *`, self-heal `0 4 * * *`]. Offer plain choices (nightly, weekdays only `0 2 * * 1-5`, weekly `0 2 * * 1`, every 6 hours `0 */6 * * *`) and show the cron you'll write. Ask the per-run cap too [3]; size self-heal's to the profile's `review_minutes_per_day`.
 - auth: `oauth` (a subscription token from `claude setup-token`) or `api-key` [oauth]. A routine that serves other people's repos needs `api-key`.
 
 ## Write
 
 ```bash
-$S add review && $S add self-create      # --preset <p> picks the CI profile's preset [solo-hacker]
+$S add review
+$S add self-create --cron "0 2 * * 1-5"   # --cron sets this routine's schedule; --preset <p> the CI profile's [solo-hacker]
+$S schedule self-create "0 */6 * * *"     # change one routine's schedule later; re-renders its workflow
 ```
+
+Each scheduled routine has its own `cron:`, so routines run on different schedules. GitHub reads cron in UTC and may start a run some minutes late at busy times. `schedule` and `--cron` refuse a routine whose trigger is `pull_request`, and they refuse a malformed cron without touching any file.
 
 | File | Committed | What it is |
 |---|---|---|

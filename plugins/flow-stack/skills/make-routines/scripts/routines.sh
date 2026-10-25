@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # routines.sh: flow-stack routines on GitHub Actions. Run from the target repo's root.
 #   routines.sh list                                  the catalog: each template routine and when to use it
-#   routines.sh add <name> [--preset <p>] [--force]   write .github/routines/<name>.md (from the catalog when the
+#   routines.sh add <name> [--cron "<m h d M w>"] [--preset <p>] [--force]
+#                                                     write .github/routines/<name>.md (from the catalog when the
 #                                                     name is in it, else a stub) and render it
+#   routines.sh schedule <name> "<m h d M w>"         change a scheduled routine's cron (UTC) and re-render it
 #   routines.sh render                                .github/routines/*.md → .github/workflows/flow-<name>.yml
 #   routines.sh check                                 every routine's workflow matches a fresh render; no orphans
 # Frontmatter: trigger (schedule | pull_request), cron (schedule only), timeout (minutes), labels, auth
@@ -23,6 +25,16 @@ field() { # field <file> <key> <default>
   printf '%s' "${v:-$3}"
 }
 
+valid_cron() { [[ "$1" =~ ^[0-9*/,-]+( [0-9*/,A-Za-z-]+){4}$ ]]; }
+
+set_cron() { # set_cron <name> <cron>: put the cron in the routine's frontmatter
+  local f="$dir/$1.md"
+  valid_cron "$2" || die "cron must be five fields (minute hour day month weekday, UTC), got '$2'"
+  [ "$(field "$f" trigger schedule)" = schedule ] || die "$f: trigger is $(field "$f" trigger schedule), which takes no cron"
+  if grep -q '^cron:' "$f"; then C="$2" perl -pi -e 'if (!$done && s/^cron:.*/cron: "$ENV{C}"/) { $done = 1 }' "$f"
+  else C="$2" perl -0pi -e 's/\A(---\n)/$1cron: "$ENV{C}"\n/' "$f"; fi
+}
+
 render_one() { # render_one <name>: the workflow on stdout
   local f="$dir/$1.md" auth trigger cron timeout labels grants ref g s on="" iff="" group="" cancel=false ctx="" mode="--auto"
   case "$(field "$f" auth oauth)" in
@@ -35,7 +47,7 @@ render_one() { # render_one <name>: the workflow on stdout
   case "$trigger" in
     schedule)
       cron="$(field "$f" cron "0 3 * * *")"
-      [[ "$cron" =~ ^[0-9*/,-]+( [0-9*/,A-Za-z-]+){4}$ ]] || die "$f: cron must be five fields, got '$cron'"
+      valid_cron "$cron" || die "$f: cron must be five fields, got '$cron'"
       on=$'  schedule:\n    - cron: "'"$cron"$'"\n  workflow_dispatch:' ;;
     pull_request)
       on='  pull_request:'$'\n''    types: [opened, synchronize, ready_for_review]'
@@ -49,6 +61,7 @@ render_one() { # render_one <name>: the workflow on stdout
   [[ "$labels" =~ ^([a-z0-9:._-]+( [a-z0-9:._-]+)*)?$ ]] || die "$f: labels are space-separated, no quotes, got '$labels'"
   for g in $grants; do case "$g" in issues|pull-requests|contents) ;; *) die "$f: grants takes issues pull-requests contents, got '$g'" ;; esac; done
   [[ "$ref" =~ ^[A-Za-z0-9._/-]*$ ]] || die "$f: flow_ref must be a tag or branch, got '$ref'"
+  [[ ! "$ref" =~ ^[0-9a-f]{7,40}$ ]] || die "$f: flow_ref looks like a commit SHA; the clone takes a tag or branch"
   for s in contents issues pull-requests; do
     if [[ " $grants " == *" $s "* ]]; then export "R_PERM_${s//-/_}=write"; else export "R_PERM_${s//-/_}=read"; fi
   done
@@ -103,19 +116,30 @@ profile() { # profile <preset>: a headless profile for CI runs, notifications of
 }
 
 add() {
-  local name="${1:-}" preset=solo-hacker force=""; shift || true
+  local name="${1:-}" preset=solo-hacker force="" cron=""; shift || true
   [[ "$name" =~ $name_re ]] || die "add <name>: lowercase letters, digits, dashes"
   while [ $# -gt 0 ]; do
-    case "$1" in --preset) preset="$2"; shift 2 ;; --force) force=1; shift ;; *) die "unknown flag $1" ;; esac
+    case "$1" in --preset) preset="$2"; shift 2 ;; --cron) cron="$2"; shift 2 ;; --force) force=1; shift ;; *) die "unknown flag $1" ;; esac
   done
+  [ -z "$cron" ] || valid_cron "$cron" || die "--cron must be five fields (minute hour day month weekday, UTC), got '$cron'"
   local f="$dir/$name.md"
   [ ! -f "$f" ] || [ -n "$force" ] || die "$f exists (--force replaces it)"
+  if [ -n "$cron" ] && [ -f "$tpl/$name.md" ] && [ "$(field "$tpl/$name.md" trigger schedule)" != schedule ]; then
+    die "$name runs on $(field "$tpl/$name.md" trigger schedule), which takes no --cron"
+  fi
   profile "$preset"
   if [ -f "$tpl/$name.md" ]; then cp "$tpl/$name.md" "$f"
   else printf -- '---\nabout: TODO one line: what it does and when to use it\ntrigger: schedule\ncron: "0 3 * * *"\ntimeout: 60\ngrants: issues\n---\n# %s\n\nTODO: what this routine does, its caps, and what it must never do.\n' "$name" >"$f"
   fi
+  [ -z "$cron" ] || set_cron "$name" "$cron"
   echo "wrote $f"
   write_one "$name"
+}
+
+schedule() { # schedule <name> <cron>: change an existing routine's schedule and re-render it
+  [ -f "$dir/${1:-}.md" ] || die "schedule <name> <cron>: no routine $dir/${1:-}.md"
+  set_cron "$1" "${2:-}"
+  write_one "$1"
 }
 
 check() {
@@ -136,7 +160,8 @@ check() {
 case "${1:-}" in
   list) list ;;
   add) shift; add "$@" ;;
+  schedule) shift; schedule "$@" ;;
   render) render ;;
   check) check ;;
-  *) sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac
