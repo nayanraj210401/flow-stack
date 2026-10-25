@@ -1,8 +1,10 @@
 ---
+about: nightly bug hunt; files issues only with a repro that ran, max 3 per run, never edits code
+trigger: schedule
 cron: "0 2 * * *"
 timeout: 60
 labels: self-create reproducible
-push: false
+grants: issues
 ---
 # self-create: file bugs you can reproduce
 

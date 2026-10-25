@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
-# routines.sh: scheduled flow-stack routines on GitHub Actions. Run from the target repo's root.
-#   routines.sh add <name> [--preset <p>] [--force]   write .github/routines/<name>.md (from a template
-#                                                     when one exists: self-create, self-heal) and render it
+# routines.sh: flow-stack routines on GitHub Actions. Run from the target repo's root.
+#   routines.sh list                                  the catalog: each template routine and when to use it
+#   routines.sh add <name> [--preset <p>] [--force]   write .github/routines/<name>.md (from the catalog when the
+#                                                     name is in it, else a stub) and render it
 #   routines.sh render                                .github/routines/*.md → .github/workflows/flow-<name>.yml
 #   routines.sh check                                 every routine's workflow matches a fresh render; no orphans
-# A routine file's frontmatter holds cron, timeout (minutes), labels, auth (oauth | api-key), and push
-# (true grants contents and pull-requests write; default false); its body is the prompt.
+# Frontmatter: trigger (schedule | pull_request), cron (schedule only), timeout (minutes), labels, auth
+# (oauth | api-key), grants (token scopes it may write: issues pull-requests contents; the rest are read),
+# flow_ref (pin the plugin to a tag or branch; empty = the default branch, fresh each run). The body is the prompt.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 tpl="$here/../templates"
 dir=.github/routines
+market=https://github.com/nayanraj210401/flow-stack.git
 name_re='^[a-z0-9][a-z0-9-]*$'
 die() { echo "routines.sh: $*" >&2; exit 2; }
 
@@ -21,19 +24,38 @@ field() { # field <file> <key> <default>
 }
 
 render_one() { # render_one <name>: the workflow on stdout
-  local f="$dir/$1.md" auth cron timeout labels write=read
+  local f="$dir/$1.md" auth trigger cron timeout labels grants ref g s on="" iff="" group="" cancel=false ctx="" mode="--auto"
   case "$(field "$f" auth oauth)" in
     oauth) auth='claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}' ;;
     api-key) auth='anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}' ;;
     *) die "$f: auth must be oauth or api-key" ;;
   esac
-  case "$(field "$f" push false)" in true) write=write ;; false) ;; *) die "$f: push must be true or false" ;; esac
-  cron="$(field "$f" cron "0 3 * * *")" timeout="$(field "$f" timeout 60)" labels="$(field "$f" labels "$1")"
-  [[ "$cron" =~ ^[0-9*/,-]+( [0-9*/,A-Za-z-]+){4}$ ]] || die "$f: cron must be five fields, got '$cron'"
+  trigger="$(field "$f" trigger schedule)" timeout="$(field "$f" timeout 60)" labels="$(field "$f" labels "")"
+  grants="$(field "$f" grants issues)" ref="$(field "$f" flow_ref "")"
+  case "$trigger" in
+    schedule)
+      cron="$(field "$f" cron "0 3 * * *")"
+      [[ "$cron" =~ ^[0-9*/,-]+( [0-9*/,A-Za-z-]+){4}$ ]] || die "$f: cron must be five fields, got '$cron'"
+      on=$'  schedule:\n    - cron: "'"$cron"$'"\n  workflow_dispatch:' ;;
+    pull_request)
+      on='  pull_request:'$'\n''    types: [opened, synchronize, ready_for_review]'
+      # drafts aren't ready for review, and fork PRs get no secrets
+      iff='    if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository'
+      group='-${{ github.event.pull_request.number }}' cancel=true
+      ctx=' The pull request is #${{ github.event.pull_request.number }}.' ;;
+    *) die "$f: trigger must be schedule or pull_request" ;;
+  esac
   [[ "$timeout" =~ ^[0-9]+$ ]] || die "$f: timeout must be whole minutes, got '$timeout'"
-  [[ "$labels" =~ ^[a-z0-9:._-]+( [a-z0-9:._-]+)*$ ]] || die "$f: labels are space-separated, no quotes, got '$labels'"
-  NAME="$1" CRON="$cron" TIMEOUT="$timeout" LABELS="$labels" AUTH="$auth" WRITE="$write" \
-    perl -pe 's/\@(NAME|CRON|TIMEOUT|LABELS|AUTH|WRITE)\@/$ENV{$1}/g' "$tpl/workflow.yml"
+  [[ "$labels" =~ ^([a-z0-9:._-]+( [a-z0-9:._-]+)*)?$ ]] || die "$f: labels are space-separated, no quotes, got '$labels'"
+  for g in $grants; do case "$g" in issues|pull-requests|contents) ;; *) die "$f: grants takes issues pull-requests contents, got '$g'" ;; esac; done
+  [[ "$ref" =~ ^[A-Za-z0-9._/-]*$ ]] || die "$f: flow_ref must be a tag or branch, got '$ref'"
+  for s in contents issues pull-requests; do
+    if [[ " $grants " == *" $s "* ]]; then export "PERM_${s//-/_}=write"; else export "PERM_${s//-/_}=read"; fi
+  done
+  [[ " $grants " == *" contents "* ]] && mode="--auto ship"
+  NAME="$1" ON="$on" IF="$iff" GROUP="$group" CANCEL="$cancel" TIMEOUT="$timeout" LABELS="$labels" AUTH="$auth" \
+  MARKET="$market${ref:+#$ref}" MODE="$mode" CTX="$ctx" \
+    perl -pe 's/\@([A-Za-z_]+)\@/exists $ENV{$1} ? $ENV{$1} : die "unknown placeholder $1\n"/ge' "$tpl/workflow.yml"
 }
 
 names() {
@@ -55,6 +77,14 @@ write_one() { # write_one <name>: render to a temp file first, so a bad routine 
 
 render() { local n ns; ns="$(names)" || exit 2; for n in $ns; do write_one "$n"; done; }
 
+list() {
+  local f n
+  for f in "$tpl"/*.md; do
+    n="${f##*/}"; n="${n%.md}"
+    printf '%-12s %-13s %s\n' "$n" "$(field "$f" trigger schedule)" "$(field "$f" about "")"
+  done
+}
+
 profile() { # profile <preset>: a headless profile for CI runs, notifications off
   [ -f "$dir/profile.md" ] && return 0
   local h; h="$(mktemp -d)"
@@ -74,7 +104,7 @@ add() {
   [ ! -f "$f" ] || [ -n "$force" ] || die "$f exists (--force replaces it)"
   profile "$preset"
   if [ -f "$tpl/$name.md" ]; then cp "$tpl/$name.md" "$f"
-  else printf -- '---\ncron: "0 3 * * *"\ntimeout: 60\nlabels: %s\npush: false\n---\n# %s\n\nTODO: what this routine does, its caps, and what it must never do.\n' "$name" "$name" >"$f"
+  else printf -- '---\nabout: TODO one line: what it does and when to use it\ntrigger: schedule\ncron: "0 3 * * *"\ntimeout: 60\ngrants: issues\n---\n# %s\n\nTODO: what this routine does, its caps, and what it must never do.\n' "$name" >"$f"
   fi
   echo "wrote $f"
   write_one "$name"
@@ -96,8 +126,9 @@ check() {
 }
 
 case "${1:-}" in
+  list) list ;;
   add) shift; add "$@" ;;
   render) render ;;
   check) check ;;
-  *) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *) sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

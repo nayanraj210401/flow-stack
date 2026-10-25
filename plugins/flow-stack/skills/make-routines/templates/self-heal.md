@@ -1,8 +1,10 @@
 ---
+about: nightly fixer; turns maintainer-labelled issues into proven draft PRs, max 3 per run
+trigger: schedule
 cron: "0 4 * * *"
 timeout: 120
 labels: self-heal heal-ok needs-repro
-push: true
+grants: issues pull-requests contents
 ---
 # self-heal: fix open issues as proven draft PRs
 
