@@ -9,9 +9,9 @@ concurrency:
   group: flow-@NAME@
   cancel-in-progress: false
 permissions:
-  contents: write
+  contents: @WRITE@
   issues: write
-  pull-requests: write
+  pull-requests: @WRITE@
   id-token: write
 jobs:
   run:
@@ -36,4 +36,4 @@ jobs:
           plugins: flow-stack@flow-stack
           prompt: |
             /flow-stack:flow --auto ship Run the routine in .github/routines/@NAME@.md. Follow it exactly.
-          claude_args: --allowedTools "Bash,Read,Edit,Write,Glob,Grep,Agent,Skill,TodoWrite,WebFetch"
+          claude_args: --allowedTools "Bash,Read,Edit,Write,Glob,Grep,Agent,Skill,TodoWrite"

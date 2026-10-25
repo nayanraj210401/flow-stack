@@ -28,7 +28,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/flow-stack"
           cp .github/routines/profile.md "$RUNNER_TEMP/flow-stack/profile.md"
           echo "FLOW_STACK_HOME=$RUNNER_TEMP/flow-stack" >>"$GITHUB_ENV"
-          for l in self-heal needs-repro; do gh label create "$l" --force >/dev/null; done
+          for l in self-heal heal-ok needs-repro; do gh label create "$l" --force >/dev/null; done
       - uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -36,4 +36,4 @@ jobs:
           plugins: flow-stack@flow-stack
           prompt: |
             /flow-stack:flow --auto ship Run the routine in .github/routines/self-heal.md. Follow it exactly.
-          claude_args: --allowedTools "Bash,Read,Edit,Write,Glob,Grep,Agent,Skill,TodoWrite,WebFetch"
+          claude_args: --allowedTools "Bash,Read,Edit,Write,Glob,Grep,Agent,Skill,TodoWrite"
