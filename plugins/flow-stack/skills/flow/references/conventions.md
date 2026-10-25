@@ -145,6 +145,7 @@ A generic skill with a slot looks for its fill in this order and uses the first 
 | build/run | `.claude/skills/run-<repo>/` | make-runner |
 | repo playbooks | `.flow/playbooks/*.md` | make-playbook |
 | irreversible actions | `.flow/gates.md` | make-gates |
+| scheduled routines | `.github/routines/<name>.md` (frontmatter cron, timeout, labels, auth; body is the prompt) → `.github/workflows/flow-<name>.yml`; `.github/routines/profile.md` is the CI profile | make-routines |
 | anything else | `.claude/skills/<name>/` | make-skill |
 
 ## Delegation

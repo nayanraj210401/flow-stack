@@ -218,6 +218,7 @@ Type a skill yourself when you want a specific thing: `/flow-stack:challenge`, `
 | `make-runner` | Generates `.claude/skills/run-<repo>/` with verified install, start, seed, reset, and stop commands. |
 | `make-playbook` | Generates `.flow/playbooks/<name>.md` from past traces, for workflows this repo repeats. |
 | `make-gates` | Generates `.flow/gates.md`: this repo's irreversible commands as deny/ask rules the guard hook enforces. |
+| `make-routines` | Generates scheduled GitHub Actions routines (self-create files reproducible bugs, self-heal opens proven draft PRs) that run flow-stack headless with its hooks. Cloud routines can't load plugins; Actions can. |
 | `make-skill` | Generates any other repo or personal skill, with a self-test. |
 | `tend` | Re-runs every generated skill's self-test and flags drift against the code. |
 
@@ -525,6 +526,7 @@ Generic skills have **slots**. Forge skills generate what fills them. Resolution
 | Build, run, reset | `make-runner` | `.claude/skills/run-<repo>/` |
 | Repo workflows | `make-playbook` | `.flow/playbooks/*.md` |
 | Irreversible actions | `make-gates` | `.flow/gates.md` |
+| Scheduled maintenance | `make-routines` | `.github/routines/*.md` → `.github/workflows/flow-*.yml` |
 | Anything else | `make-skill` | `.claude/skills/<name>/` |
 
 Every generated skill has a `## Self-test` and a `source-commit`. `tend` re-runs the self-tests and flags drift.
