@@ -29,7 +29,8 @@ grep -q 'challenge' <<<"$out2" && bad "round 2 already says challenge: $out2" ||
 grep -q 'round 3 without ship: stop patching findings; run the challenge skill' <<<"$out3" \
   && ok "round 3 without ship says challenge" || bad "round 3 lacks the directive: $out3"
 [ "$("$R" rounds)" = 3 ] && ok "ready.sh rounds prints 3" || bad "ready.sh rounds: $("$R" rounds)"
-grep -q 'challenge' <<<"$("$R" record review ship)" && bad "ship at round 3 says challenge" || ok "ship at round 3: no challenge"
+out="$("$R" record review ship)"
+[ "$out" = "recorded review=ship for $(git rev-parse --short=7 HEAD)" ] && ok "ship at round 3: only the record line" || bad "ship at round 3: $out"
 commit four; "$R" record review ship >/dev/null
 commit five; out5="$("$R" record review fix-first 2>&1)"
 grep -q 'round 1' <<<"$out5" && ! grep -q 'challenge' <<<"$out5" \
