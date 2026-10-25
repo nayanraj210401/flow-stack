@@ -592,7 +592,7 @@ mul() { echo 6; } fooled one, not both.</span></div>
           <div class="amode"><div class="flag">self-create · nightly</div><p>Hunts for bugs by running your tests and verify driver. It files an issue only when it has a repro that actually ran, checks for duplicates first, and files at most three per run.</p></div>
           <div class="amode"><div class="flag">self-heal · nightly</div><p>Takes issues a maintainer labelled <code>heal-ok</code>, reproduces each one, and fixes it through flow. A draft PR opens only after <code>ready.sh</code> stamps the commit.</p></div>
         </div>
-        <p class="never"><b>Each routine gets only the write access it needs.</b> <code>grants:</code> in its file decides that: review can only comment, self-create can only file issues. Issue and PR text are treated as data, never instructions. Each run installs the latest flow-stack, or the release you pin with <code>flow_ref</code>.</p>
+        <p class="never"><b>Each routine gets only the write access it needs.</b> <code>grants:</code> in its file sets the token: review can only comment, self-create can only file issues. Each routine is told to treat issue and PR text as data, never instructions. Each run installs flow-stack from its default branch, or the release you pin with <code>flow_ref</code>.</p>
       </div>
       <div class="term reveal">
         <div class="term-bar"><i></i><i></i><i></i><span class="title">make-routines · illustrative</span></div>

@@ -39,8 +39,8 @@ render_one() { # render_one <name>: the workflow on stdout
       on=$'  schedule:\n    - cron: "'"$cron"$'"\n  workflow_dispatch:' ;;
     pull_request)
       on='  pull_request:'$'\n''    types: [opened, synchronize, ready_for_review]'
-      # drafts aren't ready for review, and fork PRs get no secrets
-      iff='    if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository'
+      # drafts aren't ready, fork PRs get no secrets, and Dependabot runs get only Dependabot's secrets
+      iff="    if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'"
       group='-${{ github.event.pull_request.number }}' cancel=true
       ctx=' The pull request is #${{ github.event.pull_request.number }}.' ;;
     *) die "$f: trigger must be schedule or pull_request" ;;
@@ -50,12 +50,20 @@ render_one() { # render_one <name>: the workflow on stdout
   for g in $grants; do case "$g" in issues|pull-requests|contents) ;; *) die "$f: grants takes issues pull-requests contents, got '$g'" ;; esac; done
   [[ "$ref" =~ ^[A-Za-z0-9._/-]*$ ]] || die "$f: flow_ref must be a tag or branch, got '$ref'"
   for s in contents issues pull-requests; do
-    if [[ " $grants " == *" $s "* ]]; then export "PERM_${s//-/_}=write"; else export "PERM_${s//-/_}=read"; fi
+    if [[ " $grants " == *" $s "* ]]; then export "R_PERM_${s//-/_}=write"; else export "R_PERM_${s//-/_}=read"; fi
   done
-  [[ " $grants " == *" contents "* ]] && mode="--auto ship"
-  NAME="$1" ON="$on" IF="$iff" GROUP="$group" CANCEL="$cancel" TIMEOUT="$timeout" LABELS="$labels" AUTH="$auth" \
-  MARKET="$market${ref:+#$ref}" MODE="$mode" CTX="$ctx" \
-    perl -pe 's/\@([A-Za-z_]+)\@/exists $ENV{$1} ? $ENV{$1} : die "unknown placeholder $1\n"/ge' "$tpl/workflow.yml"
+  # Without github_token the action swaps in the Claude App's token, with every scope the App has. Only a
+  # routine that pushes needs it (PRs opened with github.token don't trigger CI); the rest stay inside `grants`.
+  local token='github_token: ${{ github.token }}' mkt="$market" clone=""
+  if [[ " $grants " == *" contents "* ]]; then mode="/flow-stack:flow --auto ship" token=""; fi
+  # The action accepts only marketplace URLs ending in .git, so a pin is a clone at the ref, added by path
+  if [ -n "$ref" ]; then
+    clone="          git clone -q --depth 1 --branch '$ref' $market \"\$RUNNER_TEMP/flow-stack-plugin\""
+    mkt='${{ runner.temp }}/flow-stack-plugin'
+  fi
+  R_NAME="$1" R_ON="$on" R_IF="$iff" R_GROUP="$group" R_CANCEL="$cancel" R_TIMEOUT="$timeout" R_LABELS="$labels" \
+  R_AUTH="$auth" R_TOKEN="$token" R_MARKET="$mkt" R_CLONE="$clone" R_MODE="$mode" R_CTX="$ctx" \
+    perl -pe 's/\@([A-Za-z_]+)\@/exists $ENV{"R_$1"} ? $ENV{"R_$1"} : die "unknown placeholder $1\n"/ge' "$tpl/workflow.yml"
 }
 
 names() {

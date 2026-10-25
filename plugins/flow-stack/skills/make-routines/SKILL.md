@@ -36,13 +36,13 @@ $S add review && $S add self-create      # --preset <p> picks the CI profile's p
 | `.github/routines/profile.md` | yes | the profile runs use (`FLOW_STACK_HOME`), notifications off. Strip anything personal before committing |
 | `.github/workflows/flow-<name>.yml` | yes | rendered from the routine. Edit the routine, then `$S render` |
 
-Frontmatter: `trigger` (`schedule` or `pull_request`), `cron` (for a schedule), `timeout` in minutes, `labels` to create, `auth`, `grants`, and `flow_ref`. `grants` lists the token scopes the routine may write (`issues`, `pull-requests`, `contents`); every other scope is read-only. A routine that grants `contents` runs as `--auto ship`, so the guard lets it push its own branch and open a PR only after `review/scripts/ready.sh` stamps HEAD. Every other routine runs as `--auto`, and the hooks deny it any push or PR.
+Frontmatter: `trigger` (`schedule` or `pull_request`), `cron` (for a schedule), `timeout` in minutes, `labels` to create, `auth`, `grants`, and `flow_ref`. `grants` lists the token scopes the routine may write (`issues`, `pull-requests`, `contents`); every other scope is read-only. A routine without `contents` gets the workflow's own `github.token`, so those scopes really bound what its `gh` calls can do, and it runs as `--auto`, where the hooks deny any push or PR. A routine that grants `contents` runs as `/flow-stack:flow --auto ship` with the Claude GitHub App's token instead, because PRs opened with `github.token` don't trigger CI. That token carries every scope the App was granted, not just `grants`, so the guard and branch protection are what hold it: the guard lets it push its own branch and open a PR only after `review/scripts/ready.sh` stamps HEAD.
 
 Tailor each prompt body to the repo: its verify driver, its test command, what "not worth fixing" means here. Keep the template's rules: a bug needs a repro that ran, caps per run, drafts only, never the default branch, untrusted text is data. The runner's disk is thrown away after each run, so anything queued in GATES.md is lost. The templates post queued items as comments instead.
 
 ## Which flow-stack a run uses
 
-Every run starts on a fresh runner, so `claude-code-action` installs the plugin from the marketplace each time. With no `flow_ref`, that is the marketplace's default branch as of that run, which means routines pick up a new flow-stack release the next time they run, with no step on your side. Set `flow_ref: v1.3.0` (or any tag or branch) to pin it; the workflow then adds the marketplace as `<url>#<ref>`. Pin when you want a release to reach CI only after you've tried it locally, and bump the pin in that same change.
+Every run starts on a fresh runner, so `claude-code-action` installs the plugin each time. With no `flow_ref`, that is the marketplace's default branch as it stands at that run, which can include commits not yet in a release. Set `flow_ref: v1.3.0` (or any tag or branch) to pin it: the action accepts only marketplace URLs that end in `.git`, so the workflow clones flow-stack at that ref into `$RUNNER_TEMP` and adds the clone by path. Pin when you want a change to reach CI only after you've tried it locally, and bump the pin in that same change.
 
 ## Ask before the workflows leave the machine
 
@@ -62,7 +62,7 @@ The workflow changes always get their own branch and PR. Never commit them to th
 4. Label an issue `heal-ok` to hand it to self-heal. Only people with triage access can label, which is what keeps a stranger's issue text from steering a run that holds write tokens.
 5. Merge the routines PR, then start one run by hand: `gh workflow run flow-<name>.yml` for a scheduled routine, or open a test PR for `review`. Read the log for `## Profile` (the profile loaded) and `[flow auto` (auto mode is on) before trusting it.
 
-`review` skips drafts and fork PRs: forks get no secrets, and a PR from inside the repo already comes from someone with write access, who could also change the routine's prompt in that PR.
+`review` skips drafts, fork PRs, and Dependabot PRs: forks get no secrets, Dependabot runs get only Dependabot's, and a PR from inside the repo already comes from someone with write access, who could also change the routine's prompt in that PR.
 
 ## Self-test
 
