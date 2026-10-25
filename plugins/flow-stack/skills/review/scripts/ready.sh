@@ -7,7 +7,7 @@
 #                                            · <id> done for a repo `do` step (below)
 #   ready.sh stamped [<sha>]                 exit 0 if <sha> (default HEAD) has a pass stamp
 #   ready.sh mode                            on | yolo  (repo .flow/config.json > profile > on)
-#   ready.sh rounds                          reviewed commits on this branch; a review record prints it,
+#   ready.sh rounds                          reviewed commits on this branch since the last ship; a review record prints it,
 #                                            and round 3 without ship says to challenge the approach
 # Live checks: clean tree, lint + typecheck (config commands), impacted feature scenarios,
 # and with an active flow task: acceptance checks, seals, blind checks.
@@ -39,11 +39,11 @@ merge_base() {
     git -C "$FLOW_ROOT" rev-parse -q --verify "$ref" >/dev/null && { git -C "$FLOW_ROOT" merge-base HEAD "$ref"; return; }
   done
 }
-rounds() { # reviewed commits on this branch (merge base..HEAD); one commit reviewed twice is one round
+rounds() { # reviewed commits on this branch since the last one reviewed ship; one commit reviewed twice is one round
   local b; b="$(merge_base)"
   [ -f "$ledger" ] || { echo 0; return; }
   git -C "$FLOW_ROOT" rev-list "${b:+$b..}HEAD" 2>/dev/null |
-    awk -F'\t' 'NR == FNR { on[$1] = 1; next } $3 == "review" && on[$2] { s[$2] = 1 } END { print length(s) }' - "$ledger"
+    awk -F'\t' 'NR == FNR { if ($3 == "review") v[$2] = $4; next } v[$1] == "ship" { exit } $1 in v { n++ } END { print n + 0 }' "$ledger" -
 }
 latest() { awk -F'\t' -v s="$1" -v k="$2" '$2 == s && $3 == k { r = $4 } END { print r }' "$ledger" 2>/dev/null; }
 
@@ -61,10 +61,10 @@ case "${1:-}" in
     mkdir -p "$FLOW_DIR"
     printf '%s\t%s\t%s\t%s\t%s\n' "$(date -u +%FT%TZ)" "$(sha)" "$kind" "$res" "$(printf '%s' "${4:-}" | tr '\t\n' '  ')" >>"$ledger"
     echo "recorded $kind=$res for $(sha | cut -c1-7)"
-    if [ "$kind" = review ]; then
+    if [ "$kind" = review ] && [ "$res" != ship ]; then
       n="$(rounds)"
       echo "review round $n on this branch; a re-review reads only: git diff $(sha | cut -c1-7)..HEAD"
-      [ "$n" -lt 3 ] || [ "$res" = ship ] || echo "round $n without ship: stop patching findings; run the challenge skill on the approach before another round"
+      [ "$n" -lt 3 ] || echo "round $n without ship: stop patching findings; run the challenge skill on the approach before another round"
     fi
     exit 0 ;;
 esac

@@ -30,6 +30,10 @@ grep -q 'round 3 without ship: stop patching findings; run the challenge skill' 
   && ok "round 3 without ship says challenge" || bad "round 3 lacks the directive: $out3"
 [ "$("$R" rounds)" = 3 ] && ok "ready.sh rounds prints 3" || bad "ready.sh rounds: $("$R" rounds)"
 grep -q 'challenge' <<<"$("$R" record review ship)" && bad "ship at round 3 says challenge" || ok "ship at round 3: no challenge"
+commit four; "$R" record review ship >/dev/null
+commit five; out5="$("$R" record review fix-first 2>&1)"
+grep -q 'round 1' <<<"$out5" && ! grep -q 'challenge' <<<"$out5" \
+  && ok "after ships, the next slice's first fix-first is round 1" || bad "ships counted as fix rounds: $out5"
 
 [ "$FAILS" = 0 ] || { echo "== ready-rounds · FAIL ($FAILS)"; exit 1; }
 echo "== ready-rounds · PASS"
