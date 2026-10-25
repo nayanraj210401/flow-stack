@@ -31,8 +31,16 @@ set_cron() { # set_cron <name> <cron>: put the cron in the routine's frontmatter
   local f="$dir/$1.md"
   valid_cron "$2" || die "cron must be five fields (minute hour day month weekday, UTC), got '$2'"
   [ "$(field "$f" trigger schedule)" = schedule ] || die "$f: trigger is $(field "$f" trigger schedule), which takes no cron"
-  if grep -q '^cron:' "$f"; then C="$2" perl -pi -e 'if (!$done && s/^cron:.*/cron: "$ENV{C}"/) { $done = 1 }' "$f"
-  else C="$2" perl -0pi -e 's/\A(---\n)/$1cron: "$ENV{C}"\n/' "$f"; fi
+  local tmp; tmp="$(mktemp)"
+  # Only the frontmatter (between the first two --- lines) is touched: replace its cron, or add one before the
+  # closing ---. The line ending of the --- line is kept, so CRLF files stay CRLF.
+  C="$2" perl -ne '
+    if ($. == 1) { /^---(\r?)$/ or exit 3; $eol = $1; $fm = 1; print; next }
+    if ($fm && /^---\r?$/) { print qq{cron: "$ENV{C}"$eol\n} unless $done; $fm = 0; $done = 1; print; next }
+    if ($fm && /^cron:/) { print qq{cron: "$ENV{C}"$eol\n}; $done = 1; next }
+    print; END { exit 4 unless $done }' "$f" >"$tmp" || { rm -f "$tmp"; die "$f: no frontmatter to put a cron in"; }
+  [ "$(field "$tmp" cron "")" = "$2" ] || { rm -f "$tmp"; die "$f: the cron didn't land in the frontmatter"; }
+  mv "$tmp" "$f"
 }
 
 render_one() { # render_one <name>: the workflow on stdout
@@ -61,7 +69,7 @@ render_one() { # render_one <name>: the workflow on stdout
   [[ "$labels" =~ ^([a-z0-9:._-]+( [a-z0-9:._-]+)*)?$ ]] || die "$f: labels are space-separated, no quotes, got '$labels'"
   for g in $grants; do case "$g" in issues|pull-requests|contents) ;; *) die "$f: grants takes issues pull-requests contents, got '$g'" ;; esac; done
   [[ "$ref" =~ ^[A-Za-z0-9._/-]*$ ]] || die "$f: flow_ref must be a tag or branch, got '$ref'"
-  [[ ! "$ref" =~ ^[0-9a-f]{7,40}$ ]] || die "$f: flow_ref looks like a commit SHA; the clone takes a tag or branch"
+  [[ ! "$ref" =~ ^[0-9a-f]{7,40}$ ]] || die "$f: flow_ref looks like a commit SHA; the clone takes a tag or branch (one that isn't 7-40 hex characters)"
   for s in contents issues pull-requests; do
     if [[ " $grants " == *" $s "* ]]; then export "R_PERM_${s//-/_}=write"; else export "R_PERM_${s//-/_}=read"; fi
   done
@@ -138,8 +146,10 @@ add() {
 
 schedule() { # schedule <name> <cron>: change an existing routine's schedule and re-render it
   [ -f "$dir/${1:-}.md" ] || die "schedule <name> <cron>: no routine $dir/${1:-}.md"
+  local f="$dir/$1.md" bak; bak="$(mktemp)"; cp "$f" "$bak"
   set_cron "$1" "${2:-}"
-  write_one "$1"
+  (write_one "$1") || { cp "$bak" "$f"; rm -f "$bak"; die "$f: render failed, schedule left as it was"; }
+  rm -f "$bak"
 }
 
 check() {
