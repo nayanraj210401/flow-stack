@@ -33,13 +33,23 @@ Tailor each prompt body to the repo: its verify driver, its test command, what "
 
 Every run starts as `/flow-stack:flow --auto ship`. The guard then lets it push only its own branch and open a PR only after `review/scripts/ready.sh` stamps HEAD. Everything else irreversible is queued, and since the runner's disk is thrown away, the templates have the run post queued items as issue comments.
 
+## Ask before the workflows leave the machine
+
+Once `$S check` passes, show `git status --short .github` and ask once (AskUserQuestion): **open a draft PR with these routines?**
+
+- **Draft PR** (recommended): from the default branch, `git switch -c flow-routines`, then `git add .github/routines .github/workflows/flow-*.yml`, commit, `git push -u origin flow-routines`, and `gh pr create --draft --title "ci: flow-stack routines" --body-file <file>`. The body lists the routines with their schedules and caps, and has the human steps below as a checklist to finish before merging.
+- **Branch only**: the same branch and commit, with no push.
+- **Leave uncommitted**: stop here. The files stay in the working tree.
+
+The workflow changes always get their own branch and PR. Never commit them to the default branch, and never mix them into another change. Under `--auto` nobody can answer the question, so queue it in GATES.md and leave the files uncommitted.
+
 ## Human steps (these are gates, so hand them over, don't run them)
 
 1. The secret: `claude setup-token`, then `gh secret set CLAUDE_CODE_OAUTH_TOKEN` (or `ANTHROPIC_API_KEY`).
 2. The Claude GitHub App on the repo (`/install-github-app`). PRs opened with the default `GITHUB_TOKEN` don't trigger CI, so self-heal's drafts would arrive with no checks.
 3. Protect the default branch (require a PR and a passing check). The guard stops a stray push, but a script can get around it; branch protection can't be.
 4. Label an issue `heal-ok` to hand it to self-heal. Only people with triage access can label, which is what keeps a stranger's issue text from steering a run that holds write tokens.
-5. Commit, push, and start one run by hand: `gh workflow run flow-<name>.yml`. Read its log for `## Profile` (the profile loaded) and `[flow auto ship]` (auto mode is on) before trusting the schedule.
+5. Merge the routines PR, then start one run by hand: `gh workflow run flow-<name>.yml`. Read its log for `## Profile` (the profile loaded) and `[flow auto ship]` (auto mode is on) before trusting the schedule.
 
 ## Self-test
 
