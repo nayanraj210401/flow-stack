@@ -27,8 +27,15 @@ field() { # field <file> <key> <default>
 }
 
 valid_cron() { [[ "$1" =~ ^[0-9*/,-]+( [0-9*/,A-Za-z-]+){4}$ ]]; }
-# An IANA zone (Asia/Kolkata, America/New_York, UTC); checked against this machine's tz database when it has one.
-valid_tz() { [[ "$1" =~ ^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+){0,2}$ ]] && { [ ! -d /usr/share/zoneinfo ] || [ -f "/usr/share/zoneinfo/$1" ]; }; }
+# A canonical IANA zone (Asia/Kolkata, America/New_York) or UTC / Etc/GMT±N. With the tz database's zone.tab, only
+# zones it lists pass, so old aliases (Asia/Calcutta, US/Eastern) and non-zones (posixrules, Factory) are refused.
+valid_tz() {
+  [[ "$1" =~ ^(UTC|Etc/UTC|Etc/GMT([+-]1?[0-9])?)$ ]] && return
+  [[ "$1" =~ ^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+){1,2}$ ]] || return 1
+  local tab=/usr/share/zoneinfo/zone.tab
+  [ ! -f "$tab" ] || cut -f3 "$tab" | grep -qxF "$1"
+}
+tz_hint="a canonical IANA zone like Asia/Kolkata or America/New_York (not an alias like Asia/Calcutta or US/Eastern)"
 
 set_key() { # set_key <name> <key> <value>: put key: "value" in the routine's frontmatter
   local f="$dir/$1.md"
@@ -47,7 +54,7 @@ set_key() { # set_key <name> <key> <value>: put key: "value" in the routine's fr
 
 set_schedule() { # set_schedule <name> <cron> <tz or "">
   valid_cron "$2" || die "cron must be five fields (minute hour day month weekday), got '$2'"
-  [ -z "$3" ] || valid_tz "$3" || die "timezone must be an IANA zone like Asia/Kolkata or America/New_York, got '$3'"
+  [ -z "$3" ] || valid_tz "$3" || die "timezone must be $tz_hint, got '$3'"
   set_key "$1" cron "$2"
   [ -z "$3" ] || set_key "$1" timezone "$3"
 }
@@ -66,7 +73,7 @@ render_one() { # render_one <name>: the workflow on stdout
       cron="$(field "$f" cron "0 3 * * *")"
       valid_cron "$cron" || die "$f: cron must be five fields, got '$cron'"
       tz="$(field "$f" timezone "")"
-      [ -z "$tz" ] || valid_tz "$tz" || die "$f: timezone must be an IANA zone, got '$tz'"
+      [ -z "$tz" ] || valid_tz "$tz" || die "$f: timezone must be $tz_hint, got '$tz'"
       on=$'  schedule:\n    - cron: "'"$cron"'"'
       [ -z "$tz" ] || on+=$'\n      timezone: "'"$tz"'"'
       on+=$'\n  workflow_dispatch:' ;;
@@ -144,7 +151,7 @@ add() {
   done
   [ -z "$tz" ] || [ -n "$cron" ] || die "--tz needs --cron"
   [ -z "$cron" ] || valid_cron "$cron" || die "--cron must be five fields (minute hour day month weekday), got '$cron'"
-  [ -z "$tz" ] || valid_tz "$tz" || die "--tz must be an IANA zone like Asia/Kolkata or America/New_York, got '$tz'"
+  [ -z "$tz" ] || valid_tz "$tz" || die "--tz must be $tz_hint, got '$tz'"
   local f="$dir/$name.md"
   [ ! -f "$f" ] || [ -n "$force" ] || die "$f exists (--force replaces it)"
   if [ -n "$cron" ] && [ -f "$tpl/$name.md" ] && [ "$(field "$tpl/$name.md" trigger schedule)" != schedule ]; then
@@ -161,9 +168,11 @@ add() {
 
 schedule() { # schedule <name> <cron> [--tz <zone>]: change an existing routine's schedule and re-render it
   [ -f "$dir/${1:-}.md" ] || die "schedule <name> <cron>: no routine $dir/${1:-}.md"
-  local tz=""
-  [ "${3:-}" != --tz ] || tz="${4:-}"; [ "${3:-}" != --tz ] || [ -n "$tz" ] || die "--tz needs a zone"
-  [ -z "${3:-}" ] || [ "$3" = --tz ] || die "unknown flag $3"
+  local name="$1" cron="${2:-}" tz=""; shift $(($# < 2 ? $# : 2))
+  while [ $# -gt 0 ]; do
+    case "$1" in --tz) [ -n "${2:-}" ] || die "--tz needs a zone"; tz="$2"; shift 2 ;; *) die "unknown argument $1" ;; esac
+  done
+  set -- "$name" "$cron"
   local f="$dir/$1.md" bak; bak="$(mktemp)"; cp "$f" "$bak"
   (set_schedule "$1" "${2:-}" "$tz") || { cp "$bak" "$f"; rm -f "$bak"; exit 2; }
   (write_one "$1") || { cp "$bak" "$f"; rm -f "$bak"; die "$f: render failed, schedule left as it was"; }
