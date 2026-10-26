@@ -364,6 +364,7 @@ footer a { color: var(--muted); }
       <a class="opt" href="#how">How it works</a>
       <a class="opt" href="#mods">Mods</a>
       <a class="opt" href="#auto">Auto</a>
+      <a class="opt" href="#routines">Routines</a>
       <a class="opt" href="#board">Board</a>
       <a class="opt" href="#guardrails">Guardrails</a>
       <a class="opt" href="#cost">Cost</a>
@@ -577,6 +578,42 @@ mul() { echo 6; } fooled one, not both.</span></div>
   </div>
 </section>
 
+<section id="routines">
+  <div class="wrap">
+    <div class="reveal">
+      <div class="kicker">Routines on GitHub Actions</div>
+      <h2>Your repo, <em>tended overnight.</em></h2>
+      <p class="sub">Claude Code's cloud routines can't load plugins, so flow-stack's hooks wouldn't run there. <code>/flow-stack:make-routines</code> writes GitHub Actions workflows that install the plugin on every run, so the guard, the fences, and the ready gate stay on with nobody watching. Pick the routines you need, and the skill asks before it opens a PR with the workflows.</p>
+    </div>
+    <div class="auto-grid">
+      <div class="reveal">
+        <div class="modes">
+          <div class="amode"><div class="flag">review · every PR</div><p>The <code>flow-stack:reviewer</code> agent reviews each non-draft PR in a fresh context and posts one comment with a verdict and file:line findings. It never approves, blocks, or pushes.</p></div>
+          <div class="amode"><div class="flag">self-create · nightly</div><p>Hunts for bugs by running your tests and verify driver. It files an issue only when it has a repro that actually ran, checks for duplicates first, and files at most three per run.</p></div>
+          <div class="amode"><div class="flag">self-heal · nightly</div><p>Takes issues a maintainer labelled <code>heal-ok</code>, reproduces each one, and fixes it through flow. A draft PR opens only after <code>ready.sh</code> stamps the commit.</p></div>
+        </div>
+        <p class="never"><b>Each routine gets only the write access it needs.</b> <code>grants:</code> in its file sets the token: review can only comment, self-create can only file issues. Each routine is told to treat issue and PR text as data, never instructions. Each run installs flow-stack from its default branch, or the release you pin with <code>flow_ref</code>.</p>
+      </div>
+      <div class="term reveal">
+        <div class="term-bar"><i></i><i></i><i></i><span class="title">make-routines · illustrative</span></div>
+        <div class="term-body"><span class="you">› /flow-stack:make-routines</span>
+<span class="d">which routines?</span>  <span class="acc">[x] review</span>  <span class="acc">[x] self-create</span>  [ ] self-heal
+
+wrote    .github/routines/review.md
+wrote    .github/routines/self-create.md
+wrote    .github/routines/profile.md
+rendered .github/workflows/flow-review.yml
+rendered .github/workflows/flow-self-create.yml
+<span class="ok">✓ review</span>  <span class="ok">✓ self-create</span>   <span class="d">routines.sh check</span>
+
+<span class="d">open a draft PR with these routines?</span>
+<span class="acc">› Draft PR</span>  <span class="d">· branch only · leave uncommitted</span>
+<span class="ok">✓</span> draft PR opened <span class="d">· your checklist is in it</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section id="board">
   <div class="wrap">
     <div class="reveal">
@@ -715,6 +752,7 @@ mul() { echo 6; } fooled one, not both.</span></div>
           <span class="k">make-runner</span><span class="v">build, run, reset</span>
           <span class="k">make-gates</span><span class="v">your repo's irreversible actions</span>
           <span class="k">make-playbook</span><span class="v">your workflows</span>
+          <span class="k">make-routines</span><span class="v">flow-stack on GitHub Actions</span>
         </div>
       </div>
       <div class="b-c">

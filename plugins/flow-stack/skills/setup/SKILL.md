@@ -64,6 +64,7 @@ Read [references/tools.md](references/tools.md). Offer only what the inventory s
    - no feature map (`.flow/features/`) → `/flow-stack:feature-map` (it lets verify run exactly the features a change touches)
    - deploy or migration configs present but no `.flow/gates.md` → `/flow-stack:make-gates`
    - a team repo without `.flow/taste.md` → offer `../../templates/team-taste.md`
+   - a GitHub remote and no `.github/routines/` → `/flow-stack:make-routines` (optional: scheduled self-create and self-heal runs; it asks before opening a PR with the workflows)
 
 ## 6. Done
 
