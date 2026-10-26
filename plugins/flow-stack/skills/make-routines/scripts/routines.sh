@@ -30,7 +30,7 @@ valid_cron() { [[ "$1" =~ ^[0-9*/,-]+( [0-9*/,A-Za-z-]+){4}$ ]]; }
 # A canonical IANA zone (Asia/Kolkata, America/New_York) or UTC / Etc/GMT±N. With the tz database's zone.tab, only
 # zones it lists pass, so old aliases (Asia/Calcutta, US/Eastern) and non-zones (posixrules, Factory) are refused.
 valid_tz() {
-  [[ "$1" =~ ^(UTC|Etc/UTC|Etc/GMT([+-]1?[0-9])?)$ ]] && return
+  [[ "$1" =~ ^(UTC|GMT|Etc/(UTC|GMT(-1[0-4]|\+1[0-2]|[+-][0-9])?))$ ]] && return
   [[ "$1" =~ ^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+){1,2}$ ]] || return 1
   local tab=/usr/share/zoneinfo/zone.tab
   [ ! -f "$tab" ] || cut -f3 "$tab" | grep -qxF "$1"
