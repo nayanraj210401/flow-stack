@@ -45,7 +45,14 @@ expect allow "sh -c 'gh pr create --draft --title x'"
 expect allow "bash -lc \"gh pr create -d --title x\""
 expect deny  "sh -c 'gh pr create --title x'"
 expect deny  "sh -c 'gh pr create --title \"a -d\" --body x'"
-# Fails closed: a flag right before the closing quote could be title text ending in -d.
-expect deny  "sh -c 'gh pr create --draft'"
+expect allow "sh -c 'gh pr create --draft'"
+expect allow "eval \"gh pr create --title 'a -d' --draft\""
+expect deny  'bash -c "gh pr create --body \"fix -d flag\" --title x"'
+expect deny  "sh -c \"gh pr create --title 'x' --body \\\"y --draft z\\\"\""
+# Every gh pr create/ready on the line needs its own draft flag; quoted text naming one doesn't count.
+expect deny  "sh -c 'gh pr create --draft --title x' && gh pr create --title y"
+expect deny  'gh pr create --draft --title x && gh pr create --title y'
+expect deny  "echo 'gh pr create --draft x' && gh pr create --title x"
+expect deny  "grep 'gh pr create -d foo' f; gh pr create --title x"
 
 [ "$FAILS" -eq 0 ] && echo "ok" || { echo "$FAILS failed"; exit 1; }

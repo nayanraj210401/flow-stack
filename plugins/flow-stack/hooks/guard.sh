@@ -221,12 +221,51 @@ lead="$lead"'[[:space:]]*((if|then|elif|else|do|while|until|!)[[:space:]]+|[A-Za
 cend='([[:space:];&|)]|$)'
 gopt='([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*'
 pr_cmd="$(grep -Ei "$lead"'gh'"$gopt"'[[:space:]]+pr[[:space:]]+(create|ready)'"$cend" <<<"$code" || true)"
-# Flags are read from the gh invocation on, so a wrapper's opening quote (sh -c '…) isn't taken for a title.
-# An unpaired quote's tail becomes a lone quote: a flag right before it could be title text, so it fails closed.
-pr_args="$(awk -v re="(^|[^a-z0-9_./-])gh$gopt[[:space:]]+pr[[:space:]]+(create|ready)" '
-  { s = tolower($0); if (match(s, re)) { p = RSTART; if (substr(s, p, 2) != "gh") p++; $0 = substr($0, p) } print }' <<<"$pr_cmd")"
-if [ -d "$FLOW_DIR" ] && flow_enabled ready && [ -n "$pr_cmd" ] &&
-   ! sed -E "s/\\\\.//g; s/\"[^\"]*\"//g; s/'[^']*'//g; s/[\"'].*\$/'/" <<<"$pr_args" | grep -Eq '((--draft|[[:space:]]-d)(=true)?|--undo)([[:space:]]|$)'; then
+# The line is split into shell words and commands (quotes, escapes, $'…', ; & | ( )), and sh -c / eval scripts are
+# split the same way, so a quoted title saying "-d" is one word, not a flag. Every gh pr create|ready command needs
+# its own --draft, -d, --draft=true or --undo word. A word with an unterminated quote is never a flag.
+pr_drafts() {
+  awk -v q="'" '
+    function split_cmds(s, T, K,   i, j, c, e, n, w, has, bad, L) {
+      n = 0; w = ""; has = 0; bad = 0; L = length(s)
+      for (i = 1; i <= L; i++) {
+        c = substr(s, i, 1)
+        if (c == "\\") { w = w substr(s, ++i, 1); has = 1 }
+        else if (c == q) { j = index(substr(s, i + 1), q); has = 1
+          if (!j) { w = w substr(s, i + 1); bad = 1; i = L } else { w = w substr(s, i + 1, j - 1); i += j } }
+        else if (c == "\"" || (c == "$" && substr(s, i + 1, 1) == q)) {
+          e = (c == "$") ? q : "\""; if (c == "$") i++; has = 1
+          for (i++; i <= L && substr(s, i, 1) != e; i++) { if (substr(s, i, 1) == "\\") i++; w = w substr(s, i, 1) }
+          if (i > L) bad = 1 }
+        else if (c ~ /[;&|()\n]/) { if (has) { T[++n] = w; K[n] = bad ? "bad" : "w" } T[++n] = c; K[n] = "op"; w = ""; has = bad = 0 }
+        else if (c ~ /[ \t]/) { if (has) { T[++n] = w; K[n] = bad ? "bad" : "w" } w = ""; has = bad = 0 }
+        else { w = w c; has = 1 }
+      }
+      if (has) { T[++n] = w; K[n] = bad ? "bad" : "w" }
+      return n
+    }
+    # check(s): adds to found / nondraft for each gh pr create|ready command in s, recursing into sh -c and eval
+    function check(s,   T, K, n, i, start, g, p, d, k, sh) {
+      n = split_cmds(s, T, K); start = 1
+      for (i = 1; i <= n + 1; i++) {
+        if (i <= n && K[i] != "op") continue
+        g = p = d = sh = 0
+        for (k = start; k < i; k++) {
+          if (K[k] != "w") continue
+          if (k > start && (tolower(T[start]) == "eval" || (sh && T[k - 1] ~ /^-[A-Za-z]*c[A-Za-z]*$/))) check(T[k])
+          if (T[k] ~ /^(ba|z|da)?sh$/ || T[k] ~ /\/(ba|z|da)?sh$/) sh = 1
+          if (!g && tolower(T[k]) == "gh") g = k
+          else if (g && !p && T[k] == "pr" && k < i - 1 && T[k + 1] ~ /^(create|ready)$/ && K[k + 1] == "w") p = ++k
+          else if (p && T[k] ~ /^(--draft(=true)?|-d|--undo)$/) d = 1
+        }
+        if (p) { found++; if (!d) nondraft++ }
+        start = i + 1
+      }
+    }
+    { all = all $0 "\n" }
+    END { check(all); exit !(found && !nondraft) }'
+}
+if [ -d "$FLOW_DIR" ] && flow_enabled ready && [ -n "$pr_cmd" ] && ! pr_drafts <<<"$code"; then
   ready="$(cd "$(dirname "$0")/../skills/review/scripts" && pwd)/ready.sh"
   if [ "$(cd "$FLOW_ROOT" && "$ready" mode)" != yolo ] && ! (cd "$FLOW_ROOT" && "$ready" stamped); then
     pre_decide deny "flow ready-for-review: HEAD isn't stamped ready. Human review is the expensive step, so run $ready (it lists what's missing), or open a draft PR (--draft) meanwhile. review_gate: yolo in the profile or .flow/config.json turns this off."
