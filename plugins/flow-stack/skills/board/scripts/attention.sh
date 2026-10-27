@@ -10,11 +10,12 @@
 #   attention.sh [--days N] [--cap SECS]     transcripts touched in the last N days (default 14), cap 300
 # Transcripts: ${CLAUDE_CONFIG_DIR:-~/.claude}/projects/*/<sid>.jsonl · waits: ${FLOW_STACK_HOME:-~/.flow-stack}/waits.jsonl
 set -euo pipefail
-days=14; cap=300; file=""
+days=14; cap=300; file=""; out=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --days) days="${2:?--days needs a value}"; shift 2 ;;
     --cap) cap="${2:?--cap needs a value}"; shift 2 ;;
+    --out) out="$2"; shift 2 ;;                            # internal: the worker's output dir
     --one) [ $# -ge 2 ] || exit 0; file="$2"; shift 2 ;;   # internal: one transcript (GNU xargs calls once with none)
     *) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2 ;;
   esac
@@ -53,7 +54,10 @@ one() { # one <transcript>: its events and session line
   jq -nc --arg sid "$sid" --argjson cap "$cap" --argjson waits "${w:-[]}" "$prog" "$f" |
     jq -c --arg title "$title" 'if .kind == "session" then . + {title: $title} else . end' || true
 }
-[ -n "$file" ] && { one "$file"; exit 0; }
-# one transcript per process, one process per CPU; each line is one short write, so lines never interleave
+[ -n "$file" ] && { one "$file" >"$out/$(basename "$file")"; exit 0; }
+# one transcript per process, one process per CPU, each into its own file: jq flushes in blocks
+# that split lines, so workers sharing one output would splice each other's lines
+out="$(mktemp -d)"; trap 'rm -rf "$out"' EXIT
 find "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects" -mindepth 2 -maxdepth 2 -name '*.jsonl' -mtime -"$days" -print0 2>/dev/null |
-  xargs -0 -n1 -P "$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4)" bash "$0" --cap "$cap" --one || true
+  xargs -0 -n1 -P "$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4)" bash "$0" --cap "$cap" --out "$out" --one || true
+cat "$out"/* 2>/dev/null || true

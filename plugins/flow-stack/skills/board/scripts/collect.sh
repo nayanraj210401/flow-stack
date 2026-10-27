@@ -27,7 +27,8 @@ md_first() { awk -v h="## $2" '/<!--/{c=1} c{if(/-->/)c=0; next} $0==h{on=1;next
 
 # attention.sh once per run (events + session lines, JSON lines); empty when skipped or unavailable
 att="$(mktemp)"; trap 'rm -f "$att"' EXIT
-[ "$att_on" = 1 ] && { "$here/attention.sh" --days 14 >"$att" 2>/dev/null || true; }
+# a line that doesn't parse is dropped, so attention can lose an event but never the board
+[ "$att_on" = 1 ] && { "$here/attention.sh" --days 14 2>/dev/null | jq -cR 'fromjson? // empty' >"$att" 2>/dev/null || true; }
 
 # blocked($from): wall-clock seconds some session waited on you (answer, question, permission) since $from,
 # overlapping waits counted once; a day passes its local midnight, so an overnight wait counts from then
@@ -219,7 +220,7 @@ attention_json() { # null when skipped or no transcripts; else the day-by-day wi
 budget="$(sed -n 's/^[[:space:]]*review_minutes_per_day:[[:space:]]*\([0-9]*\).*/\1/p' "$profile" 2>/dev/null | head -n1 | grep . || echo null)"
 
 board="$(printf '%s\n' "${rj[@]:-}" | jq -sc --arg at "$(date +%FT%T%z)" --argjson spend "${spend:-null}" --argjson prefs "$(board_prefs)" \
-  --argjson budget "$budget" --argjson attention "$(attention_json "$budget")" \
+  --argjson budget "$budget" --argjson attention "$(attention_json "$budget" 2>/dev/null | grep . || echo null)" \
   '{generated:$at, review_minutes_per_day:$budget, spend:$spend, attention:$attention, repos:map(select(. != null))}
   | .prefs = ([.repos[].name] as $names | $prefs | if .tab | IN(("current", "all", $names[])) then . else .warnings += ["tab: no repo named \(.tab)"] | .tab = null end)')"
 

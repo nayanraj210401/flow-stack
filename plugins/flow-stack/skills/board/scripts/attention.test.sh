@@ -47,4 +47,15 @@ $got"; fail=1; }
 ses="$(jq -c 'select(.kind == "session") | [.sid, .title, .last - .first]' <<<"$out" 2>&1)"
 [ "$ses" = "[\"$sid\",\"Fixture title\",1345]" ] && echo "  ✓ session line" || { echo "  ✗ session: $ses"; fail=1; }
 grep -qE 'thanks|Shall I|agent prompt' <<<"$out" && { echo "  ✗ prompt text leaked"; fail=1; } || echo "  ✓ no prompt text"
+# many busy transcripts at once: parallel workers must never splice lines (jq flushes in 4 KB blocks)
+for k in $(seq 10 49); do
+  jq -nc --arg t "busy $k" '
+    range(0; 1200) as $i | {type:"assistant", timestamp:(1793059200 + $i * 20 | todate), message:{content:[{type:"text", text:"ok"}]}},
+      {type:"user", timestamp:(1793059200 + $i * 20 + 10 | todate), origin:{kind:"human"}, message:{content:"go"}}' \
+    >"$CLAUDE_CONFIG_DIR/projects/-r/abcdef$k-0000-0000-0000-000000000000.jsonl"
+done
+"$H/attention.sh" >"$SB/busy.out" 2>/dev/null; busy="$(cat "$SB/busy.out")"   # a file, as collect.sh writes it
+bad="$(jq -cR 'fromjson? // "BAD"' <<<"$busy" | grep -c '^"BAD"$')"
+n="$(jq -cR 'fromjson? | select(.kind == "prompt" and (.sid | startswith("abcdef")))' <<<"$busy" | wc -l | tr -d ' ')"
+[ "$bad" = 0 ] && [ "$n" = $((40 * 1200)) ] && echo "  ✓ 40 busy transcripts: every line parses, none lost" || { echo "  ✗ busy: $bad unparseable lines, $n of $((40 * 1200)) prompts"; fail=1; }
 [ "$fail" = 0 ] && echo PASS || exit 1
