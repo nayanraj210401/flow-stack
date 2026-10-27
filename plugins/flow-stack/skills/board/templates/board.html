@@ -39,9 +39,10 @@ h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--mute
 .draft{font:500 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--warn);background:var(--warn-soft);padding:3px 8px;border-radius:4px}
 
 /* needs-you strip */
-.needs{display:grid;grid-template-columns:1.6fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
-.needs>div{background:var(--surface);padding:16px 18px;display:flex;flex-direction:column;gap:10px}
-.needs:has(>[hidden]){grid-template-columns:1fr} .needs:not(:has(>:not([hidden]))){display:none}
+.needs{display:flex;flex-wrap:wrap;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.needs>div{background:var(--surface);padding:16px 18px;display:flex;flex-direction:column;gap:10px;flex:1 1 260px;min-width:0}
+.needs>[data-p=needs]{flex:2 1 320px}
+.needs:not(:has(>:not([hidden]))){display:none}
 .gate{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;align-items:start}
 .pill{font:500 11px var(--mono);letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:4px;white-space:nowrap}
 .p-gate{color:var(--crit);background:var(--crit-soft)} .p-pr{color:var(--accent);background:var(--accent-soft)}
@@ -65,7 +66,7 @@ h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--mute
 .panel header{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .src{font:11px var(--mono);color:var(--muted)}
 .c7{grid-column:span 7}.c5{grid-column:span 5}.c6{grid-column:span 6}.c4{grid-column:span 4}.c8{grid-column:span 8}.c12{grid-column:span 12}
-@media (max-width:900px){.c7,.c5,.c6,.c4,.c8{grid-column:span 12}.needs{grid-template-columns:1fr}}
+@media (max-width:900px){.c7,.c5,.c6,.c4,.c8{grid-column:span 12}}
 
 /* tasks */
 .task{display:grid;grid-template-columns:1fr auto;gap:6px 12px;padding-block:10px;border-top:1px solid var(--line)}
@@ -90,6 +91,12 @@ h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--mute
 .meter i.ok{background:var(--ok)} .meter i.warn{background:var(--warn)} .meter i.crit{background:var(--crit)}
 @media (max-width:600px){.qual{grid-template-columns:1fr}}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+
+/* attention tile + task sessions */
+.attn ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:4px;font-size:13px}
+.attn .stats{gap:14px}.attn .stats .num{font-size:13px}
+.sess{grid-column:1/-1;font-size:12px;color:var(--muted)}
+.sess summary{cursor:pointer}.sess table{font-size:12px;margin-top:6px}
 
 /* tables */
 .tbl{overflow-x:auto}
@@ -124,6 +131,7 @@ a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
   <section class="needs" aria-label="Needs you">
     <div data-p="needs"><h2 id="needs-h">Needs you</h2><div id="needs" style="display:flex;flex-direction:column;gap:10px"></div></div>
     <div data-p="spend"><h2>Spend</h2><div id="spend-tile"></div></div>
+    <div data-p="attention" class="attn" hidden><h2>Your attention</h2><div id="attention-tile"></div></div>
   </section>
 
   <div id="custom" class="grid" hidden></div>
@@ -158,6 +166,8 @@ a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
     ((r.prs || {}).mine || []).forEach(p => needs.push([pill(p.draft ? 'p-mute' : 'p-pr', p.draft ? 'draft' : 'your PR'), `${esc(r.name)} · ${link(p.url, '#' + p.number)} ${esc(p.title)}`, p.review === 'APPROVED' ? 'Approved: ready to merge.' : p.review === 'CHANGES_REQUESTED' ? 'Changes requested.' : 'Open, awaiting merge or review.']));
     (r.features || []).filter(f => f.status === 'stale' || f.status === 'broken').forEach(f => needs.push([pill(f.status === 'broken' ? 'p-crit' : 'p-warn', f.status), `${esc(r.name)} · feature ${esc(f.id)}`, 'Re-run its scenario: features.sh run ' + f.id]));
   });
+  const A = D.attention;
+  (A && A.warnings || []).forEach(w => needs.push([pill(w.level === 'crit' ? 'p-crit' : 'p-warn', 'attention'), esc(w.text), 'Your attention budget, today.']));
   $('needs-h').textContent = `Needs you · ${needs.length}`;
   $('needs').innerHTML = needs.length
     ? needs.map(([p, q, rec]) => `<div class="item">${p}<span class="q">${q}</span>${rec ? `<span class="rec">${esc(rec)}</span>` : ''}</div>`).join('')
@@ -171,6 +181,21 @@ a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
       <p class="note">$${wk.toFixed(2)} over the last 7 days.</p><svg viewBox="0 0 320 60" id="spark" role="img" aria-label="Daily spend, last ${sp.length} days"></svg>`;
   } else {
     $('spend-tile').innerHTML = '<p class="empty">Cost not collected (ccusage unavailable, or --no-cost).</p>';
+  }
+
+  // ---- attention tile (absent: stays hidden, old boards; null: nothing collected) ----
+  if (A !== undefined) {
+    $('attention-tile').parentElement.hidden = false;
+    const days = A ? A.by_day || [] : [], t = days[days.length - 1];
+    if (!A || !t) $('attention-tile').innerHTML = '<p class="empty">Attention not collected (no transcripts, or --no-attention).</p>';
+    else {
+      const b = A.budget_min, pct = b ? t.min / b : 0, cls = !b ? '' : pct > 1 ? 'crit' : pct > .8 ? 'warn' : 'ok';
+      $('attention-tile').innerHTML = `<div class="big">${esc(t.min)}<small> min${b ? ' of ' + esc(b) : ''} · ${esc(t.date)}</small></div>
+        ${b ? `<div class="meter" role="img" aria-label="${Math.round(pct * 100)}% of daily attention budget"><i class="${cls}" style="width:${Math.min(100, Math.max(2, pct * 100))}%"></i></div>` : ''}
+        <div class="stats"><div><span class="num">${esc(t.blocked_min)} min</span><span class="l">blocked on you</span></div><div><span class="num">${esc(t.prompts)}</span><span class="l">prompts</span></div><div><span class="num">${esc(t.answers)}</span><span class="l">answers</span></div><div><span class="num">${esc(t.questions)}</span><span class="l">questions</span></div><div><span class="num">${esc(t.permissions)}</span><span class="l">permissions</span></div></div>
+        <svg viewBox="0 0 320 60" id="attn-bars" role="img" aria-label="Daily attention minutes, last ${days.length} days"></svg>
+        ${(A.warnings || []).length ? `<ul>${A.warnings.map(w => `<li>${pill(w.level === 'crit' ? 'p-crit' : 'p-warn', w.level)} ${esc(w.text)}</li>`).join('')}</ul>` : ''}`;
+    }
   }
 
   // ---- views: one tab per repo + all repos ----
@@ -213,15 +238,22 @@ a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
   function panel(id, cls, title, src, inner) {
     return `<section class="panel ${cls}" data-p="${id}"><header><h2>${title}</h2><span class="src">${esc(src)}</span></header>${inner}</section>`;
   }
+  // minutes only when attention was collected (--no-attention leaves them out; never show 0 as data)
+  function timed(ss) { return ss.every(x => 'min' in x); }
+  function sessions(ss) {
+    const f = x => new Date(x).toLocaleString([], {dateStyle: 'short', timeStyle: 'short'}), m = timed(ss);
+    return `<details class="sess"><summary>Sessions</summary><div class="tbl"><table><thead><tr><th>Session</th><th>Last active</th><th class="num">Calls</th>${m ? '<th class="num">Min</th><th class="num">Blocked</th>' : ''}</tr></thead><tbody>${ss.map(x => `<tr><td>${esc(x.title || String(x.sid).slice(0, 8))}</td><td class="mono">${esc(f(x.last))}</td><td class="num">${esc(x.calls)}</td>${m ? `<td class="num">${esc(x.min)}</td><td class="num">${esc(x.blocked_min)}</td>` : ''}</tr>`).join('')}</tbody></table></div></details>`;
+  }
   function tone(s) { return s == null ? '' : s >= 80 ? 'ok' : s >= 50 ? 'warn' : 'crit'; }
   function repoView(r) {
     const tasks = open(r), feats = r.features || [], ver = feats.filter(f => f.status === 'verified').length;
     const taskHtml = tasks.length ? tasks.map(t => {
       const s = t.slices || [], done = s.filter(x => x.status === 'done').length, doing = s.find(x => x.status === 'doing');
       const state = (t.gates || []).length ? pill('p-gate', 'gate') : s.length && done === s.length ? pill('p-warn', 'ready to close') : t.active ? pill('p-pr', 'active') : pill('p-mute', 'paused');
+      const ss = t.sessions || [];
       return `<div class="task"><span class="goal">${esc(t.goal || t.slug)}</span>${state}
         <div class="slices">${s.map(x => `<span class="${x.status === 'done' ? 'd' : x.status === 'doing' ? 'w' : x.status === 'blocked' ? 'b' : ''}" title="${esc(x.id + ' · ' + x.title + ' · ' + x.status)}"></span>`).join('')}</div>
-        <div class="meta"><span>${esc(t.slug)} · ${esc(t.playbook || '?')}</span><span>${done}/${s.length} slices</span>${t.owner ? `<span title="${esc(t.owner)}">${t.owner === r.path ? 'led from main checkout' : 'led from worktree ' + esc(t.owner.split('/').pop())}</span>` : ''}${doing ? `<span>${esc(doing.id)} doing</span>` : ''}${t.handoff ? '<span>handoff written</span>' : ''}${t.lanes ? `<span>${t.lanes} worker lane${t.lanes > 1 ? 's' : ''}</span>` : ''}${(t.repos || []).length > 1 ? `<span>repos: ${esc(t.repos.join(', '))}</span>` : ''}${t.estimate_usd != null ? `<span class="mono">est $${t.estimate_usd}</span>` : ''}</div></div>`;
+        <div class="meta"><span>${esc(t.slug)} · ${esc(t.playbook || '?')}</span><span>${done}/${s.length} slices</span>${t.owner ? `<span title="${esc(t.owner)}">${t.owner === r.path ? 'led from main checkout' : 'led from worktree ' + esc(t.owner.split('/').pop())}</span>` : ''}${doing ? `<span>${esc(doing.id)} doing</span>` : ''}${t.handoff ? '<span>handoff written</span>' : ''}${t.lanes ? `<span>${t.lanes} worker lane${t.lanes > 1 ? 's' : ''}</span>` : ''}${(t.repos || []).length > 1 ? `<span>repos: ${esc(t.repos.join(', '))}</span>` : ''}${t.estimate_usd != null ? `<span class="mono">est $${t.estimate_usd}</span>` : ''}${ss.length ? `<span>${ss.length} session${ss.length > 1 ? 's' : ''}${timed(ss) ? ` · ${Math.round(ss.reduce((a, x) => a + x.min, 0))} min of you` : ''}</span>` : ''}</div>${ss.length ? sessions(ss) : ''}</div>`;
     }).join('') : r.linked ? `<p class="empty">Working on ${esc(r.linked.home)}/${esc(r.linked.slug)}, a multi-repo task whose folder lives in ${esc(r.linked.home)}.</p>` : '<p class="empty">No open flow tasks.</p>';
     const shipped = (r.shipped || []).length ? `<div class="tbl"><table><tbody>${r.shipped.map(c => `<tr><td class="mono">${esc(c.sha)}</td><td>${esc(c.subject)}</td><td class="mono src">${esc(c.date)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">No commits in the last 7 days.</p>';
     const featHtml = feats.length ? `<div class="feat">${feats.map(f => `<div class="f ${f.status === 'verified' ? 'ok' : f.status === 'unverified' ? 'un' : 'st'}" title="${esc(f.id + ' · ' + f.status + (f.verified ? ' · ' + f.verified : ''))}"><b></b><span>${esc(f.id)}</span></div>`).join('')}</div>
@@ -268,6 +300,11 @@ a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
     const v = D.spend.map(d => d.usd);
     if ($('spark')) area($('spark'), v, 2, 316, 4, 56);
     if ($('spend')) { const x = area($('spend'), v, 40, 550, 8, 122, true); txt($('spend'), x(0), 142, D.spend[0].date); txt($('spend'), x(v.length - 1), 142, D.spend[v.length - 1].date, 'end'); }
+  }
+  if (A && $('attn-bars')) {
+    const v = A.by_day.map(d => d.min), max = Math.max(1, A.budget_min || 0, ...v) * 1.1, n = v.length, w = 316 / n, svg = $('attn-bars');
+    v.forEach((m, i) => el('rect', {x: 2 + i * w + 1, y: 56 - 52 * m / max, width: Math.max(1, w - 2), height: Math.max(1, 52 * m / max), rx: 1.5, fill: i === n - 1 ? 'var(--accent)' : 'var(--line)'}, svg));
+    if (A.budget_min) el('line', {x1: 2, x2: 318, y1: 56 - 52 * A.budget_min / max, y2: 56 - 52 * A.budget_min / max, stroke: 'var(--warn)', 'stroke-dasharray': '3 3'}, svg);
   }
   document.querySelectorAll('svg.est').forEach(svg => {
     const rows = JSON.parse(svg.dataset.rows), max = Math.max(...rows.flatMap(r => [r[1], r[2]])) * 1.1, L = 150, R = 540, x = v => L + (R - L) * v / max;

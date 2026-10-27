@@ -20,6 +20,7 @@ The single source of truth for file locations and formats. Skills and hooks both
 | `<repo>/.flow/features/.ignore` | globs that are not features (for `coverage`) | yes |
 | `<repo>/.flow/board/` | board staging: `board.json`, `board.html` (from `board`; the artifact is the product) | no |
 | `~/.flow-stack/board/url` | the board artifact's link, reused on every publish | no (personal) |
+| `~/.flow-stack/waits.jsonl` | notify.sh: one `{ts,sid,kind}` line per permission prompt or MCP elicitation shown; board/attention.sh reads it | no (personal) |
 | `~/.flow-stack/auto/<session_id>` | auto mode is on for that session: `--auto` in a prompt creates it, `--no-auto` removes it (anchor hook); hooks turn every ask into deny-and-queue | no |
 | `~/.flow-stack/hosts/<session_id>` | the host hook's last sidebar push: text, gate count, herdr seq, then the files whose change moves the phase; removed at session end, and by any session start once older than 3 days (a crashed session's) | no |
 | `~/.claude/sessions/<pid>.json` | Claude Code's own row per live session (`pid sessionId cwd name status`); flow reads it for task owners and never writes it | no (Claude Code's) |
