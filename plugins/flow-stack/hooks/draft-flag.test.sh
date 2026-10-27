@@ -78,6 +78,13 @@ expect allow 'gh pr create --draft --title x --body "a (gh pr ready) b"'
 expect allow "gh pr create --draft --title x --body 'Run \`gh pr ready\` when done'"
 expect deny  'gh pr create --draft --title x --body "Run `gh pr ready` when done"'
 expect deny  "sh -c 'echo \"\$(gh pr create --title y)\"'"
+expect allow 'git commit -m "wip; gh pr ready next" && gh pr create --draft --title x'
+expect allow 'git commit -m "handle drafts (gh pr ready)" && gh pr create --draft --title x'
+expect allow "gh pr create --draft --title x --body \"\$(printf '%s' 'a; gh pr ready')\""
+expect deny  'gh pr create --draft --title x --body "$(echo "a"; gh pr create --title y)"'
+expect deny  'gh pr create --draft --title x --body "`echo "a"; gh pr create --title y`"'
+expect deny  "gh pr create --draft; command eval 'gh pr create --title x'"
+expect deny  "gh pr create --draft --title x --body \"\$(sh -c 'gh pr create --title y')\""
 expect allow 'gh pr create --title x \
 --draft'
 expect deny  "bash -c \$'gh pr create --title \\'a -d\\''"
