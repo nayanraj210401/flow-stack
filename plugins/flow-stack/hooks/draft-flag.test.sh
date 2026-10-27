@@ -62,6 +62,11 @@ expect deny  "gh pr create --draft; X=1 eval 'gh pr create --title x'"
 expect deny  'gh pr create --title x # --draft'
 expect allow 'gh pr create --draft --title x # opened as a draft'
 expect deny  'gh pr create --title x "--draf\t"'
+# A draft whose own text names the command is still a draft.
+expect allow 'gh pr create --draft --title "docs: explain gh pr create flags"'
+expect allow 'gh pr create --draft --title x --body "Run gh pr ready when done"'
+expect allow 'git commit -m "guard: handle gh pr create" && gh pr create --draft --title x'
+expect allow "gh pr create --draft --title x --body 'Fixes: gh pr create --draft wrapped in sh -c'"
 expect allow 'gh pr create --title x \
 --draft'
 expect deny  "bash -c \$'gh pr create --title \\'a -d\\''"

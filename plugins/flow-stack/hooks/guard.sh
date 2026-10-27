@@ -207,7 +207,7 @@ fi
 
 # 3c. Ready for review: in a flow-stack repo, a non-draft PR or `gh pr ready` needs ready.sh's stamp for HEAD.
 #     Only a real invocation counts: heredoc bodies are dropped, and gh must start a command:
-#     line start, ; && || | (, if/then/!, VAR=x prefixes, or behind a wrapper (eval, sh/bash/zsh/dash, command, env, time,
+#     line start, ; && || | (, if/then/!, VAR=x prefixes, or behind a wrapper (eval, sh/bash/zsh/dash/ksh, command, env, time,
 #     nohup, xargs, sudo, exec) with any flags of its own. Case-insensitive: case-insensitive
 #     filesystems run GH as gh. A commit message that mentions it mid-sentence passes.
 code="$(awk -v q="'" '
@@ -215,18 +215,19 @@ code="$(awk -v q="'" '
   { print
     if (match($0, "<<-?[ \t]*[\"" q "]?[A-Za-z_][A-Za-z0-9_]*")) {
       hd = substr($0, RSTART, RLENGTH); sub("<<-?[ \t]*[\"" q "]?", "", hd) } }' <<<"$cmd")"
-lead='(^|[;&|(]|(^|[;&|([:space:]])(eval|command|env|time|nohup|xargs|sudo|exec|(ba|z|da)?sh)([[:space:]][^;&|]*)?[[:space:]])'
-lead="$lead"'[[:space:]]*((if|then|elif|else|do|while|until|!)[[:space:]]+|[A-Za-z_][A-Za-z0-9_]*=([^[:space:]]*|"[^"]*"|'"'"'[^'"'"']*'"'"')[[:space:]]+)*(\$?["'"'"'])?'
+lead='(^|[;&|(]|(^|[;&|([:space:]])(eval|command|env|time|nohup|xargs|sudo|exec|(ba|z|da|k)?sh)([[:space:]][^;&|]*)?[[:space:]])'
+lead="$lead"'[[:space:]]*((if|then|elif|else|do|while|until|!)[[:space:]]+|[A-Za-z_][A-Za-z0-9_]*=([^[:space:]]*|"[^"]*"|'"'"'[^'"'"']*'"'"')[[:space:]]+)*([$]?["'"'"'])?'
 cend='([[:space:];&|)]|$)'
 gopt='([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*'
 pr_cmd="$(grep -Ei "$lead"'gh'"$gopt"'[[:space:]]+pr[[:space:]]+(create|ready)'"$cend" <<<"$code" || true)"
 # The line is split into shell words and commands (quotes, escapes, $'…', ; & | ( )), and sh -c / eval scripts are
 # split the same way, so a quoted title saying "-d" is one word, not a flag. Every gh pr create|ready command needs
 # its own --draft, -d, --draft=true or --undo word. A word with an unterminated quote is never a flag, and # starts
-# a comment. Fails closed: when the line mentions gh pr create|ready more often than the split found commands
-# (backticks, "$(…)", another interpreter), it is not a draft.
+# a comment. Fails closed: when the line starts gh pr create|ready (in a command position, as above, or after a
+# backtick) more often than the split found commands ("$(…)", another interpreter), it is not a draft. A title or
+# body that names the command mid-sentence isn't counted.
 pr_drafts() {
-  awk -v q="'" -v said="(^|[^a-z0-9_./-])gh$gopt[[:space:]]+pr[[:space:]]+(create|ready)" '
+  awk -v q="'" -v said="(\`|$lead)gh$gopt[[:space:]]+pr[[:space:]]+(create|ready)" '
     function split_cmds(s, T, K,   i, j, c, e, n, w, has, bad, L) {
       n = 0; w = ""; has = 0; bad = 0; L = length(s)
       for (i = 1; i <= L; i++) {
@@ -258,7 +259,7 @@ pr_drafts() {
         for (k = start; k < i; k++) {
           if (K[k] != "w") continue
           if (k > start && (tolower(T[start]) == "eval" || (sh && T[k - 1] ~ /^-[A-Za-z]*c[A-Za-z]*$/))) check(T[k])
-          if (T[k] ~ /^(ba|z|da)?sh$/ || T[k] ~ /\/(ba|z|da)?sh$/) sh = 1
+          if (T[k] ~ /^(ba|z|da|k)?sh$/ || T[k] ~ /\/(ba|z|da|k)?sh$/) sh = 1
           if (!g && tolower(T[k]) == "gh") g = k
           else if (g && !p && T[k] == "pr" && k < i - 1 && T[k + 1] ~ /^(create|ready)$/ && K[k + 1] == "w") p = ++k
           else if (p && T[k] ~ /^(--draft(=true)?|-d|--undo)$/) d = 1
