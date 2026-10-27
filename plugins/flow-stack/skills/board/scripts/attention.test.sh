@@ -22,7 +22,11 @@ jq -nc '
   say(1200; "Built it. Is it good? I think so.\n\nAll done."),
   you(1260; "ok"),
   say(1300; "```\nok?\n```"),
+  {type:"attachment", timestamp:at(1307)},                           # written at approval: ends the permission wait
   you(1320; [{type:"text", text:"thanks"}]),
+  {type:"user", timestamp:at(1330), isCompactSummary:true, message:{content:"This session is being continued"}},
+  you(1340; "<bash-stdout>ok</bash-stdout><bash-stderr></bash-stderr>"),
+  you(1345; "[Request interrupted by user]"),
   {type:"ai-title", aiTitle:"Fixture title"}
 ' >"$CLAUDE_CONFIG_DIR/projects/-r/$sid.jsonl"
 jq -nc --arg s "$sid" '{ts:(1793059200 + 1305 | todate), sid:$s, kind:"permission_prompt"}' >"$FLOW_STACK_HOME/waits.jsonl"
@@ -33,7 +37,7 @@ want='["prompt",60,60]
 ["question",30,30]
 ["answer",1000,300]
 ["prompt",60,60]
-["permission",15,15]
+["permission",2,2]
 ["prompt",20,20]'
 fail=0
 [ "$got" = "$want" ] && echo "  ✓ events, kinds, caps, order" || { echo "  ✗ events: want
@@ -41,6 +45,6 @@ $want
 got
 $got"; fail=1; }
 ses="$(jq -c 'select(.kind == "session") | [.sid, .title, .last - .first]' <<<"$out" 2>&1)"
-[ "$ses" = "[\"$sid\",\"Fixture title\",1320]" ] && echo "  ✓ session line" || { echo "  ✗ session: $ses"; fail=1; }
+[ "$ses" = "[\"$sid\",\"Fixture title\",1345]" ] && echo "  ✓ session line" || { echo "  ✗ session: $ses"; fail=1; }
 grep -qE 'thanks|Shall I|agent prompt' <<<"$out" && { echo "  ✗ prompt text leaked"; fail=1; } || echo "  ✓ no prompt text"
 [ "$fail" = 0 ] && echo PASS || exit 1

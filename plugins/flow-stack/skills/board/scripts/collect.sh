@@ -29,9 +29,15 @@ md_first() { awk -v h="## $2" '/<!--/{c=1} c{if(/-->/)c=0; next} $0==h{on=1;next
 att="$(mktemp)"; trap 'rm -f "$att"' EXIT
 [ "$att_on" = 1 ] && { "$here/attention.sh" --days 14 >"$att" 2>/dev/null || true; }
 
+# blocked($from): wall-clock seconds some session waited on you (answer, question, permission) since $from,
+# overlapping waits counted once; a day passes its local midnight, so an overnight wait counts from then
+blocked='def blocked($from): map(select(.kind != "prompt") | [([.ts - .wait, $from] | max), .ts]) | sort
+  | reduce .[] as $i ({t: 0, e: null}; if .e == null or $i[0] > .e then .t += $i[1] - $i[0] | .e = $i[1]
+      elif $i[1] > .e then .t += $i[1] - .e | .e = $i[1] else . end) | .t;'
+
 task_sessions() { # task_sessions <task-dir>: distinct sids in trail.jsonl with calls, titles, and (with attention) min / blocked_min
   [ -s "$1/trail.jsonl" ] || { echo "[]"; return; }
-  jq -sc --slurpfile a "$att" --argjson on "$att_on" '
+  jq -sc --slurpfile a "$att" --argjson on "$att_on" "$blocked"'
     def ts: sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601;
     def m: . / 60 * 10 | round / 10;
     map(select((.sid // "") != "" and .ts)) | group_by(.sid) | map(
@@ -39,7 +45,7 @@ task_sessions() { # task_sessions <task-dir>: distinct sids in trail.jsonl with 
       | ([$a[] | select(.sid == $sid and .kind == "session")][0].title // "") as $title
       | [$a[] | select(.sid == $sid and .kind != "session" and .ts >= ($t | min) - 600 and .ts <= ($t | max) + 60)] as $e
       | {sid: $sid, title: $title, first: ($t | min | todate), last: ($t | max | todate), calls: $n}
-        + (if $on == 1 then {min: ($e | map(.secs) | add // 0 | m), blocked_min: ($e | map(select(.kind != "prompt") | .wait) | add // 0 | m)} else {} end))
+        + (if $on == 1 then {min: ($e | map(.secs) | add // 0 | m), blocked_min: ($e | blocked(0) | m)} else {} end))
     | sort_by(.last) | reverse' "$1/trail.jsonl" 2>/dev/null || echo "[]"
 }
 
@@ -183,10 +189,10 @@ board_prefs() {
 }
 
 attention_json() { # null when skipped or no transcripts; else the day-by-day window plus today's warnings
-  jq -sc --argjson days 14 --argjson cap 300 --argjson budget "$1" 'if any(.[]; .kind == "session") | not then null else
+  jq -sc --argjson days 14 --argjson cap 300 --argjson budget "$1" "$blocked"'if any(.[]; .kind == "session") | not then null else
     def m: . / 60 * 10 | round / 10;
     def n($k): map(select(.kind == $k)) | length;
-    def day($d): sort_by(.ts) as $e | {date: $d, min: ($e | map(.secs) | add // 0 | m), blocked_min: ($e | map(select(.kind != "prompt") | .wait) | add // 0 | m),
+    def day($d): sort_by(.ts) as $e | {date: $d, min: ($e | map(.secs) | add // 0 | m), blocked_min: ($e | blocked($e[0].ts // 0 | . - (localtime | .[3] * 3600 + .[4] * 60 + (.[5] | floor))) | m),
       prompts: ($e | n("prompt")), answers: ($e | n("answer")), questions: ($e | n("question")), permissions: ($e | n("permission")),
       sessions: ($e | map(.sid) | unique | length),
       switches: ([range(1; $e | length) | select($e[.].sid != $e[. - 1].sid and $e[.].ts - $e[. - 1].ts <= 600)] | length),
@@ -197,14 +203,17 @@ attention_json() { # null when skipped or no transcripts; else the day-by-day wi
     | map(select(.kind != "session") | . + {d: (.ts | dstr)}) as $ev
     | [range($days - 1; -1; -1) as $i | (($today + "T12:00:00Z" | fromdate) - $i * 86400 | todate | .[0:10]) as $d | ($ev | map(select(.d == $d)) | day($d))] as $by
     | $by[-1] as $t
-    | ($ev | map(select(.d == $today) | .sid) | unique) as $sids
-    | ($sids | map(if $titles[.] != "" and $titles[.] != null then $titles[.] else .[0:8] end) | join(", ")) as $names
-    | ([ if $budget != null and $t.min > $budget then {level: "crit", text: "over your review budget: \($t.min) of \($budget) min today"}
-         elif $budget != null and $t.min > 0.8 * $budget then {level: "warn", text: "\($t.min) of \($budget) min review budget used today"} else empty end,
-         if $t.peak >= 3 then {level: "warn", text: "\($t.peak) sessions in parallel within 30 min"} else empty end,
-         if $t.switches >= 15 then {level: "warn", text: "\($t.switches) context switches today"} else empty end]
+    | ($ev | map(select(.d == $today)) | sort_by(.ts)) as $te
+    | ($te | map(.sid) | unique) as $sids
+    | ([$te[] | .ts as $at | [$te[] | select(.ts >= $at and .ts < $at + 1800) | .sid] | unique] | max_by(length) // []) as $psids
+    | def names: map(if ($titles[.] // "") != "" then $titles[.] else .[0:8] end) | join(", ");
+    # each warning names the sessions behind it and one thing to do about it
+      ([ if $budget != null and $t.min > $budget then {level: "crit", text: "over your review budget: \($t.min) of \($budget) min today. Delegate or queue the rest with --auto", sids: $sids}
+         elif $budget != null and $t.min > 0.8 * $budget then {level: "warn", text: "\($t.min) of \($budget) min review budget used today. Delegate what is left", sids: $sids} else empty end,
+         if $t.peak >= 3 then {level: "warn", text: "\($t.peak) sessions needed you within 30 min. Queue one with --auto", sids: $psids} else empty end,
+         if $t.switches >= 15 then {level: "warn", text: "\($t.switches) switches between sessions today. Close or park a session", sids: $sids} else empty end]
        | (if length >= 2 then map(.level = "crit") else . end)
-       | map({level, text: ((if .level == "crit" then "🔴 " else "🟡 " end) + .text + " (" + $names + ")"), sids: $sids})) as $w
+       | map(.text = (if .level == "crit" then "🔴 " else "🟡 " end) + .text + " (" + (.sids | names) + ")")) as $w
     | {cap_secs: $cap, days: $days, budget_min: $budget, today: $t, by_day: $by, warnings: $w} end' "$att"
 }
 budget="$(sed -n 's/^[[:space:]]*review_minutes_per_day:[[:space:]]*\([0-9]*\).*/\1/p' "$profile" 2>/dev/null | head -n1 | grep . || echo null)"
