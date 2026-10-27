@@ -208,8 +208,7 @@ fi
 # 3c. Ready for review: in a flow-stack repo, a non-draft PR or `gh pr ready` needs ready.sh's stamp for HEAD.
 #     Only a real invocation counts: heredoc bodies are dropped, and gh must start a command:
 #     line start, ; && || | (, if/then/!, VAR=x prefixes, or behind a wrapper (eval, sh/bash/zsh/dash, command, env, time,
-#     nohup, xargs, sudo, exec) with any flags of its own. Quoted strings are dropped before the draft flag is
-#     looked for, so a title saying "-d" isn't a draft. Case-insensitive: case-insensitive
+#     nohup, xargs, sudo, exec) with any flags of its own. Case-insensitive: case-insensitive
 #     filesystems run GH as gh. A commit message that mentions it mid-sentence passes.
 code="$(awk -v q="'" '
   hd != "" { if ($0 == hd) hd = ""; next }
@@ -217,26 +216,32 @@ code="$(awk -v q="'" '
     if (match($0, "<<-?[ \t]*[\"" q "]?[A-Za-z_][A-Za-z0-9_]*")) {
       hd = substr($0, RSTART, RLENGTH); sub("<<-?[ \t]*[\"" q "]?", "", hd) } }' <<<"$cmd")"
 lead='(^|[;&|(]|(^|[;&|([:space:]])(eval|command|env|time|nohup|xargs|sudo|exec|(ba|z|da)?sh)([[:space:]][^;&|]*)?[[:space:]])'
-lead="$lead"'[[:space:]]*((if|then|elif|else|do|while|until|!)[[:space:]]+|[A-Za-z_][A-Za-z0-9_]*=([^[:space:]]*|"[^"]*"|'"'"'[^'"'"']*'"'"')[[:space:]]+)*["'"'"']?'
+lead="$lead"'[[:space:]]*((if|then|elif|else|do|while|until|!)[[:space:]]+|[A-Za-z_][A-Za-z0-9_]*=([^[:space:]]*|"[^"]*"|'"'"'[^'"'"']*'"'"')[[:space:]]+)*(\$?["'"'"'])?'
 cend='([[:space:];&|)]|$)'
 gopt='([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*'
 pr_cmd="$(grep -Ei "$lead"'gh'"$gopt"'[[:space:]]+pr[[:space:]]+(create|ready)'"$cend" <<<"$code" || true)"
 # The line is split into shell words and commands (quotes, escapes, $'…', ; & | ( )), and sh -c / eval scripts are
 # split the same way, so a quoted title saying "-d" is one word, not a flag. Every gh pr create|ready command needs
-# its own --draft, -d, --draft=true or --undo word. A word with an unterminated quote is never a flag.
+# its own --draft, -d, --draft=true or --undo word. A word with an unterminated quote is never a flag, and # starts
+# a comment. Fails closed: when the line mentions gh pr create|ready more often than the split found commands
+# (backticks, "$(…)", another interpreter), it is not a draft.
 pr_drafts() {
-  awk -v q="'" '
+  awk -v q="'" -v said="(^|[^a-z0-9_./-])gh$gopt[[:space:]]+pr[[:space:]]+(create|ready)" '
     function split_cmds(s, T, K,   i, j, c, e, n, w, has, bad, L) {
       n = 0; w = ""; has = 0; bad = 0; L = length(s)
       for (i = 1; i <= L; i++) {
         c = substr(s, i, 1)
-        if (c == "\\") { w = w substr(s, ++i, 1); has = 1 }
+        if (c == "\\") { if (substr(s, ++i, 1) != "\n") { w = w substr(s, i, 1); has = 1 } }
         else if (c == q) { j = index(substr(s, i + 1), q); has = 1
           if (!j) { w = w substr(s, i + 1); bad = 1; i = L } else { w = w substr(s, i + 1, j - 1); i += j } }
         else if (c == "\"" || (c == "$" && substr(s, i + 1, 1) == q)) {
           e = (c == "$") ? q : "\""; if (c == "$") i++; has = 1
-          for (i++; i <= L && substr(s, i, 1) != e; i++) { if (substr(s, i, 1) == "\\") i++; w = w substr(s, i, 1) }
+          for (i++; i <= L && substr(s, i, 1) != e; i++) {
+            # "…" drops a backslash only before $ ` " \ newline; $'…' always does
+            if (substr(s, i, 1) == "\\" && (e == q || index("$`\"\\\n", substr(s, i + 1, 1)))) i++
+            w = w substr(s, i, 1) }
           if (i > L) bad = 1 }
+        else if (c == "#" && !has) { j = index(substr(s, i), "\n"); i = j ? i + j - 2 : L }
         else if (c ~ /[;&|()\n]/) { if (has) { T[++n] = w; K[n] = bad ? "bad" : "w" } T[++n] = c; K[n] = "op"; w = ""; has = bad = 0 }
         else if (c ~ /[ \t]/) { if (has) { T[++n] = w; K[n] = bad ? "bad" : "w" } w = ""; has = bad = 0 }
         else { w = w c; has = 1 }
@@ -263,7 +268,7 @@ pr_drafts() {
       }
     }
     { all = all $0 "\n" }
-    END { check(all); exit !(found && !nondraft) }'
+    END { check(all); s = tolower(all); exit !(found && !nondraft && found >= gsub(said, "", s)) }'
 }
 if [ -d "$FLOW_DIR" ] && flow_enabled ready && [ -n "$pr_cmd" ] && ! pr_drafts <<<"$code"; then
   ready="$(cd "$(dirname "$0")/../skills/review/scripts" && pwd)/ready.sh"

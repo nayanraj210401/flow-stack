@@ -54,5 +54,17 @@ expect deny  "sh -c 'gh pr create --draft --title x' && gh pr create --title y"
 expect deny  'gh pr create --draft --title x && gh pr create --title y'
 expect deny  "echo 'gh pr create --draft x' && gh pr create --title x"
 expect deny  "grep 'gh pr create -d foo' f; gh pr create --title x"
+# Commands the split can't see into fail closed instead of riding on a draft elsewhere on the line.
+expect deny  'gh pr create --draft; `gh pr create --title x`'
+expect deny  'gh pr create --draft --title "$(gh pr create --title y)"'
+expect deny  "gh pr create --draft; bash -c -e 'gh pr create --title x'"
+expect deny  "gh pr create --draft; X=1 eval 'gh pr create --title x'"
+expect deny  'gh pr create --title x # --draft'
+expect allow 'gh pr create --draft --title x # opened as a draft'
+expect deny  'gh pr create --title x "--draf\t"'
+expect allow 'gh pr create --title x \
+--draft'
+expect deny  "bash -c \$'gh pr create --title \\'a -d\\''"
+expect allow "bash -c \$'gh pr create --title x --draft'"
 
 [ "$FAILS" -eq 0 ] && echo "ok" || { echo "$FAILS failed"; exit 1; }
