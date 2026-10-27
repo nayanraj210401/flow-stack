@@ -72,6 +72,12 @@ expect allow 'gh pr create --draft --title "docs: explain gh pr create flags"'
 expect allow 'gh pr create --draft --title x --body "Run gh pr ready when done"'
 expect allow 'git commit -m "guard: handle gh pr create" && gh pr create --draft --title x'
 expect allow "gh pr create --draft --title x --body 'Fixes: gh pr create --draft wrapped in sh -c'"
+expect allow 'gh pr create --draft --title x --body "steps: build; gh pr ready"'
+expect allow "gh pr create --draft --title x --body 'see: a; gh pr ready'"
+expect allow 'gh pr create --draft --title x --body "a (gh pr ready) b"'
+expect allow "gh pr create --draft --title x --body 'Run \`gh pr ready\` when done'"
+expect deny  'gh pr create --draft --title x --body "Run `gh pr ready` when done"'
+expect deny  "sh -c 'echo \"\$(gh pr create --title y)\"'"
 expect allow 'gh pr create --title x \
 --draft'
 expect deny  "bash -c \$'gh pr create --title \\'a -d\\''"

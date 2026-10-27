@@ -224,52 +224,66 @@ pr_cmd="$(grep -Ei "$lead"'gh'"$gopt"'[[:space:]]+pr[[:space:]]+(create|ready)'"
 # split the same way, so a quoted title saying "-d" is one word, not a flag. Every gh pr create|ready command needs
 # its own --draft, -d, --draft=true or --undo word. A word with an unterminated quote is never a flag, and # starts
 # a comment. Fails closed: when the line starts gh pr create|ready (in a command position, as above, or after a
-# backtick) more often than the split found commands ("$(…)", another interpreter), it is not a draft. A title or
-# body that names the command mid-sentence isn't counted.
+# backtick) more often than the split found commands ("$(…)", another interpreter), it is not a draft. A gh pr
+# command's own quoted title or body isn't counted, since gh never runs it.
 pr_drafts() {
   awk -v q="'" -v said="(\`|$lead)gh$gopt[[:space:]]+pr[[:space:]]+(create|ready)" '
-    function split_cmds(s, T, K,   i, j, c, e, n, w, has, bad, L) {
-      n = 0; w = ""; has = 0; bad = 0; L = length(s)
+    # split_cmds(s): tokens T with kinds K (w | bad | op), the source text R of each word and the part of it the shell runs as
+    # code C (unquoted text, and $(…) or `…` inside "…"; nothing from single-quoted text)
+    function split_cmds(s, T, K, R, C,   i, i0, j, c, ch, e, n, w, wr, wc, has, bad, L, sub_, bt, esc) {
+      n = 0; w = wr = wc = ""; has = 0; bad = 0; L = length(s)
       for (i = 1; i <= L; i++) {
-        c = substr(s, i, 1)
-        if (c == "\\") { if (substr(s, ++i, 1) != "\n") { w = w substr(s, i, 1); has = 1 } }
+        c = substr(s, i, 1); i0 = i
+        if (c == "\\") { if (substr(s, ++i, 1) != "\n") { w = w substr(s, i, 1); wc = wc substr(s, i, 1); has = 1 } }
         else if (c == q) { j = index(substr(s, i + 1), q); has = 1
           if (!j) { w = w substr(s, i + 1); bad = 1; i = L } else { w = w substr(s, i + 1, j - 1); i += j } }
         else if (c == "\"" || (c == "$" && substr(s, i + 1, 1) == q)) {
-          e = (c == "$") ? q : "\""; if (c == "$") i++; has = 1
-          for (i++; i <= L && substr(s, i, 1) != e; i++) {
+          e = (c == "$") ? q : "\""; if (c == "$") i++; has = 1; sub_ = bt = 0
+          for (i++; i <= L && (ch = substr(s, i, 1)) != e; i++) {
             # "…" drops a backslash only before $ ` " \ newline; $'…' always does
-            if (substr(s, i, 1) == "\\" && (e == q || index("$`\"\\\n", substr(s, i + 1, 1)))) i++
-            w = w substr(s, i, 1) }
+            esc = ch == "\\" && (e == q || index("$`\"\\\n", substr(s, i + 1, 1)))
+            if (esc) ch = substr(s, ++i, 1)
+            else if (e != q && ch == "`") { bt = !bt; wc = wc ch }
+            else if (e != q && ch == "$" && substr(s, i + 1, 1) == "(") { sub_++; wc = wc ch }
+            else if (sub_ || bt) { if (ch == "(") sub_++; else if (ch == ")" && sub_) sub_--; wc = wc ch }
+            if (esc && (sub_ || bt)) wc = wc ch
+            w = w ch }
           if (i > L) bad = 1 }
-        else if (c == "#" && !has) { j = index(substr(s, i), "\n"); i = j ? i + j - 2 : L }
-        else if (c ~ /[;&|()\n]/) { if (has) { T[++n] = w; K[n] = bad ? "bad" : "w" } T[++n] = c; K[n] = "op"; w = ""; has = bad = 0 }
-        else if (c ~ /[ \t]/) { if (has) { T[++n] = w; K[n] = bad ? "bad" : "w" } w = ""; has = bad = 0 }
-        else { w = w c; has = 1 }
+        else if (c == "#" && !has) { j = index(substr(s, i), "\n"); i = j ? i + j - 2 : L; continue }
+        else if (c ~ /[;&|()\n]/) { if (has) { T[++n] = w; K[n] = bad ? "bad" : "w"; R[n] = wr; C[n] = wc }
+          T[++n] = c; K[n] = "op"; w = wr = wc = ""; has = bad = 0; continue }
+        else if (c ~ /[ \t]/) { if (has) { T[++n] = w; K[n] = bad ? "bad" : "w"; R[n] = wr; C[n] = wc }
+          w = wr = wc = ""; has = bad = 0; continue }
+        else { w = w c; wc = wc c; has = 1 }
+        wr = wr substr(s, i0, i - i0 + 1)
       }
-      if (has) { T[++n] = w; K[n] = bad ? "bad" : "w" }
+      if (has) { T[++n] = w; K[n] = bad ? "bad" : "w"; R[n] = wr; C[n] = wc }
       return n
     }
-    # check(s): adds to found / nondraft for each gh pr create|ready command in s, recursing into sh -c and eval
-    function check(s,   T, K, n, i, start, g, p, d, k, sh) {
-      n = split_cmds(s, T, K); start = 1
+    # check(s): adds to found / nondraft for each gh pr create|ready command in s, recursing into sh -c and eval.
+    # Returns s as code for the fail-closed count: the arguments of a gh pr command keep only their code part (gh never
+    # runs its title or body), and a recursed script is replaced by its own check.
+    function check(s,   T, K, R, C, X, N, n, i, start, g, p, d, k, sh, out) {
+      n = split_cmds(s, T, K, R, C); start = 1
       for (i = 1; i <= n + 1; i++) {
         if (i <= n && K[i] != "op") continue
         g = p = d = sh = 0
         for (k = start; k < i; k++) {
           if (K[k] != "w") continue
-          if (k > start && (tolower(T[start]) == "eval" || (sh && T[k - 1] ~ /^-[A-Za-z]*c[A-Za-z]*$/))) check(T[k])
+          if (k > start && (tolower(T[start]) == "eval" || (sh && T[k - 1] ~ /^-[A-Za-z]*c[A-Za-z]*$/))) X[k] = check(T[k])
           if (T[k] ~ /^(ba|z|da|k)?sh$/ || T[k] ~ /\/(ba|z|da|k)?sh$/) sh = 1
           if (!g && tolower(T[k]) == "gh") g = k
           else if (g && !p && T[k] == "pr" && k < i - 1 && T[k + 1] ~ /^(create|ready)$/ && K[k + 1] == "w") p = ++k
           else if (p && T[k] ~ /^(--draft(=true)?|-d|--undo)$/) d = 1
         }
-        if (p) { found++; if (!d) nondraft++ }
+        if (p) { found++; if (!d) nondraft++; for (k = p + 1; k < i; k++) N[k] = 1 }
         start = i + 1
       }
+      for (k = 1; k <= n; k++) out = out (K[k] == "op" ? T[k] : " " ((k in X) ? X[k] : (k in N) ? C[k] : R[k]) " ")
+      return out
     }
     { all = all $0 "\n" }
-    END { check(all); s = tolower(all); exit !(found && !nondraft && found >= gsub(said, "", s)) }'
+    END { s = tolower(check(all)); exit !(found && !nondraft && found >= gsub(said, "", s)) }'
 }
 if [ -d "$FLOW_DIR" ] && flow_enabled ready && [ -n "$pr_cmd" ] && ! pr_drafts <<<"$code"; then
   ready="$(cd "$(dirname "$0")/../skills/review/scripts" && pwd)/ready.sh"
