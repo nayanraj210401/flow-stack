@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# draft-flag.test.sh: the ready gate exempts a real draft flag, not "-d" inside a quoted title/body (#60), nor --draft=false (#122).
+# draft-flag.test.sh: the ready gate exempts a real draft flag, not "-d" inside a quoted title/body (#60), nor --draft=false (#122),
+# including a draft wrapped in sh -c '…'.
 set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)"
 FAILS=0
@@ -39,5 +40,12 @@ expect allow 'gh pr create --draft=true --title x'
 expect deny  'gh pr create --draft=false'
 expect deny  'gh pr create --title x --draft=false'
 expect deny  'gh pr create --draft=false --title x'
+# Wrapped in a quoted shell string: the wrapper's quote is not a quoted title.
+expect allow "sh -c 'gh pr create --draft --title x'"
+expect allow "bash -lc \"gh pr create -d --title x\""
+expect deny  "sh -c 'gh pr create --title x'"
+expect deny  "sh -c 'gh pr create --title \"a -d\" --body x'"
+# Fails closed: a flag right before the closing quote could be title text ending in -d.
+expect deny  "sh -c 'gh pr create --draft'"
 
 [ "$FAILS" -eq 0 ] && echo "ok" || { echo "$FAILS failed"; exit 1; }

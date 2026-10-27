@@ -221,8 +221,12 @@ lead="$lead"'[[:space:]]*((if|then|elif|else|do|while|until|!)[[:space:]]+|[A-Za
 cend='([[:space:];&|)]|$)'
 gopt='([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*'
 pr_cmd="$(grep -Ei "$lead"'gh'"$gopt"'[[:space:]]+pr[[:space:]]+(create|ready)'"$cend" <<<"$code" || true)"
+# Flags are read from the gh invocation on, so a wrapper's opening quote (sh -c '…) isn't taken for a title.
+# An unpaired quote's tail becomes a lone quote: a flag right before it could be title text, so it fails closed.
+pr_args="$(awk -v re="(^|[^a-z0-9_./-])gh$gopt[[:space:]]+pr[[:space:]]+(create|ready)" '
+  { s = tolower($0); if (match(s, re)) { p = RSTART; if (substr(s, p, 2) != "gh") p++; $0 = substr($0, p) } print }' <<<"$pr_cmd")"
 if [ -d "$FLOW_DIR" ] && flow_enabled ready && [ -n "$pr_cmd" ] &&
-   ! sed -E "s/\\\\.//g; s/\"[^\"]*\"//g; s/'[^']*'//g; s/[\"'].*\$//" <<<"$pr_cmd" | grep -Eq '((--draft|[[:space:]]-d)(=true)?|--undo)([[:space:]]|$)'; then
+   ! sed -E "s/\\\\.//g; s/\"[^\"]*\"//g; s/'[^']*'//g; s/[\"'].*\$/'/" <<<"$pr_args" | grep -Eq '((--draft|[[:space:]]-d)(=true)?|--undo)([[:space:]]|$)'; then
   ready="$(cd "$(dirname "$0")/../skills/review/scripts" && pwd)/ready.sh"
   if [ "$(cd "$FLOW_ROOT" && "$ready" mode)" != yolo ] && ! (cd "$FLOW_ROOT" && "$ready" stamped); then
     pre_decide deny "flow ready-for-review: HEAD isn't stamped ready. Human review is the expensive step, so run $ready (it lists what's missing), or open a draft PR (--draft) meanwhile. review_gate: yolo in the profile or .flow/config.json turns this off."
