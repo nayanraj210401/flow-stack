@@ -207,15 +207,15 @@ fi
 
 # 3c. Ready for review: in a flow-stack repo, a non-draft PR or `gh pr ready` needs ready.sh's stamp for HEAD.
 #     Only a real invocation counts: heredoc bodies are dropped, and gh must start a command:
-#     line start, ; && || | (, if/then/!, VAR=x prefixes, or behind a wrapper (eval, sh/bash/zsh/dash/ksh, command, env, time,
-#     nohup, xargs, sudo, exec) with any flags of its own. Case-insensitive: case-insensitive
+#     line start, ; && || | ( {, if/then/!, VAR=x prefixes, or behind a wrapper (eval, sh/bash/zsh/dash/ksh, command, env,
+#     time, timeout, nice, nohup, xargs, sudo, exec) with any flags of its own. Case-insensitive: case-insensitive
 #     filesystems run GH as gh. A commit message that mentions it mid-sentence passes.
 code="$(awk -v q="'" '
   hd != "" { if ($0 == hd) hd = ""; next }
   { print
     if (match($0, "<<-?[ \t]*[\"" q "]?[A-Za-z_][A-Za-z0-9_]*")) {
       hd = substr($0, RSTART, RLENGTH); sub("<<-?[ \t]*[\"" q "]?", "", hd) } }' <<<"$cmd")"
-lead='(^|[;&|(]|(^|[;&|([:space:]])(eval|command|env|time|nohup|xargs|sudo|exec|(ba|z|da|k)?sh)([[:space:]][^;&|]*)?[[:space:]])'
+lead='(^|[;&|({]|(^|[;&|({[:space:]])(eval|command|env|time|timeout|nice|nohup|xargs|sudo|exec|(ba|z|da|k)?sh)([[:space:]][^;&|]*)?[[:space:]])'
 lead="$lead"'[[:space:]]*((if|then|elif|else|do|while|until|!)[[:space:]]+|[A-Za-z_][A-Za-z0-9_]*=([^[:space:]]*|"[^"]*"|'"'"'[^'"'"']*'"'"')[[:space:]]+)*([$]?["'"'"'])?'
 cend='([[:space:];&|)]|$)'
 gopt='([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*'

@@ -60,6 +60,11 @@ expect deny  'gh pr create --draft --title "$(gh pr create --title y)"'
 expect deny  "gh pr create --draft; bash -c -e 'gh pr create --title x'"
 expect deny  "gh pr create --draft; X=1 eval 'gh pr create --title x'"
 expect deny  'gh pr create --title x # --draft'
+expect deny  "gh pr create --draft; ksh -c 'gh pr create --title x'"
+expect deny  '{ gh pr create --title x; }'
+expect deny  'nice gh pr create --title x'
+expect deny  'gh pr create --draft --body "$(timeout 5 gh pr create --title x)"'
+expect allow '{ gh pr create --draft --title x; }'
 expect allow 'gh pr create --draft --title x # opened as a draft'
 expect deny  'gh pr create --title x "--draf\t"'
 # A draft whose own text names the command is still a draft.
