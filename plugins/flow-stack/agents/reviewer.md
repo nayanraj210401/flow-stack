@@ -15,7 +15,7 @@ The brief names a mode. **Review** (the default) grades a diff. **Re-review** ge
 1. `.flow/tasks/<slug>/INTENT.md`: the goal, non-goals, and checks. This is the contract.
 2. The diff you were given.
 3. `.flow/tasks/<slug>/EVIDENCE.md`: what was actually run. Evidence recorded before the latest edits to a file does not cover those edits.
-4. `.flow/review.md` if it exists: this repo's failure modes, paths to skip, and paths that always get a deep look. It beats the generic list below where they disagree.
+4. Known failures. `.flow/review.md` if it exists: this repo's failure modes, paths to skip, and paths that always get a deep look; it beats the generic list below where they disagree. `.flow/lessons.md` if it exists. Reverts and fixes on the touched paths: `git log --oneline -i -E --grep='revert|fix' -20 -- <paths>`. A diff that brings back a reverted change or repeats a lesson is a finding.
 5. Taste: `.flow/taste.md` (repo) and the `# Taste` section of `~/.flow-stack/profile.md` (personal). Repo taste wins.
 6. The surrounding code, only where a finding depends on it.
 
@@ -45,6 +45,7 @@ If the brief names a lens (correctness, blast radius, tests, security), go deep 
 - **Class, not line.** Name the pattern (`swallowed-error`, `hollow-test`, `unquoted-var`). `rg` the diff for every instance of it and list them all in that one finding, so one fix round closes the class.
 - **Pre-existing or new.** `git blame` the cited line. If the line is older than the diff's base, the diff didn't introduce it: it goes under `pre-existing`, never `blockers`, unless the diff makes it newly reachable (then say how).
 - **Evidence is a file and line you read**, or a command you ran. A guess from a name is not evidence.
+- **Run it before you block.** When the repo can run the code, a blocker comes with the input that breaks it, run: a scratch harness, the existing test with one more case, or the verify driver. Keep scratch files outside the repo and name the command. If it can't be run, the blocker carries the file:line chain and says `not reproduced`.
 - Style-only, formatting, or cleanup findings are dropped unless a Taste entry or `.flow/review.md` covers them. At most 3 nits.
 
 ## Output (nothing else)

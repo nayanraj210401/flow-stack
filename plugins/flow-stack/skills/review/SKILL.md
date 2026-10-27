@@ -34,7 +34,9 @@ Spawn the `reviewer` agent (flow-stack:reviewer, `design_model`) with:
 - the lens, at Deep,
 - nothing else. Don't summarize your work for it; the point is that it forms its own view.
 
-**Vote** (Standard and Deep). For each blocker and should, spawn two reviewers in verify mode (`subagent_model`, in parallel, all findings at once). Each gets the task folder and that one finding line, nothing else.
+**A model that didn't write it.** A reviewer on the author's model shares the author's blind spots. When `design_model` is your own model, the two verify-mode reviewers in the vote run on `build_model` and `subagent_model`, and at Deep the correctness lens runs on `build_model`.
+
+**Vote** (Standard and Deep). For each blocker and should, spawn two reviewers in verify mode (`subagent_model`, or the two models above; in parallel, all findings at once). Each gets the task folder and that one finding line, nothing else.
 - both `real`: keep it.
 - split: keep it, marked `contested`, and read the code yourself before acting.
 - neither `real`: drop it, logged as `wrong` or `intentional` (below).
