@@ -16,7 +16,7 @@ while [ $# -gt 0 ]; do
     --days) days="${2:?--days needs a value}"; shift 2 ;;
     --cap) cap="${2:?--cap needs a value}"; shift 2 ;;
     --out) out="$2"; shift 2 ;;                            # internal: the worker's output dir
-    --one) [ $# -ge 2 ] || exit 0; file="$2"; shift 2 ;;   # internal: one transcript (GNU xargs calls once with none)
+    --one) [ $# -ge 2 ] || exit 0; file="$2"; shift 2 ;;   # internal: one session id (GNU xargs calls once with none)
     *) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2 ;;
   esac
 done
@@ -47,17 +47,20 @@ def asks: [body | gsub("```[^`]*```"; "") | split("\n\n") | map(select(test("\\S
    | .last = $now | .first //= $now)
 | ((.out + $perms) | sort_by(.ts)[]), {sid: $sid, kind: "session", first, last}'
 
-one() { # one <transcript>: its events and session line
-  local f="$1" sid w title; sid="$(basename "$f" .jsonl)"
+one() { # one <sid>: its events and session line, from every copy of its transcript (a session that
+  # moved folders keeps its start in the old one), each record once
+  local sid="$1" w title fs; fs=("$projects"/*/"$sid".jsonl)
   w="[]"; [ -s "$waits" ] && w="$(jq -sc --arg s "$sid" '[.[] | select(.sid == $s) | .ts | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601] | sort' "$waits" 2>/dev/null || echo "[]")"
-  title="$(grep -F '"type":"ai-title"' "$f" 2>/dev/null | tail -n1 | jq -r '.aiTitle // empty' 2>/dev/null || true)"
-  jq -nc --arg sid "$sid" --argjson cap "$cap" --argjson waits "${w:-[]}" "$prog" "$f" |
+  title="$(cat "${fs[@]}" 2>/dev/null | grep -F '"type":"ai-title"' | tail -n1 | jq -r '.aiTitle // empty' 2>/dev/null || true)"
+  { if [ "${#fs[@]}" -gt 1 ]; then cat "${fs[@]}" | awk '!seen[$0]++'; else cat "${fs[0]}"; fi; } 2>/dev/null |
+    jq -nc --arg sid "$sid" --argjson cap "$cap" --argjson waits "${w:-[]}" "$prog" |
     jq -c --arg title "$title" 'if .kind == "session" then . + {title: $title} else . end' || true
 }
-[ -n "$file" ] && { one "$file" >"$out/$(basename "$file")"; exit 0; }
-# one transcript per process, one process per CPU, each into its own file: jq flushes in blocks
+projects="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects"
+[ -n "$file" ] && { [ -n "$out" ] || exit 2; one "$file" >"$out/$file"; exit 0; }
+# one session per process, one process per CPU, each into its own file: jq flushes in blocks
 # that split lines, so workers sharing one output would splice each other's lines
 out="$(mktemp -d)"; trap 'rm -rf "$out"' EXIT
-find "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects" -mindepth 2 -maxdepth 2 -name '*.jsonl' -mtime -"$days" -print0 2>/dev/null |
-  xargs -0 -n1 -P "$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4)" bash "$0" --cap "$cap" --out "$out" --one || true
+find "$projects" -mindepth 2 -maxdepth 2 -name '*.jsonl' -mtime -"$days" 2>/dev/null | sed 's#.*/##; s#\.jsonl$##' | sort -u |
+  xargs -n1 -P "$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4)" bash "$0" --cap "$cap" --out "$out" --one || true
 cat "$out"/* 2>/dev/null || true

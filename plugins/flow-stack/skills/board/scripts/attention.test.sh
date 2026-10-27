@@ -47,6 +47,13 @@ $got"; fail=1; }
 ses="$(jq -c 'select(.kind == "session") | [.sid, .title, .last - .first]' <<<"$out" 2>&1)"
 [ "$ses" = "[\"$sid\",\"Fixture title\",1345]" ] && echo "  ✓ session line" || { echo "  ✗ session: $ses"; fail=1; }
 grep -qE 'thanks|Shall I|agent prompt' <<<"$out" && { echo "  ✗ prompt text leaked"; fail=1; } || echo "  ✓ no prompt text"
+# a session that moved folders has a copy of its start in each: its events count once, from one worker
+mkdir -p "$CLAUDE_CONFIG_DIR/projects/-r2"
+jq -c 'select(.timestamp == null or (.timestamp | sub("Z$"; "") | . <= "2026-10-27T00:02:00"))' "$CLAUDE_CONFIG_DIR/projects/-r/$sid.jsonl" >"$CLAUDE_CONFIG_DIR/projects/-r2/$sid.jsonl"
+got2="$("$H/attention.sh" 2>&1 | jq -c 'select(.kind != "session") | [.kind, .wait, .secs]' 2>&1)"
+[ "$got2" = "$want" ] && echo "  ✓ a session copied into two folders counts once" || { echo "  ✗ moved session: got
+$got2"; fail=1; }
+rm -rf "$CLAUDE_CONFIG_DIR/projects/-r2"
 # many busy transcripts at once: parallel workers must never splice lines (jq flushes in 4 KB blocks)
 for k in $(seq 10 49); do
   jq -nc --arg t "busy $k" '
