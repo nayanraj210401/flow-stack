@@ -207,22 +207,90 @@ fi
 
 # 3c. Ready for review: in a flow-stack repo, a non-draft PR or `gh pr ready` needs ready.sh's stamp for HEAD.
 #     Only a real invocation counts: heredoc bodies are dropped, and gh must start a command:
-#     line start, ; && || | (, if/then/!, VAR=x prefixes, or behind a wrapper (eval, sh/bash/zsh/dash, command, env, time,
-#     nohup, xargs, sudo, exec) with any flags of its own. Quoted strings are dropped before the draft flag is
-#     looked for, so a title saying "-d" isn't a draft. Case-insensitive: case-insensitive
+#     line start, ; && || | ( {, if/then/!, VAR=x prefixes, or behind a wrapper (eval, sh/bash/zsh/dash/ksh, command, env,
+#     time, timeout, nice, nohup, xargs, sudo, exec) with any flags of its own. Case-insensitive: case-insensitive
 #     filesystems run GH as gh. A commit message that mentions it mid-sentence passes.
 code="$(awk -v q="'" '
   hd != "" { if ($0 == hd) hd = ""; next }
   { print
     if (match($0, "<<-?[ \t]*[\"" q "]?[A-Za-z_][A-Za-z0-9_]*")) {
       hd = substr($0, RSTART, RLENGTH); sub("<<-?[ \t]*[\"" q "]?", "", hd) } }' <<<"$cmd")"
-lead='(^|[;&|(]|(^|[;&|([:space:]])(eval|command|env|time|nohup|xargs|sudo|exec|(ba|z|da)?sh)([[:space:]][^;&|]*)?[[:space:]])'
-lead="$lead"'[[:space:]]*((if|then|elif|else|do|while|until|!)[[:space:]]+|[A-Za-z_][A-Za-z0-9_]*=([^[:space:]]*|"[^"]*"|'"'"'[^'"'"']*'"'"')[[:space:]]+)*["'"'"']?'
+lead='(^|[;&|({]|(^|[;&|({[:space:]])(eval|command|env|time|timeout|nice|nohup|xargs|sudo|exec|(ba|z|da|k)?sh)([[:space:]][^;&|]*)?[[:space:]])'
+lead="$lead"'[[:space:]]*((if|then|elif|else|do|while|until|!)[[:space:]]+|[A-Za-z_][A-Za-z0-9_]*=([^[:space:]]*|"[^"]*"|'"'"'[^'"'"']*'"'"')[[:space:]]+)*([$]?["'"'"'])?'
 cend='([[:space:];&|)]|$)'
 gopt='([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*'
 pr_cmd="$(grep -Ei "$lead"'gh'"$gopt"'[[:space:]]+pr[[:space:]]+(create|ready)'"$cend" <<<"$code" || true)"
-if [ -d "$FLOW_DIR" ] && flow_enabled ready && [ -n "$pr_cmd" ] &&
-   ! sed -E "s/\\\\.//g; s/\"[^\"]*\"//g; s/'[^']*'//g; s/[\"'].*\$//" <<<"$pr_cmd" | grep -Eq '((--draft|[[:space:]]-d)(=true)?|--undo)([[:space:]]|$)'; then
+# The line is split into shell words and commands (quotes, escapes, $'…', ; & | ( )), and sh -c / eval scripts are
+# split the same way, so a quoted title saying "-d" is one word, not a flag. Every gh pr create|ready command needs
+# its own --draft, -d, --draft=true or --undo word. A word with an unterminated quote is never a flag, and # starts
+# a comment. Fails closed: when the line starts gh pr create|ready (in a command position, as above, or after a
+# backtick) more often than the split found commands ("$(…)", another interpreter), it is not a draft. Only code
+# is counted: quoted titles, bodies and messages that name the command are text.
+pr_drafts() {
+  awk -v q="'" -v said="(\`|$lead)gh$gopt[[:space:]]+pr[[:space:]]+(create|ready)" '
+    # split_cmds(s): tokens T with kinds K (w | bad | op), the part of each word the shell runs as code C (unquoted
+    # text, and $(…) or `…` inside "…"; nothing from single-quoted text), and CS set when C holds such a substitution
+    function split_cmds(s, T, K, C, CS,   i, j, c, ch, e, n, w, wc, has, bad, L, sub_, bt, nq, sq, code, cs) {
+      n = 0; w = wc = ""; has = bad = cs = 0; L = length(s)
+      for (i = 1; i <= L; i++) {
+        c = substr(s, i, 1)
+        if (c == "\\") { if (substr(s, ++i, 1) != "\n") { w = w substr(s, i, 1); wc = wc substr(s, i, 1); has = 1 } }
+        else if (c == q) { j = index(substr(s, i + 1), q); has = 1
+          if (!j) { w = w substr(s, i + 1); bad = 1; i = L } else { w = w substr(s, i + 1, j - 1); i += j } }
+        else if (c == "\"" || (c == "$" && substr(s, i + 1, 1) == q)) {
+          e = (c == "$") ? q : "\""; if (c == "$") i++; has = 1; sub_ = bt = nq = sq = 0
+          for (i++; i <= L; i++) {
+            ch = substr(s, i, 1); code = sub_ || bt
+            if (!code && ch == e) break
+            # inside $(…) or `…`, quotes nest; that code is kept as written and checked as a script of its own
+            if (sq) { if (ch == q) sq = 0; wc = wc ch; w = w ch; continue }
+            # "…" drops a backslash only before $ ` " \ newline; $'…' always does
+            if (ch == "\\" && (e == q || index("$`\"\\\n", substr(s, i + 1, 1)))) { ch = substr(s, ++i, 1); if (code) wc = wc ch }
+            else if (code && ch == q) { sq = 1; wc = wc ch }
+            else if (code && ch == "\"") { nq = !nq; wc = wc ch }
+            else if (e != q && !nq && ch == "`") { bt = !bt; wc = wc ch; cs = 1 }
+            else if (e != q && !nq && substr(s, i, 2) == "$(") { sub_++; wc = wc "$("; w = w ch; ch = "("; i++; cs = 1 }
+            else if (code) { if (!nq) { if (ch == "(") sub_++; else if (ch == ")" && sub_) sub_-- } wc = wc ch }
+            w = w ch }
+          if (i > L) bad = 1 }
+        else if (c == "#" && !has) { j = index(substr(s, i), "\n"); i = j ? i + j - 2 : L }
+        else if (c ~ /[;&|()\n]/) { if (has) { T[++n] = w; K[n] = bad ? "bad" : "w"; C[n] = wc; CS[n] = cs }
+          T[++n] = c; K[n] = "op"; w = wc = ""; has = bad = cs = 0 }
+        else if (c ~ /[ \t]/) { if (has) { T[++n] = w; K[n] = bad ? "bad" : "w"; C[n] = wc; CS[n] = cs }
+          w = wc = ""; has = bad = cs = 0 }
+        else { w = w c; wc = wc c; has = 1 }
+      }
+      if (has) { T[++n] = w; K[n] = bad ? "bad" : "w"; C[n] = wc; CS[n] = cs }
+      return n
+    }
+    # check(s): adds to found / nondraft for each gh pr create|ready command in s, recursing into every word after
+    # eval, after a -c option of sh, and into the substitutions in "…". Returns the code in s for the fail-closed count: each word keeps only its code
+    # part, and a recursed word is replaced by its own check.
+    function check(s,   T, K, C, CS, X, n, i, start, g, p, d, k, sh, ev, out) {
+      n = split_cmds(s, T, K, C, CS); start = 1
+      for (i = 1; i <= n + 1; i++) {
+        if (i <= n && K[i] != "op") continue
+        g = p = d = sh = ev = 0
+        for (k = start; k < i; k++) {
+          if (K[k] != "w") continue
+          if (ev || sh > 1) X[k] = check(T[k]); else if (CS[k]) X[k] = check(C[k])
+          if (tolower(T[k]) == "eval") ev = 1
+          if (T[k] ~ /^(ba|z|da|k)?sh$/ || T[k] ~ /\/(ba|z|da|k)?sh$/) sh = 1
+          else if (sh && T[k] ~ /^-[A-Za-z]*c[A-Za-z]*$/) sh = 2
+          if (!g && tolower(T[k]) == "gh") g = k
+          else if (g && !p && T[k] == "pr" && k < i - 1 && T[k + 1] ~ /^(create|ready)$/ && K[k + 1] == "w") p = ++k
+          else if (p && T[k] ~ /^(--draft(=true)?|-d|--undo)$/) d = 1
+        }
+        if (p) { found++; if (!d) nondraft++ }
+        start = i + 1
+      }
+      for (k = 1; k <= n; k++) out = out (K[k] == "op" ? T[k] : " " ((k in X) ? X[k] : C[k]) " ")
+      return out
+    }
+    { all = all $0 "\n" }
+    END { s = tolower(check(all)); exit !(found && !nondraft && found >= gsub(said, "", s)) }'
+}
+if [ -d "$FLOW_DIR" ] && flow_enabled ready && [ -n "$pr_cmd" ] && ! pr_drafts <<<"$code"; then
   ready="$(cd "$(dirname "$0")/../skills/review/scripts" && pwd)/ready.sh"
   if [ "$(cd "$FLOW_ROOT" && "$ready" mode)" != yolo ] && ! (cd "$FLOW_ROOT" && "$ready" stamped); then
     pre_decide deny "flow ready-for-review: HEAD isn't stamped ready. Human review is the expensive step, so run $ready (it lists what's missing), or open a draft PR (--draft) meanwhile. review_gate: yolo in the profile or .flow/config.json turns this off."

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# draft-flag.test.sh: the ready gate exempts a real draft flag, not "-d" inside a quoted title/body (#60), nor --draft=false (#122).
+# draft-flag.test.sh: the ready gate exempts a real draft flag, not "-d" inside a quoted title/body (#60), nor --draft=false (#122),
+# including a draft wrapped in sh -c '…'.
 set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)"
 FAILS=0
@@ -39,5 +40,54 @@ expect allow 'gh pr create --draft=true --title x'
 expect deny  'gh pr create --draft=false'
 expect deny  'gh pr create --title x --draft=false'
 expect deny  'gh pr create --draft=false --title x'
+# Wrapped in a quoted shell string: the wrapper's quote is not a quoted title.
+expect allow "sh -c 'gh pr create --draft --title x'"
+expect allow "bash -lc \"gh pr create -d --title x\""
+expect deny  "sh -c 'gh pr create --title x'"
+expect deny  "sh -c 'gh pr create --title \"a -d\" --body x'"
+expect allow "sh -c 'gh pr create --draft'"
+expect allow "eval \"gh pr create --title 'a -d' --draft\""
+expect deny  'bash -c "gh pr create --body \"fix -d flag\" --title x"'
+expect deny  "sh -c \"gh pr create --title 'x' --body \\\"y --draft z\\\"\""
+# Every gh pr create/ready on the line needs its own draft flag; quoted text naming one doesn't count.
+expect deny  "sh -c 'gh pr create --draft --title x' && gh pr create --title y"
+expect deny  'gh pr create --draft --title x && gh pr create --title y'
+expect deny  "echo 'gh pr create --draft x' && gh pr create --title x"
+expect deny  "grep 'gh pr create -d foo' f; gh pr create --title x"
+# Commands the split can't see into fail closed instead of riding on a draft elsewhere on the line.
+expect deny  'gh pr create --draft; `gh pr create --title x`'
+expect deny  'gh pr create --draft --title "$(gh pr create --title y)"'
+expect deny  "gh pr create --draft; bash -c -e 'gh pr create --title x'"
+expect deny  "gh pr create --draft; X=1 eval 'gh pr create --title x'"
+expect deny  'gh pr create --title x # --draft'
+expect deny  "gh pr create --draft; ksh -c 'gh pr create --title x'"
+expect deny  '{ gh pr create --title x; }'
+expect deny  'nice gh pr create --title x'
+expect deny  'gh pr create --draft --body "$(timeout 5 gh pr create --title x)"'
+expect allow '{ gh pr create --draft --title x; }'
+expect allow 'gh pr create --draft --title x # opened as a draft'
+expect deny  'gh pr create --title x "--draf\t"'
+# A draft whose own text names the command is still a draft.
+expect allow 'gh pr create --draft --title "docs: explain gh pr create flags"'
+expect allow 'gh pr create --draft --title x --body "Run gh pr ready when done"'
+expect allow 'git commit -m "guard: handle gh pr create" && gh pr create --draft --title x'
+expect allow "gh pr create --draft --title x --body 'Fixes: gh pr create --draft wrapped in sh -c'"
+expect allow 'gh pr create --draft --title x --body "steps: build; gh pr ready"'
+expect allow "gh pr create --draft --title x --body 'see: a; gh pr ready'"
+expect allow 'gh pr create --draft --title x --body "a (gh pr ready) b"'
+expect allow "gh pr create --draft --title x --body 'Run \`gh pr ready\` when done'"
+expect deny  'gh pr create --draft --title x --body "Run `gh pr ready` when done"'
+expect deny  "sh -c 'echo \"\$(gh pr create --title y)\"'"
+expect allow 'git commit -m "wip; gh pr ready next" && gh pr create --draft --title x'
+expect allow 'git commit -m "handle drafts (gh pr ready)" && gh pr create --draft --title x'
+expect allow "gh pr create --draft --title x --body \"\$(printf '%s' 'a; gh pr ready')\""
+expect deny  'gh pr create --draft --title x --body "$(echo "a"; gh pr create --title y)"'
+expect deny  'gh pr create --draft --title x --body "`echo "a"; gh pr create --title y`"'
+expect deny  "gh pr create --draft; command eval 'gh pr create --title x'"
+expect deny  "gh pr create --draft --title x --body \"\$(sh -c 'gh pr create --title y')\""
+expect allow 'gh pr create --title x \
+--draft'
+expect deny  "bash -c \$'gh pr create --title \\'a -d\\''"
+expect allow "bash -c \$'gh pr create --title x --draft'"
 
 [ "$FAILS" -eq 0 ] && echo "ok" || { echo "$FAILS failed"; exit 1; }
