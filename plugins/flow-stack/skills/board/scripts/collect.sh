@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # collect.sh: everything the board shows, as one JSON document on stdout.
-#   collect.sh [--no-cost] [--no-prs] [repo-path ...]
+#   collect.sh [--no-cost] [--no-prs] [--no-attention] [repo-path ...]
 #
 # Repos: the given paths, else the profile's `# Repos` paths plus the current repo.
 # Reads only what flow-stack already writes (.flow/tasks, features, debt.md) and git;
@@ -9,9 +9,9 @@ set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/../../../hooks/roots.sh"
 
-cost=1; prs=1; repos=()
+cost=1; prs=1; att_on=1; repos=()
 while [ $# -gt 0 ]; do
-  case "$1" in --no-cost) cost=0 ;; --no-prs) prs=0 ;; *) repos+=("$1") ;; esac; shift
+  case "$1" in --no-cost) cost=0 ;; --no-prs) prs=0 ;; --no-attention) att_on=0 ;; *) repos+=("$1") ;; esac; shift
 done
 home="${FLOW_STACK_HOME:-$HOME/.flow-stack}"; profile="$home/profile.md"
 
@@ -25,6 +25,24 @@ current=""; git rev-parse --show-toplevel >/dev/null 2>&1 && { flow_roots; curre
 # first non-comment line under "## <heading>" in a markdown file
 md_first() { awk -v h="## $2" '/<!--/{c=1} c{if(/-->/)c=0; next} $0==h{on=1;next} on&&/^## /{exit} on&&NF&&$0!="- "{print;exit}' "$1" 2>/dev/null; }
 
+# attention.sh once per run (events + session lines, JSON lines); empty when skipped or unavailable
+att="$(mktemp)"; trap 'rm -f "$att"' EXIT
+[ "$att_on" = 1 ] && { "$here/attention.sh" --days 14 >"$att" 2>/dev/null || true; }
+
+task_sessions() { # task_sessions <task-dir>: distinct sids in trail.jsonl with calls, titles, and (with attention) min / blocked_min
+  [ -s "$1/trail.jsonl" ] || { echo "[]"; return; }
+  jq -sc --slurpfile a "$att" --argjson on "$att_on" '
+    def ts: sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601;
+    def m: . / 60 * 10 | round / 10;
+    map(select((.sid // "") != "" and .ts)) | group_by(.sid) | map(
+      map(.ts | ts) as $t | .[0].sid as $sid | length as $n
+      | ([$a[] | select(.sid == $sid and .kind == "session")][0].title // "") as $title
+      | [$a[] | select(.sid == $sid and .kind != "session" and .ts >= ($t | min) - 600 and .ts <= ($t | max) + 60)] as $e
+      | {sid: $sid, title: $title, first: ($t | min | todate), last: ($t | max | todate), calls: $n}
+        + (if $on == 1 then {min: ($e | map(.secs) | add // 0 | m), blocked_min: ($e | map(select(.kind != "prompt") | .wait) | add // 0 | m)} else {} end))
+    | sort_by(.last) | reverse' "$1/trail.jsonl" 2>/dev/null || echo "[]"
+}
+
 task_json() { # task_json <task-dir> <owners: "slug<TAB>checkout" lines for tasks active anywhere>
   local d="$1" slug; slug="$(basename "$d")"
   local slices gates est trace_usd
@@ -37,7 +55,7 @@ task_json() { # task_json <task-dir> <owners: "slug<TAB>checkout" lines for task
   est="$(sed -n 's/.*usd=\([0-9.]*\).*/\1/p' "$d/ESTIMATE" 2>/dev/null | head -n1)"
   trace_usd="$(awk -F'|' '$2 ~ /^ *\$ *$/ {gsub(/[ $]/,"",$4); print $4; exit}' "$d/TRACE.md" 2>/dev/null)"
   jq -nc --arg slug "$slug" --arg goal "$(md_first "$d/INTENT.md" Goal)" --arg playbook "$(cat "$d/PLAYBOOK" 2>/dev/null)" \
-    --argjson slices "${slices:-[]}" --argjson gates "${gates:-[]}" \
+    --argjson sessions "$(task_sessions "$d")" --argjson slices "${slices:-[]}" --argjson gates "${gates:-[]}" \
     --arg est "$est" --arg actual "$trace_usd" \
     --arg owner "$(awk -F'\t' -v s="$slug" '$1 == s {print $2; exit}' <<<"$2")" \
     --argjson closed "$([ -f "$d/TRACE.md" ] && grep -qv '^<!--' "$d/TRACE.md" && [ -n "$(md_first "$d/TRACE.md" Outcome)" ] && echo true || echo false)" \
@@ -45,8 +63,9 @@ task_json() { # task_json <task-dir> <owners: "slug<TAB>checkout" lines for task
     --argjson lanes "$(ls -d "$d"/lanes/*/ 2>/dev/null | wc -l | tr -d ' ')" \
     --argjson repos "$(cut -f1 "$d/REPOS" 2>/dev/null | jq -Rsc 'split("\n") | map(select(length>0))')" \
     '{slug:$slug, goal:$goal, playbook:$playbook, active:($owner != ""), owner:(if $owner == "" then null else $owner end), closed:$closed, handoff:$handoff, lanes:$lanes, repos:$repos,
-      slices:$slices, gates:$gates,
-      estimate_usd:($est|tonumber? // null), actual_usd:($actual|tonumber? // null)}'
+      slices:$slices, gates:$gates, sessions:$sessions,
+      estimate_usd:($est|tonumber? // null), actual_usd:($actual|tonumber? // null)}
+    + (if ($sessions | all(has("min"))) then {attention_min: ($sessions | map(.min) | add // 0)} else {} end)'
 }
 
 quality_json() { # quality_json <repo> <features-json> <debt-json>: 0-100 per dimension, null when the repo has no data for it
@@ -145,7 +164,7 @@ board_prefs() {
   perl -0pe 's/<!--.*?-->//gs' "$profile" 2>/dev/null |
     awk '/^# /{on = ($0 ~ /^# Board[[:space:]]*$/); next}
       on && /^-[[:space:]]+[A-Za-z_]+:/{l=$0; sub(/^-[[:space:]]+/,"",l); k=l; sub(/:.*/,"",k); sub(/^[^:]*:[[:space:]]*/,"",l); if (k == "view") { sub(/[[:space:]]+$/,"",l); if (match(l, / · (table|list|count)[[:space:]]+#[[:space:]].*$/)) { t = substr(l, RSTART); sub(/[[:space:]]+#.*$/,"",t); l = substr(l, 1, RSTART - 1) t } } else sub(/[[:space:]]+(#[[:space:]].*)?$/,"",l); print k"\t"l}' |
-    jq -Rsc '["needs","spend","tasks","features","quality","decisions","debt","shipped","estimate","repos"] as $ids
+    jq -Rsc '["needs","spend","attention","tasks","features","quality","decisions","debt","shipped","estimate","repos"] as $ids
       | reduce (split("\n")[] | select(length > 0) | split("\t") | {k: .[0], v: (.[1] // "")}) as $p
         ({hide: [], order: [], wide: [], theme: "auto", tab: "current", accent: null, views: [], warnings: []};
          if $p.k == "hide" or $p.k == "order" or $p.k == "wide" then
@@ -163,14 +182,41 @@ board_prefs() {
          else .warnings += ["unknown key: \($p.k)"] end)'
 }
 
+attention_json() { # null when skipped or no transcripts; else the day-by-day window plus today's warnings
+  jq -sc --argjson days 14 --argjson cap 300 --argjson budget "$1" 'if any(.[]; .kind == "session") | not then null else
+    def m: . / 60 * 10 | round / 10;
+    def n($k): map(select(.kind == $k)) | length;
+    def day($d): sort_by(.ts) as $e | {date: $d, min: ($e | map(.secs) | add // 0 | m), blocked_min: ($e | map(select(.kind != "prompt") | .wait) | add // 0 | m),
+      prompts: ($e | n("prompt")), answers: ($e | n("answer")), questions: ($e | n("question")), permissions: ($e | n("permission")),
+      sessions: ($e | map(.sid) | unique | length),
+      switches: ([range(1; $e | length) | select($e[.].sid != $e[. - 1].sid and $e[.].ts - $e[. - 1].ts <= 600)] | length),
+      peak: ([$e[] | .ts as $t | [$e[] | select(.ts >= $t and .ts < $t + 1800) | .sid] | unique | length] | max // 0)};
+    def dstr: localtime | strftime("%Y-%m-%d");
+    (now | dstr) as $today
+    | (map(select(.kind == "session") | {(.sid): .title}) | add) as $titles
+    | map(select(.kind != "session") | . + {d: (.ts | dstr)}) as $ev
+    | [range($days - 1; -1; -1) as $i | (($today + "T12:00:00Z" | fromdate) - $i * 86400 | todate | .[0:10]) as $d | ($ev | map(select(.d == $d)) | day($d))] as $by
+    | $by[-1] as $t
+    | ($ev | map(select(.d == $today) | .sid) | unique) as $sids
+    | ($sids | map(if $titles[.] != "" and $titles[.] != null then $titles[.] else .[0:8] end) | join(", ")) as $names
+    | ([ if $budget != null and $t.min > $budget then {level: "crit", text: "over your review budget: \($t.min) of \($budget) min today"}
+         elif $budget != null and $t.min > 0.8 * $budget then {level: "warn", text: "\($t.min) of \($budget) min review budget used today"} else empty end,
+         if $t.peak >= 3 then {level: "warn", text: "\($t.peak) sessions in parallel within 30 min"} else empty end,
+         if $t.switches >= 15 then {level: "warn", text: "\($t.switches) context switches today"} else empty end]
+       | (if length >= 2 then map(.level = "crit") else . end)
+       | map({level, text: ((if .level == "crit" then "🔴 " else "🟡 " end) + .text + " (" + $names + ")"), sids: $sids})) as $w
+    | {cap_secs: $cap, days: $days, budget_min: $budget, today: $t, by_day: $by, warnings: $w} end' "$att"
+}
+budget="$(sed -n 's/^[[:space:]]*review_minutes_per_day:[[:space:]]*\([0-9]*\).*/\1/p' "$profile" 2>/dev/null | head -n1 | grep . || echo null)"
+
 board="$(printf '%s\n' "${rj[@]:-}" | jq -sc --arg at "$(date +%FT%T%z)" --argjson spend "${spend:-null}" --argjson prefs "$(board_prefs)" \
-  --argjson budget "$(sed -n 's/^[[:space:]]*review_minutes_per_day:[[:space:]]*\([0-9]*\).*/\1/p' "$profile" 2>/dev/null | head -n1 | grep . || echo null)" \
-  '{generated:$at, review_minutes_per_day:$budget, spend:$spend, repos:map(select(. != null))}
+  --argjson budget "$budget" --argjson attention "$(attention_json "$budget")" \
+  '{generated:$at, review_minutes_per_day:$budget, spend:$spend, attention:$attention, repos:map(select(. != null))}
   | .prefs = ([.repos[].name] as $names | $prefs | if .tab | IN(("current", "all", $names[])) then . else .warnings += ["tab: no repo named \(.tab)"] | .tab = null end)')"
 
 # each view is jq over the board: empty environment (no secrets), 5 s, 50 rows. Its stderr is
 # kept apart, so a debug or a parse error can only fail that one view.
-err="$(mktemp)"; trap 'rm -f "$err"' EXIT
+err="$(mktemp)"; trap 'rm -f "$err" "$att"' EXIT
 bin="$(dirname "$(command -v jq)"):$(dirname "$(command -v perl)")"
 views="$(jq -c '.prefs.views[]' <<<"$board" | while IFS= read -r v; do
   rows="$(env -i PATH="$bin" perl -e 'alarm 5; exec @ARGV' jq -c "[limit(51; ($(jq -r .expr <<<"$v")))] | if length == 1 and (.[0] | type) == \"array\" then .[0] else . end | .[:50]" <<<"$board" 2>"$err")"; rc=$?
