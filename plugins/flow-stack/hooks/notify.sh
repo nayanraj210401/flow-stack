@@ -11,6 +11,9 @@ msg="$1"
 if [ -z "$msg" ]; then
   input="$(cat)"
   msg="$(jq -r '.message // "Claude needs you"' <<<"$input" 2>/dev/null || echo "Claude needs you")"
+  # a wait for the human is logged before any delivery branch; a failed write never changes delivery
+  { mkdir -p "$FLOW_HOME" && jq -c --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" 'select(.notification_type=="permission_prompt" or .notification_type=="elicitation_dialog")
+    | {ts:$ts, sid:(.session_id // ""), kind:.notification_type}' <<<"$input" >>"$FLOW_HOME/waits.jsonl"; } 2>/dev/null || true
 fi
 
 target="$(profile_fm notify 2>/dev/null || true)"
