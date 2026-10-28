@@ -34,6 +34,7 @@ jobs:
 
       # A fresh runner installs the plugin on every run: the marketplace's default branch, or the clone pinned above
       - uses: anthropics/claude-code-action@v1
+        id: claude
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ github.token }}
@@ -42,6 +43,23 @@ jobs:
           prompt: |
             --auto Run the routine in .github/routines/self-create.md. Follow it exactly.
           claude_args: --allowedTools "Bash,Read,Edit,Write,Glob,Grep,Agent,Skill,TodoWrite"
+      # The action hides the run's output, and this repo's logs may be public. The trace shows what the run did
+      # (each tool call's input and the run's own words) but no tool results, where a secret would surface.
+      - name: Trace
+        if: always() && steps.claude.outputs.execution_file != ''
+        env:
+          RUN_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          [ -f "$RUN_FILE" ] || exit 0
+          { echo "### What the run did"; echo '```'
+            jq -rs 'if length == 1 and (.[0] | type) == "array" then .[0][] else .[] end | (select(.type == "assistant") | .message.content[]? |
+                if .type == "tool_use" then "\(.name): \(.input | .command // .file_path // .pattern // .skill // .description // . | tostring | gsub("\n"; " ") | .[:200])"
+                elif .type == "text" then "say: \(.text | gsub("\n"; " ") | .[:300])" else empty end),
+              (select(.type == "user") | .message.content[]? | select(.type? == "tool_result" and .is_error == true) |
+                "error: \(.content | tostring | gsub("\n"; " ") | .[:160])"),
+              (select(.type == "result") | "result: \(.subtype) turns=\(.num_turns) cost=$\(.total_cost_usd) denied=\(.permission_denials_count // (.permission_denials | length))")' "$RUN_FILE" |
+              perl -pe 's/(sk-[A-Za-z0-9_-]{4}|gh[opsu]_|github_pat_)[A-Za-z0-9_]{8,}/$1REDACTED/g'
+            echo '```'; } >>"$GITHUB_STEP_SUMMARY"
       # The runner's disk is thrown away, so show whatever the run queued in GATES.md before it is lost
       - name: Open gates
         if: always()
