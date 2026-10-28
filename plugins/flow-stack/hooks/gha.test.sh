@@ -49,7 +49,7 @@ done
 echo "-- a flag file the model writes by hand does nothing off a runner"
 mkdir -p "$FLOW_STACK_HOME/auto"; echo gha >"$FLOW_STACK_HOME/auto/s"
 stamp
-expect deny -- 'gh release create v1.0.0 --generate-notes'
+expect deny -- 'gh release create v1.0.0 --target feat/x --generate-notes'
 expect deny -- 'gh pr create --title x --body-file b.md'
 expect deny -- 'git push origin feat/x'
 rm -f "$FLOW_STACK_HOME/auto/s"
@@ -63,8 +63,8 @@ expect allow "${RUNNER[@]}" -- 'git push origin feat/x'
 expect allow "${RUNNER[@]}" -- 'git push -u origin feat/x'
 expect allow "${RUNNER[@]}" -- 'gh pr create --title x --body-file b.md'
 expect allow "${RUNNER[@]}" -- 'gh pr merge --squash --delete-branch'
-expect allow "${RUNNER[@]}" -- 'gh release create v1.0.0 --generate-notes'
-expect allow "${RUNNER[@]}" -- 'gh release create v1.0.0 --title v1 --notes-file notes.md'
+expect allow "${RUNNER[@]}" -- 'gh release create v1.0.0 --target feat/x --generate-notes'
+expect allow "${RUNNER[@]}" -- 'gh release create v1.0.0 --target feat/x --title v1 --notes-file notes.md'
 echo "-- hard stops stay denied in CI"
 expect deny "${RUNNER[@]}" -- 'git push origin main'
 expect deny "${RUNNER[@]}" -- 'git push origin feat/x:main'
@@ -76,6 +76,8 @@ expect deny "${RUNNER[@]}" -- 'git push --force origin main'
 expect deny "${RUNNER[@]}" -- 'gh pr merge 99 --squash'
 expect deny "${RUNNER[@]}" -- 'gh release create v1.0.0 --notes "$(cat /etc/passwd)"'
 expect deny "${RUNNER[@]}" -- 'gh release create v1.0.0 --generate-notes; rm -rf x'
+expect deny "${RUNNER[@]}" -- 'gh release create v1.0.0 --generate-notes'
+expect deny "${RUNNER[@]}" -- 'gh release create v1.0.0 --target main --generate-notes'
 expect deny "${RUNNER[@]}" -- 'npm publish'
 expect deny "${RUNNER[@]}" -- 'git reset --hard HEAD~1'
 expect deny "${RUNNER[@]}" -- 'git clean -fd'
@@ -87,7 +89,7 @@ expect deny "${RUNNER[@]}" -- 'gh release create v1.0.0'
 stamp
 echo "-- ship on a runner does not unlock releases"
 prompt "${RUNNER[@]}" -- '--auto ship' >/dev/null
-expect deny "${RUNNER[@]}" -- 'gh release create v1.0.0 --generate-notes'
+expect deny "${RUNNER[@]}" -- 'gh release create v1.0.0 --target feat/x --generate-notes'
 expect allow "${RUNNER[@]}" -- 'git push origin feat/x'
 prompt "${RUNNER[@]}" -- '--no-auto' >/dev/null; [ ! -f "$FLOW_STACK_HOME/auto/s" ] && ok "--no-auto ends it" || bad "flag remains"
 
