@@ -13,6 +13,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      # holds.test.sh builds the herdr band mod (register.tsx) with bun
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.19
       - name: script tests
         run: |
           git config --global user.email ci@example.com
