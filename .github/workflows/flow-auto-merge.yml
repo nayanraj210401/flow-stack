@@ -42,3 +42,16 @@ jobs:
           prompt: |
             /flow-stack:flow --auto ship Run the routine in .github/routines/auto-merge.md. Follow it exactly.
           claude_args: --allowedTools "Bash,Read,Edit,Write,Glob,Grep,Agent,Skill,TodoWrite"
+      # The runner's disk is thrown away, so show whatever the run queued in GATES.md before it is lost
+      - name: Open gates
+        if: always()
+        run: |
+          for g in .flow/GATES.md .flow/tasks/*/GATES.md; do [ -f "$g" ] || continue; { echo "### $g"; cat "$g"; } >>"$GITHUB_STEP_SUMMARY"; done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: flow-gates
+          path: |
+            .flow/GATES.md
+            .flow/tasks/*/GATES.md
+          if-no-files-found: ignore

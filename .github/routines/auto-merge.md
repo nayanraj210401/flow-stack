@@ -69,4 +69,4 @@ Only with a ship verdict and no security finding:
 
 Never merge a PR that failed any step above, a fork PR, a draft, or one that touches the safety machinery. Never approve or request changes, never push, never edit tracked files, never remove a label a human added except `auto-merge` as in step 1. Never merge more than 3 per run.
 
-The runner's disk is thrown away at the end, so a gate queued in GATES.md is lost: post every blocked or queued action as a PR comment. End with a table: PR, then merged (SHA), blocked (why), or skipped (why).
+Anything you queue in GATES.md lands in the job summary and the `flow-gates` artifact, which nobody reads by default: also post every blocked or queued action as a PR comment. End with a table: PR, then merged (SHA), blocked (why), or skipped (why).
