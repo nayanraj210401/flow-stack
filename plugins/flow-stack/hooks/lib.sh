@@ -173,7 +173,16 @@ flow_host() {
   elif [ -n "${CONDUCTOR_WORKSPACE_PATH:-}" ]; then echo conductor
   else echo none; fi
 }
-flow_auto_ship() { local f; f="$(flow_auto_flag)" && [ "$(cat "$f" 2>/dev/null)" = ship ]; }
+# flow_on_runner: this hook process runs on a GitHub-hosted Actions runner. Only the hook's own environment counts,
+# which no Bash call from the model can change. A human can export these on their own machine; the model cannot.
+# Self-hosted runners don't count: their disk may be someone's laptop.
+flow_on_runner() {
+  [ "${GITHUB_ACTIONS:-}" = true ] && [[ "${GITHUB_RUN_ID:-}" =~ ^[0-9]+$ ]] \
+    && [ "${RUNNER_ENVIRONMENT:-}" = github-hosted ] && [ -n "${RUNNER_TEMP:-}" ] && [ -d "$RUNNER_TEMP" ]
+}
+# --gha: the flag says gha AND this is a runner, checked at every decision, so a flag file written by hand off a runner does nothing.
+flow_auto_gha() { local f; f="$(flow_auto_flag)" && [ "$(cat "$f" 2>/dev/null)" = gha ] && flow_on_runner; }
+flow_auto_ship() { local f; f="$(flow_auto_flag)" || return 1; [ "$(cat "$f" 2>/dev/null)" = ship ] || flow_auto_gha; }
 FLOW_AUTO_QUEUE="Add it to .flow/tasks/<slug>/GATES.md (question, options, recommendation), keep going on work it doesn't block, and list GATES.md first in the handoff."
 
 pre_decide() {

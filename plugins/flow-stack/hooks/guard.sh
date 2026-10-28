@@ -112,6 +112,22 @@ if { has '\.flow/tasks/[^/[:space:]]+/blind' || [ -n "$blind_glob" ] ||
   pre_decide deny "flow guard: blind checks are held out from the builder. Run them only via verify's scripts/blind-run.sh."
 fi
 
+# 2b. Modes are the human's: a write to the auto-mode flags, or to Claude Code settings (whose env block
+# could fake a GitHub runner for --gha), would let the model grant itself a mode. The path must follow a
+# write verb (a whole word, or a redirect) in the same segment, so reading these files stays allowed.
+# Interpreter one-liners (python -c, node -e) are a known gap; --gha still re-checks the runner itself.
+cfg="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"; c2="${cmd//"$FLOW_HOME"/FLOW_HOME}"; c2="${c2//"$cfg"/CLAUDE_CONFIG_DIR}"
+wr='(>|(^|[[:space:];&|(])(tee|cp|mv|ln|install|dd|truncate|rm|sponge|sed[[:space:]]+-[A-Za-z]*i|perl[[:space:]]+-[A-Za-z]*i)([[:space:]]|$))[^;&|]*'
+home='(\.flow-stack|FLOW_STACK_HOME\}?|FLOW_HOME\}?)'; conf='(\.claude|CLAUDE_CONFIG_DIR\}?)'
+end='([/"'\''[:space:]]|$)'; sett='settings[^/[:space:]"'\'']*\.json'
+cdin() { grep -Eq -- "(^|[;&|(][[:space:]]*)cd[[:space:]]+[^;&|]*$1" <<<"$c2"; }
+if grep -Eq -- "$wr$home/auto$end" <<<"$c2" || { cdin "$home" && grep -Eq -- "$wr[\"']?(\./)?auto$end" <<<"$c2"; }; then
+  pre_decide deny "flow guard: \$FLOW_STACK_HOME/auto/ holds the session's mode (--auto, ship, --gha). Only the human's prompt sets it."
+fi
+if grep -Eq -- "$wr$conf/$sett" <<<"$c2" || { cdin "$conf" && grep -Eq -- "$wr[\"']?(\./)?$sett" <<<"$c2"; }; then
+  pre_decide ask "flow guard: writing Claude Code settings can change permissions, hooks, or env (an env block can fake a GitHub runner for --gha), so the human approves."
+fi
+
 # 3. Writes to sealed checks via the shell.
 if [ -n "$FLOW_TASK_DIR" ] && [ -f "$FLOW_TASK_DIR/SEALS" ]; then
   if has 'seal\.sh[[:space:]]+(reseal|rm)'; then
@@ -322,13 +338,18 @@ ship_allowed() { # ship_allowed <one-line command>
     git\ push\ *)
       cur="$(git -C "$FLOW_ROOT" symbolic-ref --short -q HEAD)" && [ "$cur" != main ] && [ "$cur" != master ] || return 1
       [[ "$1" =~ ^git\ push(\ -u|\ --set-upstream)?\ [A-Za-z0-9._-]+\ ([^[:space:]]+)$ ]] && [ "${BASH_REMATCH[2]}" = "$cur" ] ;;
+    gh\ release\ create\ *)
+      flow_auto_gha || return 1
+      # the tag is cut from the stamped branch, never from the default branch's tip
+      cur="$(git -C "$FLOW_ROOT" symbolic-ref --short -q HEAD)" && [ "$cur" != main ] && [ "$cur" != master ] || return 1
+      [[ "$1" =~ ^gh\ release\ create\ [A-Za-z0-9._-]+\ --target\ ([A-Za-z0-9._/-]+)(\ --(generate-notes|draft|prerelease)|\ --(title|notes-file)\ [A-Za-z0-9._-]+)*$ ]] && [ "${BASH_REMATCH[1]}" = "$cur" ] ;;
     *) grep -Eq '^(gh pr (create|ready)( [^;&|`$<>()]*)?|gh pr merge( --(squash|merge|rebase|delete-branch))*)$' <<<"$1" ;;
   esac
 }
 if grep -Eiq "$lead"'(git'"$gopt"'[[:space:]]+push|gh'"$gopt"'[[:space:]]+(pr[[:space:]]+(create|merge|ready)|release[[:space:]]+create)|npm'"$gopt"'[[:space:]]+publish)'"$cend" <<<"$code" && flow_auto; then
   if ! flow_auto_ship || ! ship_allowed "$(sed -E 's/^[[:space:]]+|[[:space:]]+$//g' <<<"$cmd")" \
      || ! (cd "$FLOW_ROOT" && "$(dirname "$0")/../skills/review/scripts/ready.sh" stamped) 2>/dev/null; then
-    pre_decide ask "flow: outward-facing action$(flow_auto_ship && echo ". --auto ship allows only \`git push [-u] <remote> <current branch>\` (not main), gh pr create/ready (body via --body-file or --fill, no shell expansions), and gh pr merge of the current branch's PR, once review/scripts/ready.sh has stamped HEAD")."
+    pre_decide ask "flow: outward-facing action$(flow_auto_gha && echo ". --gha adds only gh release create <tag> --target <current branch> (plain flags) to the --auto ship set.")$(flow_auto_ship && echo ". --auto ship allows only \`git push [-u] <remote> <current branch>\` (not main), gh pr create/ready (body via --body-file or --fill, no shell expansions), and gh pr merge of the current branch's PR, once review/scripts/ready.sh has stamped HEAD")."
   fi
 fi
 
