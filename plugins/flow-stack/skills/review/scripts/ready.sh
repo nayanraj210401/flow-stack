@@ -7,6 +7,8 @@
 #                                            · <id> done for a repo `do` step (below)
 #   ready.sh stamped [<sha>]                 exit 0 if <sha> (default HEAD) has a pass stamp
 #   ready.sh mode                            on | yolo  (repo .flow/config.json > profile > on)
+#   ready.sh rounds                          reviewed commits on this branch since the last ship; a review record prints it,
+#                                            and round 3 without ship says to challenge the approach
 # Live checks: clean tree, lint + typecheck (config commands), impacted feature scenarios,
 # and with an active flow task: acceptance checks, seals, blind checks.
 # Repo quality gates: .flow/config.json "ready": [{"id","run":"<cmd>"} | {"id","do":"<step>"}].
@@ -31,10 +33,23 @@ custom() { # custom [<do-id>]: the repo's ready entries as id<TAB>run|do<TAB>bod
   jq -r '.ready // [] | to_entries[] | select(.value.id) | [.value.id, (if .value.run then "run" else "do" end), .key] | @tsv' "$FLOW_DIR/config.json" 2>/dev/null
 }
 custom_body() { jq -r --argjson i "$1" '.ready[$i] | .run // .do // ""' "$FLOW_DIR/config.json" 2>/dev/null; }
+merge_base() {
+  local ref
+  for ref in origin/HEAD origin/main origin/master main master; do
+    git -C "$FLOW_ROOT" rev-parse -q --verify "$ref" >/dev/null && { git -C "$FLOW_ROOT" merge-base HEAD "$ref"; return; }
+  done
+}
+rounds() { # reviewed commits on this branch since the last one reviewed ship; one commit reviewed twice is one round
+  local b; b="$(merge_base)"
+  [ -f "$ledger" ] || { echo 0; return; }
+  git -C "$FLOW_ROOT" rev-list "${b:+$b..}HEAD" 2>/dev/null |
+    awk -F'\t' 'NR == FNR { if ($3 == "review") v[$2] = $4; next } v[$1] == "ship" { exit } $1 in v { n++ } END { print n + 0 }' "$ledger" -
+}
 latest() { awk -F'\t' -v s="$1" -v k="$2" '$2 == s && $3 == k { r = $4 } END { print r }' "$ledger" 2>/dev/null; }
 
 case "${1:-}" in
   mode) mode; exit 0 ;;
+  rounds) rounds; exit 0 ;;
   stamped) [ "$(latest "$(sha "${2:-HEAD}")" ready)" = pass ]; exit ;;
   record)
     kind="${2:-}"; res="${3:-}"
@@ -45,16 +60,18 @@ case "${1:-}" in
     esac
     mkdir -p "$FLOW_DIR"
     printf '%s\t%s\t%s\t%s\t%s\n' "$(date -u +%FT%TZ)" "$(sha)" "$kind" "$res" "$(printf '%s' "${4:-}" | tr '\t\n' '  ')" >>"$ledger"
-    echo "recorded $kind=$res for $(sha | cut -c1-7)"; exit 0 ;;
+    echo "recorded $kind=$res for $(sha | cut -c1-7)"
+    if [ "$kind" = review ] && [ "$res" != ship ]; then
+      n="$(rounds)"
+      echo "review round $n on this branch; a re-review reads only: git diff $(sha | cut -c1-7)..HEAD"
+      [ "$n" -lt 3 ] || echo "round $n without ship: stop patching findings; run the challenge skill on the approach before another round"
+    fi
+    exit 0 ;;
 esac
 
 base=""; [ "${1:-}" = --base ] && base="${2:-}"
 if [ "$(mode)" = yolo ]; then echo "review gate: yolo; nothing to check, PRs go straight to review"; exit 0; fi
-if [ -z "$base" ]; then
-  for ref in origin/HEAD origin/main origin/master main master; do
-    git -C "$FLOW_ROOT" rev-parse -q --verify "$ref" >/dev/null && { base="$(git -C "$FLOW_ROOT" merge-base HEAD "$ref")"; break; }
-  done
-fi
+[ -n "$base" ] || base="$(merge_base)"
 head="$(sha)"; fails=0
 pass() { echo "  ✓ $*"; }
 miss() { echo "  ✗ $*"; fails=$((fails + 1)); }

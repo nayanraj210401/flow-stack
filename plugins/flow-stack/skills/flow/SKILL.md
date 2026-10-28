@@ -66,7 +66,7 @@ The profile's `rigor:` sets the default. The human overrides per task: "quick" m
 | intent interview | ≤ 2 questions | as needed | as needed |
 | blind checks (checker agent) | skip | when a contract changes | always |
 | challenge (advocate agent) | on request, or when the circuit trips | multi-slice features and refactors | every task-folder task |
-| review (reviewer agent) | diff > 300 lines | one reviewer | one per area, in parallel |
+| review (reviewer agent) | Quick, when diff > 300 lines | Standard: one reviewer + vote | Deep: one per lens + vote |
 | impacted feature scenarios | touched features | touched features | every feature |
 | evidence, seal, probe, slice gate | on (bash, 0 tokens) | on | on |
 | trace / reflect | on request | at close | at close |
