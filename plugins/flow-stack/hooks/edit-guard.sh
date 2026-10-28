@@ -4,10 +4,15 @@
 # under an opt-in TDD lock, red edits only tests and green edits only code.
 . "$(dirname "$0")/lib.sh"
 flow_init edit-guard
-[ -n "$FLOW_TASK_DIR" ] || exit 0
 
 file="$(flow_edit_file)"
 [ -n "$file" ] || exit 0
+# Modes are the human's, with or without a task (guard.sh 2b is the shell side).
+case "$file" in
+  "$FLOW_HOME"/auto/*) pre_decide deny "flow guard: \$FLOW_STACK_HOME/auto/ holds the session's mode (--auto, ship, --gha). Only the human's prompt sets it." ;;
+  */.claude/settings*.json|.claude/settings*.json) pre_decide ask "flow guard: writing Claude Code settings can change permissions, hooks, or env (an env block can fake a GitHub runner for --gha), so the human approves." ;;
+esac
+[ -n "$FLOW_TASK_DIR" ] || exit 0
 rel="$(flow_rel "$file")"
 # The repo the file belongs to. In a multi-repo task a file in another task repo (or the
 # task's home .flow/) is judged as that repo's file, not waved through as "outside".

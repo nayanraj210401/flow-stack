@@ -112,6 +112,18 @@ if { has '\.flow/tasks/[^/[:space:]]+/blind' || [ -n "$blind_glob" ] ||
   pre_decide deny "flow guard: blind checks are held out from the builder. Run them only via verify's scripts/blind-run.sh."
 fi
 
+# 2b. Modes are the human's: a write to the auto-mode flags, or to Claude Code settings (whose env block
+# could fake a GitHub runner for --gha), would let the model grant itself a mode. The path must follow the
+# write verb in the same segment, so reading these files stays allowed.
+c2="${cmd//"$FLOW_HOME"/FLOW_HOME}"
+wr='(>|tee|cp|mv|ln|install|dd|truncate|rm|sed[[:space:]]+-i|perl[[:space:]]+-p?i)[^;&|]*'
+if grep -Eq -- "$wr"'(\.flow-stack|FLOW_STACK_HOME\}?|FLOW_HOME\}?)/auto([/"'\''[:space:]]|$)' <<<"$c2"; then
+  pre_decide deny "flow guard: \$FLOW_STACK_HOME/auto/ holds the session's mode (--auto, ship, --gha). Only the human's prompt sets it."
+fi
+if grep -Eq -- "$wr"'\.claude/settings[^/[:space:]"'\'']*\.json' <<<"$cmd"; then
+  pre_decide ask "flow guard: writing Claude Code settings can change permissions, hooks, or env (an env block can fake a GitHub runner for --gha), so the human approves."
+fi
+
 # 3. Writes to sealed checks via the shell.
 if [ -n "$FLOW_TASK_DIR" ] && [ -f "$FLOW_TASK_DIR/SEALS" ]; then
   if has 'seal\.sh[[:space:]]+(reseal|rm)'; then
