@@ -113,14 +113,18 @@ if { has '\.flow/tasks/[^/[:space:]]+/blind' || [ -n "$blind_glob" ] ||
 fi
 
 # 2b. Modes are the human's: a write to the auto-mode flags, or to Claude Code settings (whose env block
-# could fake a GitHub runner for --gha), would let the model grant itself a mode. The path must follow the
-# write verb in the same segment, so reading these files stays allowed.
-c2="${cmd//"$FLOW_HOME"/FLOW_HOME}"
-wr='(>|tee|cp|mv|ln|install|dd|truncate|rm|sed[[:space:]]+-i|perl[[:space:]]+-p?i)[^;&|]*'
-if grep -Eq -- "$wr"'(\.flow-stack|FLOW_STACK_HOME\}?|FLOW_HOME\}?)/auto([/"'\''[:space:]]|$)' <<<"$c2"; then
+# could fake a GitHub runner for --gha), would let the model grant itself a mode. The path must follow a
+# write verb (a whole word, or a redirect) in the same segment, so reading these files stays allowed.
+# Interpreter one-liners (python -c, node -e) are a known gap; --gha still re-checks the runner itself.
+cfg="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"; c2="${cmd//"$FLOW_HOME"/FLOW_HOME}"; c2="${c2//"$cfg"/CLAUDE_CONFIG_DIR}"
+wr='(>|(^|[[:space:];&|(])(tee|cp|mv|ln|install|dd|truncate|rm|sponge|sed[[:space:]]+-[A-Za-z]*i|perl[[:space:]]+-[A-Za-z]*i)([[:space:]]|$))[^;&|]*'
+home='(\.flow-stack|FLOW_STACK_HOME\}?|FLOW_HOME\}?)'; conf='(\.claude|CLAUDE_CONFIG_DIR\}?)'
+end='([/"'\''[:space:]]|$)'; sett='settings[^/[:space:]"'\'']*\.json'
+cdin() { grep -Eq -- "(^|[;&|(][[:space:]]*)cd[[:space:]]+[^;&|]*$1" <<<"$c2"; }
+if grep -Eq -- "$wr$home/auto$end" <<<"$c2" || { cdin "$home" && grep -Eq -- "$wr[\"']?(\./)?auto$end" <<<"$c2"; }; then
   pre_decide deny "flow guard: \$FLOW_STACK_HOME/auto/ holds the session's mode (--auto, ship, --gha). Only the human's prompt sets it."
 fi
-if grep -Eq -- "$wr"'\.claude/settings[^/[:space:]"'\'']*\.json' <<<"$cmd"; then
+if grep -Eq -- "$wr$conf/$sett" <<<"$c2" || { cdin "$conf" && grep -Eq -- "$wr[\"']?(\./)?$sett" <<<"$c2"; }; then
   pre_decide ask "flow guard: writing Claude Code settings can change permissions, hooks, or env (an env block can fake a GitHub runner for --gha), so the human approves."
 fi
 

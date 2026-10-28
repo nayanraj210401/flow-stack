@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # mode-spoof.test.sh: the model can't fake a mode. Writes to the auto-mode flags ($FLOW_STACK_HOME/auto/) are
 # denied from Bash and Edit/Write; writes to Claude Code settings (where an env block could fake a GitHub runner
-# for --gha) need the human. Reading them stays allowed. Runs the working tree's hooks.
+# for --gha) need the human. Reading them stays allowed. Interpreter one-liners (python -c, node -e) are a
+# known gap: a regex can't see their writes, and --gha itself re-checks the runner. Runs the working tree's hooks.
 set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)"
 FAILS=0
@@ -25,22 +26,34 @@ bash_is() { local got; got="$(decide guard.sh "$(jq -nc --arg c "$2" '{command:$
 edit_is() { local got; got="$(decide edit-guard.sh "$(jq -nc --arg f "$2" '{file_path:$f,content:"x"}')" Write)"; [ "$got" = "$1" ] && ok "$1: Write $2" || bad "Write $2 → $got, want $1"; }
 
 echo "-- auto-mode flags: writes denied"
-bash_is deny "echo 'ship gha' > $FLOW_STACK_HOME/auto/s"
-bash_is deny 'printf gha >~/.flow-stack/auto/s'
-bash_is deny 'echo gha | tee "$FLOW_STACK_HOME/auto/s"'
+bash_is deny "echo ship > $FLOW_STACK_HOME/auto/s"
+bash_is deny 'printf ship >~/.flow-stack/auto/s'
+bash_is deny 'echo ship | tee "$FLOW_STACK_HOME/auto/s"'
+bash_is deny 'cd ~/.flow-stack && echo ship > auto/s'
 bash_is deny "cp /tmp/x $FLOW_STACK_HOME/auto/s"
 edit_is deny "$FLOW_STACK_HOME/auto/s"
+edit_is deny "$FLOW_STACK_HOME//auto/s"
+edit_is deny "$FLOW_STACK_HOME/x/../auto/s"
 echo "-- Claude Code settings: writes ask"
 bash_is ask "jq '.env.GITHUB_ACTIONS=\"true\"' x > .claude/settings.local.json"
 bash_is ask "sed -i '' 's/a/b/' .claude/settings.json"
 bash_is ask 'cp /tmp/s.json ~/.claude/settings.json'
+bash_is ask 'cd .claude && echo x > settings.local.json'
+bash_is ask 'echo x > $CLAUDE_CONFIG_DIR/settings.json'
 edit_is ask "$SB/repo/.claude/settings.local.json"
 edit_is ask "$HOME/.claude/settings.json"
+edit_is ask "$CLAUDE_CONFIG_DIR/settings.json"
+edit_is ask "$SB/repo/.claude/x/../settings.json"
 echo "-- reads and unrelated writes: allow"
 bash_is allow "cat $FLOW_STACK_HOME/auto/s"
 bash_is allow 'ls ~/.flow-stack/auto'
 bash_is allow 'jq .env .claude/settings.json'
 bash_is allow 'echo hi > notes.txt'
+bash_is allow 'git add .claude/settings.json'
+bash_is allow 'git log --format=%H -- .claude/settings.json'
+bash_is allow 'grep -n addDirectories ~/.claude/settings.json'
+bash_is allow 'rg -n ddd ~/.flow-stack/auto/s'
+bash_is allow 'cd ~/.flow-stack && cat auto/s'
 edit_is allow "$SB/repo/notes.txt"
 edit_is allow "$SB/repo/.claude/agents/x.md"
 

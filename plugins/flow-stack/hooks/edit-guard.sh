@@ -8,9 +8,9 @@ flow_init edit-guard
 file="$(flow_edit_file)"
 [ -n "$file" ] || exit 0
 # Modes are the human's, with or without a task (guard.sh 2b is the shell side).
-case "$file" in
-  "$FLOW_HOME"/auto/*) pre_decide deny "flow guard: \$FLOW_STACK_HOME/auto/ holds the session's mode (--auto, ship, --gha). Only the human's prompt sets it." ;;
-  */.claude/settings*.json|.claude/settings*.json) pre_decide ask "flow guard: writing Claude Code settings can change permissions, hooks, or env (an env block can fake a GitHub runner for --gha), so the human approves." ;;
+case "$(flow_norm "$file")" in
+  "$(flow_norm "$FLOW_HOME")"/auto/*) pre_decide deny "flow guard: \$FLOW_STACK_HOME/auto/ holds the session's mode (--auto, ship, --gha). Only the human's prompt sets it." ;;
+  */.claude/settings*.json|.claude/settings*.json|"${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/settings*.json) pre_decide ask "flow guard: writing Claude Code settings can change permissions, hooks, or env (an env block can fake a GitHub runner for --gha), so the human approves." ;;
 esac
 [ -n "$FLOW_TASK_DIR" ] || exit 0
 rel="$(flow_rel "$file")"
