@@ -12,13 +12,21 @@ grep -Eq '<(agent-message|task-notification)[[:space:]>]' <<<"$prompt" && prompt
 if flag="$(flow_auto_flag)"; then
   if grep -Eq '(^|[[:space:]])--no-auto([[:space:],.;:!?)]|$)' <<<"$prompt"; then
     rm -f "$flag"; echo "[flow auto] off: the human is back; gates ask again."
+  elif grep -Eq '(^|[[:space:]])--gha([[:space:],.;:!?)]|$)' <<<"$prompt" && flow_on_runner; then
+    mkdir -p "${flag%/*}"; echo gha >"$flag"
   elif grep -Eq '(^|[[:space:]])--auto[[:space:]]+ship([[:space:],.;:!?)]|$)' <<<"$prompt"; then
     mkdir -p "${flag%/*}"; echo ship >"$flag"
   elif grep -Eq '(^|[[:space:]])--auto([[:space:],.;:!?)]|$)' <<<"$prompt"; then
     mkdir -p "${flag%/*}"; : >"$flag"
     find "${flag%/*}" -type f -mtime +7 -delete 2>/dev/null || true
   fi
-  if flow_auto_ship; then
+  if grep -Eq '(^|[[:space:]])--gha([[:space:],.;:!?)]|$)' <<<"$prompt" && ! flow_on_runner; then
+    [ -f "$flag" ] || { mkdir -p "${flag%/*}"; : >"$flag"; }
+    echo "[flow gha] REFUSED: --gha works only on a GitHub-hosted Actions runner, and this is not one. Running as the other flags in the prompt say (plain --auto if none)."
+  fi
+  if flow_auto_gha; then
+    echo "[flow auto gha] a GitHub Actions run: nobody can answer a gate and the disk is thrown away, so the owner authorized this routine to finish its work (--gha). Same as --auto ship (push the current branch, not main, by name; gh pr create/ready; gh pr merge of the current branch's PR), plus gh release create <tag>, all only once review/scripts/ready.sh has stamped the current HEAD. Still never: force-push, the default branch, other refs or PRs, publish, deploy, SQL, gates.md. Whatever you queue in GATES.md is shown in the run summary. Run flow's Autonomous mode."
+  elif flow_auto_ship; then
     echo "[flow auto ship] the human is away and granted shipping (--auto ship; --no-auto ends it). Never wait on them: run flow's Autonomous mode. Pushing the current branch (not main) by name, gh pr create/ready (body via --body-file or --fill), and gh pr merge of the current branch's PR proceed only once review/scripts/ready.sh has stamped the current HEAD; anything else irreversible (deploy, publish, .flow/gates.md) is queued in GATES.md. Notify and hand off at the end."
   elif [ -f "$flag" ]; then
     echo "[flow auto] the human is away (--auto; --no-auto ends it). Never wait on them: run flow's Autonomous mode. Reversible gates, including intent and seal approval: take your recommended option and log it with task.sh decide agent. Irreversible actions (push, PR, merge, deploy, publish, .flow/gates.md) never happen: queue them in GATES.md. The hooks catch push, PR, publish, and gates.md; a deploy script is on you. Notify and hand off at the end."

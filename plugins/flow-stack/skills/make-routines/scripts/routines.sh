@@ -97,6 +97,11 @@ render_one() { # render_one <name>: the workflow on stdout
   # routine that pushes needs it (PRs opened with github.token don't trigger CI); the rest stay inside `grants`.
   local token='github_token: ${{ github.token }}' mkt="$market" clone=""
   if [[ " $grants " == *" contents "* ]]; then mode="/flow-stack:flow --auto ship" token=""; fi
+  case "$(field "$f" gha false)" in
+    true) [[ " $grants " == *" contents "* ]] || die "$f: gha: true needs contents in grants (--gha adds releases to the ship set)"; mode="/flow-stack:flow --auto ship --gha" ;;
+    false) ;;
+    *) die "$f: gha must be true or false" ;;
+  esac
   # The action accepts only marketplace URLs ending in .git, so a pin is a clone at the ref, added by path
   if [ -n "$ref" ]; then
     clone="          git clone -q --depth 1 --branch '$ref' $market \"\$RUNNER_TEMP/flow-stack-plugin\""
