@@ -1,0 +1,24 @@
+# The script tests on every PR: the check the auto-merge routine and branch protection require.
+# Read-only token and no secrets, so a PR's own test code runs here without anything to steal.
+name: test
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: script tests
+        run: |
+          git config --global user.email ci@example.com
+          git config --global user.name ci
+          fail=0
+          for t in $(git ls-files 'plugins/**/*.test.sh' | grep -v '/herdr/'); do
+            if out="$(bash "$t" 2>&1)"; then echo "ok   $t"; else echo "FAIL $t"; echo "$out" | tail -20; fail=1; fi
+          done
+          exit "$fail"
