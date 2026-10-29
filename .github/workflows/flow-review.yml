@@ -33,6 +33,10 @@ jobs:
       # A fresh runner installs the plugin on every run: the marketplace's default branch, or the clone pinned above
       - uses: anthropics/claude-code-action@v1
         id: claude
+        # The action's SDK session ends when the agent ends its turn, so a subagent left running in the background
+        # (the reviewer, a worker) is dropped and its result never used. Foreground subagents return in the same turn.
+        env:
+          CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1"
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ github.token }}
