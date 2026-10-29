@@ -57,7 +57,7 @@ jobs:
                 "error: \(.content | tostring | gsub("\n"; " ") | .[:160])"),
               (select(.type == "result") | "result: \(.subtype) turns=\(.num_turns) cost=$\(.total_cost_usd) denied=\(.permission_denials_count // (.permission_denials | length))")' "$RUN_FILE" |
               perl -pe 's/(sk-[A-Za-z0-9_-]{4}|gh[opsu]_|github_pat_)[A-Za-z0-9_]{8,}/$1REDACTED/g'
-            echo '```'; } >>"$GITHUB_STEP_SUMMARY"
+            echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
       # The runner's disk is thrown away, so show whatever the run queued in GATES.md before it is lost
       - name: Open gates
         if: always()
