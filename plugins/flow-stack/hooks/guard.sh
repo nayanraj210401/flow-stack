@@ -49,9 +49,13 @@ while IFS= read -r seg; do
   fi
 done < <(grep -Eo "(^|[;&|(\`[:space:]]|(-c|eval)[[:space:]]+[\"'])rm[[:space:]][^;&|)\`]*" <<<"$lit" || true)
 gopts='git([[:space:]]+(-[cC][[:space:]]+[^[:space:];&|]+|-[^[:space:];&|]+))*'
-force_push="" force_main=""
+force_push="" force_main="" wipe_push=""
 while IFS= read -r seg; do
   rest="$(sed -E "s/^$gopts[[:space:]]+push//" <<<"$seg")"
+  grep -Eq '(^|[[:space:]])--mirror([[:space:]]|$)' <<<"$rest" && wipe_push=1
+  grep -Eq '[[:space:]]:["'"'"']?(refs/heads/)?(main|master)["'"'"']?([[:space:]]|$)' <<<"$rest" && wipe_push=1
+  grep -Eq '(^|[[:space:]])(--delete|-d)([[:space:]]|$)' <<<"$rest" &&
+    grep -Eq '[[:space:]]["'"'"']?(refs/heads/)?(main|master)["'"'"']?([[:space:]]|$)' <<<"$rest" && wipe_push=1
   grep -Eq '(^|[[:space:]])(--force|-[A-Za-z]*f[A-Za-z]*([[:space:]]|$))|(^|[[:space:]:])\+[^[:space:]]' <<<"$rest" || continue
   force_push=1
   grep -Eq '([[:space:]:+]["'"'"']?|refs/heads/)(main|master)["'"'"']?([[:space:]]|$)' <<<"$rest" && force_main=1
@@ -356,6 +360,9 @@ fi
 # 5. Built-in escalations: reversible only with effort, so the human decides.
 if [ -n "$force_push" ]; then
   pre_decide ask "flow guard: force-push rewrites remote history."
+fi
+if [ -n "$wipe_push" ]; then
+  pre_decide ask "flow guard: this push deletes remote main/master or mirrors every ref."
 fi
 if has 'git[[:space:]]+(reset[[:space:]]+--hard|clean[[:space:]]+-[a-z]*f)'; then
   pre_decide ask "flow guard: this discards uncommitted work."
