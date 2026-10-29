@@ -29,16 +29,18 @@ The default branch must require the `tests` check, by classic protection or by a
 - in that timeline, no `committed`, `head_ref_force_pushed`, or `head_ref_restored` event comes after that `labeled` event. Commit dates are set by whoever commits, so order the events by their position in the timeline, never by a commit's date. If one came after, remove the `auto-merge` label and comment "new commits since auto-merge was labelled; re-label after you look at them";
 - `gh pr checks <n> --required` shows `tests` and every required check passed (pending means skip this run, not block);
 - `gh pr view <n> --json mergeable` is `MERGEABLE`;
-- `additions + deletions` is at most 400;
-- no changed path is part of the safety machinery. These PRs are the human's to merge, however small; label `auto-merge-blocked` and comment which path:
+- `additions + deletions` is at most 400, and the PR changes fewer than 100 files (the `files` list stops at 100, so a bigger PR can't be path-checked here);
+- no changed path is part of the safety machinery (the list from `files` is a first pass; step 2 checks the full list again). These PRs are the human's to merge, however small; label `auto-merge-blocked` and comment which path:
   - `.github/`, any `.flow/` directory (gitignored, so a PR that adds one is forcing it in: `ready.sh` would run its commands and read its hook switches), any `CLAUDE.md`, `AGENTS.md`, `.mcp.json`, or `settings*.json` at any depth;
   - any `.claude-plugin/` directory, `plugins/flow-stack/hooks/`, `plugins/flow-stack/agents/`, `plugins/flow-stack/templates/`;
+  - `README.md` and `plugins/flow-stack/skills/principles/`: the rules the review and self-heal routines read;
   - `plugins/flow-stack/skills/` `flow/`, `review/`, `verify/`, `seal/`, `gate/`, `make-gates/`, `make-routines/`;
   - any `plugins/flow-stack/skills/*/scripts/` file: hooks and the ready bar run these scripts (`setup/scripts/inventory.sh` at every session start, `feature-map/scripts/features.sh` from `ready.sh`), so a merged change there runs inside every later routine that holds write tokens.
 
 ## 2. Security review (per candidate)
 
 1. `gh pr checkout <n>`, then confirm `git rev-parse HEAD` equals the PR's `headRefOid`.
+   Check every changed path again against the safety list in step 1, from git rather than the API: `git diff --name-only --no-renames origin/<base>...HEAD`. `--no-renames` lists both sides of a rename, so moving the guard out of `hooks/` is caught. Any hit: label `auto-merge-blocked`, comment the path, move on.
 2. Mechanical scan of `git diff origin/<base>...HEAD`, before any model judgment:
    - invisible or direction-changing Unicode: `git diff origin/<base>...HEAD | LC_ALL=C.UTF-8 grep -nP '[\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2060}-\x{2064}\x{2066}-\x{2069}\x{FEFF}]'`
    - long base64 or hex blobs, and new HTML comments in Markdown (`<!--`): read each one;
