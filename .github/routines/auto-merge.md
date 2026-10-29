@@ -31,7 +31,7 @@ The default branch must require the `tests` check, by classic protection or by a
 - `gh pr view <n> --json mergeable` is `MERGEABLE`;
 - `additions + deletions` is at most 400, and the PR changes fewer than 100 files (the `files` list stops at 100, so a bigger PR can't be path-checked here);
 - no changed path is part of the safety machinery (the list from `files` is a first pass; step 2 checks the full list again). These PRs are the human's to merge, however small; label `auto-merge-blocked` and comment which path:
-  - `.github/`, any `.flow/` directory (gitignored, so a PR that adds one is forcing it in: `ready.sh` would run its commands and read its hook switches), any `CLAUDE.md`, `AGENTS.md`, `.mcp.json`, or `settings*.json` at any depth;
+  - `.github/`, any `.flow/` directory (gitignored, so a PR that adds one is forcing it in: `ready.sh` would run its commands and read its hook switches), any `.claude/` directory (gitignored too: forced-in skills, agents or commands would load into every later run), any `CLAUDE.md`, `AGENTS.md`, `.mcp.json`, or `settings*.json` at any depth;
   - any `.claude-plugin/` directory, `plugins/flow-stack/hooks/`, `plugins/flow-stack/agents/`, `plugins/flow-stack/templates/`;
   - `README.md` and `plugins/flow-stack/skills/principles/`: the rules the review and self-heal routines read;
   - `plugins/flow-stack/skills/` `flow/`, `review/`, `verify/`, `seal/`, `gate/`, `make-gates/`, `make-routines/`;
