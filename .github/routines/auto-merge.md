@@ -33,7 +33,8 @@ The default branch must require the `tests` check, by classic protection or by a
 - no changed path is part of the safety machinery. These PRs are the human's to merge, however small; label `auto-merge-blocked` and comment which path:
   - `.github/`, any `.flow/` directory (gitignored, so a PR that adds one is forcing it in: `ready.sh` would run its commands and read its hook switches), any `CLAUDE.md`, `AGENTS.md`, `.mcp.json`, or `settings*.json` at any depth;
   - any `.claude-plugin/` directory, `plugins/flow-stack/hooks/`, `plugins/flow-stack/agents/`, `plugins/flow-stack/templates/`;
-  - `plugins/flow-stack/skills/` `flow/`, `review/`, `verify/`, `seal/`, `gate/`, `make-gates/`, `make-routines/`.
+  - `plugins/flow-stack/skills/` `flow/`, `review/`, `verify/`, `seal/`, `gate/`, `make-gates/`, `make-routines/`;
+  - any `plugins/flow-stack/skills/*/scripts/` file: hooks and the ready bar run these scripts (`setup/scripts/inventory.sh` at every session start, `feature-map/scripts/features.sh` from `ready.sh`), so a merged change there runs inside every later routine that holds write tokens.
 
 ## 2. Security review (per candidate)
 
