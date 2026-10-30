@@ -363,7 +363,8 @@ fi
 if has '(drop[[:space:]]+(table|database|schema)|truncate[[:space:]]+table)'; then
   pre_decide ask "flow guard: destructive SQL."
 fi
-if has '(curl|wget)[^|]*\|[[:space:]]*(sudo[[:space:]]+)?(ba|z)?sh'; then
+# The shell after the pipe may sit behind sudo/doas/env (with flags or VAR=val) or a path.
+if has '(curl|wget)[^|]*\|[[:space:]]*(([^|;&[:space:]]*/)?(sudo|doas|env)([[:space:]]+[^|;&[:space:]]+)*[[:space:]]+)?([^|;&[:space:]]*/)?(ba|z|da|k|mk|c|tc|fi|ya)?sh([[:space:];&|)]|$)'; then
   pre_decide ask "flow guard: piping a download into a shell."
 fi
 
