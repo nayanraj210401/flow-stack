@@ -93,4 +93,15 @@ expect deny "${RUNNER[@]}" -- 'gh release create v1.0.0 --target feat/x --genera
 expect allow "${RUNNER[@]}" -- 'git push origin feat/x'
 prompt "${RUNNER[@]}" -- '--no-auto' >/dev/null; [ ! -f "$FLOW_STACK_HOME/auto/s" ] && ok "--no-auto ends it" || bad "flag remains"
 
+echo "-- plain --auto, unstamped: a PR may go back to draft, nothing else"
+prompt -- '--auto' >/dev/null; printf '' >.flow/ready.tsv
+expect allow -- 'gh pr ready 12 --undo'
+expect allow -- 'gh pr ready --undo 12'
+expect allow -- 'gh pr ready --undo'
+expect deny -- 'gh pr ready 12'
+expect deny -- 'gh pr ready 12 --undo; git push origin feat/x'
+expect deny -- 'gh pr ready 12 --undo && gh pr merge --squash'
+expect deny -- $'gh pr ready 12 --undo\ngh pr ready 13'
+prompt -- '--no-auto' >/dev/null
+
 [ "$FAILS" = 0 ] && echo "gha.test.sh: pass" || { echo "gha.test.sh: $FAILS failed"; exit 1; }
