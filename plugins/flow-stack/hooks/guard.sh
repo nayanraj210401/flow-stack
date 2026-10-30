@@ -357,7 +357,16 @@ fi
 if [ -n "$force_push" ]; then
   pre_decide ask "flow guard: force-push rewrites remote history."
 fi
-if has 'git[[:space:]]+(reset[[:space:]]+--hard|clean[[:space:]]+-[a-z]*f)'; then
+# Same reading of git's global options and flag spellings as the force-push guard above.
+discard=""
+while IFS= read -r seg; do
+  rest="$(sed -E "s/^$gopts[[:space:]]+//" <<<"$seg")"
+  case "$rest" in
+    reset*) grep -Eq '(^|[[:space:]])--hard([[:space:]]|$)' <<<"$rest" && discard=1 ;;
+    clean*) grep -Eq '(^|[[:space:]])(--force|-[A-Za-z]*f[A-Za-z]*)([[:space:]]|$)' <<<"$rest" && discard=1 ;;
+  esac
+done < <(grep -Eio "$gopts[[:space:]]+(reset|clean)([[:space:]][^;&|)\`]*)?" <<<"$cmd" || true)
+if [ -n "$discard" ]; then
   pre_decide ask "flow guard: this discards uncommitted work."
 fi
 if has '(drop[[:space:]]+(table|database|schema)|truncate[[:space:]]+table)'; then
