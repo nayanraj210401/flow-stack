@@ -8,6 +8,8 @@
 #                                     REPOS lists name<TAB>path, and every other repo's ACTIVE
 #                                     points home: "@<home-path>:<slug>"
 #   task.sh repos                     the active task's repos (name<TAB>path)
+#   task.sh route "<request>"         which repo a request with no repo named belongs to (profile # Repos what:,
+#                                     feature maps' owns:): repo<TAB>name<TAB>path | workspace<TAB>name | ask<TAB>question
 #   task.sh active                    print the active slug (empty if none)
 #   task.sh dir                       print the active task dir
 #   task.sh switch <slug> [--take]    make another task active here. Your own task active in another
@@ -72,6 +74,42 @@ repo_field() {
 ws_repos() {
   awk -v n="## $1" '/^# /{on=($0=="# Workspaces")} on && /^## /{cur=$0}
     on && cur==n && /^- repos:/ {sub(/^- repos:[[:space:]]*/,""); gsub(/[[:space:]]*,[[:space:]]*/,"\n"); print; exit}' "$profile" 2>/dev/null || true
+}
+section_names() { awk -v s="# $1" '/^# /{on=($0==s)} on && /^## /{print substr($0,4)}' "$profile" 2>/dev/null || true; }
+# words: lowercase words of 3+ letters, crudely stemmed, minus filler; one per line, unique
+words() {
+  tr -cs '[:alnum:]' '\n' | tr '[:upper:]' '[:lower:]' | sed -E 's/(ing|ed|s)$//' |
+    awk 'length >= 3 && !/^(the|and|for|with|from|that|this|into|add|make|fix|update|new|our|all|src|lib|test|app)$/' | sort -u
+}
+# route <request>: which repo a request with no repo named belongs to. Each repo's vocabulary is its
+# name, its what:, and its feature map's title: and owns: lines; only words unique to one repo count.
+# Prints one line: repo<TAB>name<TAB>path · workspace<TAB>name · ask<TAB>question
+route() {
+  local req="$1" tmp n p hit=() ws best="" bn=0 k cands=""
+  tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' RETURN
+  while IFS= read -r n; do
+    p="$(repo_field "$n" path)"; p="${p/#\~/$HOME}"
+    { echo "$n $(repo_field "$n" what)"; grep -hE '^(title|owns):' "$p"/.flow/features/*.md 2>/dev/null || true; } | words >"$tmp/r.$n"
+  done < <(section_names Repos)
+  cat "$tmp"/r.* 2>/dev/null | sort | uniq -u >"$tmp/unique"
+  printf '%s' "$req" | words >"$tmp/req"
+  while IFS= read -r n; do
+    [ -n "$(comm -12 "$tmp/req" "$tmp/r.$n" | comm -12 - "$tmp/unique")" ] && hit+=("$n")
+  done < <(section_names Repos)
+  if [ ${#hit[@]} -eq 1 ]; then
+    p="$(repo_field "${hit[0]}" path)"; printf 'repo\t%s\t%s\n' "${hit[0]}" "${p/#\~/$HOME}"; return
+  fi
+  if [ ${#hit[@]} -gt 1 ]; then
+    while IFS= read -r ws; do
+      k="$(ws_repos "$ws")"
+      for n in "${hit[@]}"; do grep -qxF "$n" <<<"$k" || continue 2; done
+      [ -n "$best" ] && [ "$(wc -l <<<"$k")" -ge "$bn" ] || { best="$ws"; bn="$(wc -l <<<"$k")"; }
+    done < <(section_names Workspaces)
+    [ -z "$best" ] || { printf 'workspace\t%s\n' "$best"; return; }
+  fi
+  [ ${#hit[@]} -gt 0 ] || while IFS= read -r n; do hit+=("$n"); done < <(section_names Repos)
+  for n in ${hit[@]+"${hit[@]}"}; do cands="$cands${cands:+; }$n ($(repo_field "$n" what))"; done
+  printf 'ask\tWhich repo is "%s" for? %s. Or name a # Workspaces entry, or several repos.\n' "$req" "${cands:-no # Repos in $profile}"
 }
 # owned_by <pid>: how a refusal names a live owner, so the agent can message it (SendMessage).
 owned_by() { printf "session %s (pid %s; SendMessage reaches it by that name)" "$(flow_owner_name "$1")" "$1"; }
@@ -233,6 +271,7 @@ case "$cmd" in
     s="${1:-}"; [[ "$s" =~ ^[a-z0-9][a-z0-9-]*$ ]] && [ -n "$gd" ] && [ -d "$flow/tasks/$s" ] || die "usage: task.sh join <slug> (in a worktree; the task must exist)"
     [ ! -s "$gd/flow-active" ] || die "this worktree leads '$(head -n1 "$gd/flow-active")'; close it before joining another task"
     printf '%s\n' "$s" >"$gd/flow-lane"; echo "joined: $s" ;;
+  route) [ -n "${1:-}" ] || die 'usage: task.sh route "<request>"'; route "$1" ;;
   active) active ;;
   dir) active_dir ;;
   repos)
