@@ -1,0 +1,8 @@
+# Driver plumbing (not a feature)
+.claude/skills/verify-flow-stack/scripts/lib.sh
+.claude/skills/verify-flow-stack/scripts/up.sh
+.claude/skills/verify-flow-stack/scripts/down.sh
+# Unit tests (driven by their own .test.sh, not features)
+plugins/flow-stack/hooks/*.test.sh
+# Landing page
+docs/index.html
