@@ -8,7 +8,7 @@
 #                                                     change a scheduled routine's cron (in its timezone) and re-render it
 #   routines.sh render                                .github/routines/*.md → .github/workflows/flow-<name>.yml
 #   routines.sh check                                 every routine's workflow matches a fresh render; no orphans
-# Frontmatter: trigger (schedule | pull_request), cron and timezone (schedule only; an IANA zone, default UTC), timeout (minutes), labels, auth
+# Frontmatter: trigger (schedule | pull_request | mention: an @claude comment from a user with write access), cron and timezone (schedule only; an IANA zone, default UTC), timeout (minutes), labels, auth
 # (oauth | api-key), grants (token scopes it may write: issues pull-requests contents; the rest are read),
 # flow_ref (pin the plugin to a tag or branch; empty = the default branch, fresh each run). The body is the prompt.
 set -euo pipefail
@@ -60,7 +60,7 @@ set_schedule() { # set_schedule <name> <cron> <tz or "">
 }
 
 render_one() { # render_one <name>: the workflow on stdout
-  local f="$dir/$1.md" auth trigger cron tz timeout labels grants ref g s on="" iff="" group="" cancel=false ctx="" mode="--auto"
+  local f="$dir/$1.md" auth trigger cron tz timeout labels grants ref g s on="" iff="" group="" cancel=false ctx="" guard="" mode="--auto"
   case "$(field "$f" auth oauth)" in
     oauth) auth='claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}' ;;
     api-key) auth='anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}' ;;
@@ -83,7 +83,20 @@ render_one() { # render_one <name>: the workflow on stdout
       iff="    if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'"
       group='-${{ github.event.pull_request.number }}' cancel=true
       ctx=' The pull request is #${{ github.event.pull_request.number }}.' ;;
-    *) die "$f: trigger must be schedule or pull_request" ;;
+    mention)
+      on=$'  issue_comment:\n    types: [created]\n  pull_request_review_comment:\n    types: [created]'
+      # author_association drops most strangers for free; the step below asks GitHub for the commenter's real permission
+      iff="    if: contains(github.event.comment.body, '@claude') && contains(fromJSON('[\"OWNER\",\"MEMBER\",\"COLLABORATOR\"]'), github.event.comment.author_association)"
+      group='-${{ github.event.issue.number || github.event.pull_request.number }}'
+      ctx=' The request is comment ${{ github.event.comment.id }} (${{ github.event_name }}) on #${{ github.event.issue.number || github.event.pull_request.number }}.'
+      # a GitHub login is letters, digits and dashes, so it can't break out of the quotes
+      guard='          COMMENTER='"'"'${{ github.event.comment.user.login }}'"'"
+      guard+=$'\n''          perm="$(gh api "repos/$GITHUB_REPOSITORY/collaborators/$COMMENTER/permission" --jq .permission)" || perm=none'
+      guard+=$'\n''          case "$perm" in admin|maintain|write) ;; *) echo "refused: $COMMENTER has $perm access, not write" | tee -a "$GITHUB_STEP_SUMMARY"; exit 1 ;; esac'
+      # the run holds write tokens, so a fork PR's code must never be checked out: refuse it here, not in the prompt
+      guard+=$'\n''          PR='"'"'${{ github.event.pull_request.number || (github.event.issue.pull_request && github.event.issue.number) || '"''"' }}'"'"
+      guard+=$'\n''          [ -z "$PR" ] || [ "$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" --jq .head.repo.full_name)" = "$GITHUB_REPOSITORY" ] || { echo "refused: #$PR is from a fork or unreadable; a maintainer takes it over" | tee -a "$GITHUB_STEP_SUMMARY"; exit 1; }' ;;
+    *) die "$f: trigger must be schedule, pull_request, or mention" ;;
   esac
   [[ "$timeout" =~ ^[0-9]+$ ]] || die "$f: timeout must be whole minutes, got '$timeout'"
   [[ "$labels" =~ ^([a-z0-9:._-]+( [a-z0-9:._-]+)*)?$ ]] || die "$f: labels are space-separated, no quotes, got '$labels'"
@@ -109,7 +122,7 @@ render_one() { # render_one <name>: the workflow on stdout
     mkt='${{ runner.temp }}/flow-stack-plugin'
   fi
   R_NAME="$1" R_ON="$on" R_IF="$iff" R_GROUP="$group" R_CANCEL="$cancel" R_TIMEOUT="$timeout" R_LABELS="$labels" \
-  R_AUTH="$auth" R_TOKEN="$token" R_MARKET="$mkt" R_CLONE="$clone" R_MODE="$mode" R_CTX="$ctx" \
+  R_AUTH="$auth" R_TOKEN="$token" R_MARKET="$mkt" R_SETUP="${guard:+$guard${clone:+$'\n'}}$clone" R_MODE="$mode" R_CTX="$ctx" \
     perl -pe 's/\@([A-Za-z_]+)\@/exists $ENV{"R_$1"} ? $ENV{"R_$1"} : die "unknown placeholder $1\n"/ge' "$tpl/workflow.yml"
 }
 
