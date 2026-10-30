@@ -13,10 +13,10 @@ permissions:
   contents: read
   issues: write
   pull-requests: read
+  checks: read
   id-token: write
 jobs:
   run:
-
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -31,7 +31,6 @@ jobs:
           cp .github/routines/profile.md "$RUNNER_TEMP/flow-stack/profile.md"
           echo "FLOW_STACK_HOME=$RUNNER_TEMP/flow-stack" >>"$GITHUB_ENV"
           for l in self-create reproducible; do gh label create "$l" --force >/dev/null; done
-
       # A fresh runner installs the plugin on every run: the marketplace's default branch, or the clone pinned above
       - uses: anthropics/claude-code-action@v1
         id: claude

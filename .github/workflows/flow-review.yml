@@ -11,6 +11,7 @@ permissions:
   contents: read
   issues: read
   pull-requests: write
+  checks: read
   id-token: write
 jobs:
   run:
@@ -29,10 +30,21 @@ jobs:
           cp .github/routines/profile.md "$RUNNER_TEMP/flow-stack/profile.md"
           echo "FLOW_STACK_HOME=$RUNNER_TEMP/flow-stack" >>"$GITHUB_ENV"
           for l in ; do gh label create "$l" --force >/dev/null; done
-
+      - name: flow/ready
+        id: stamp
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          n="$(gh api "repos/$GITHUB_REPOSITORY/commits/$SHA/check-runs?check_name=flow/ready" \
+            --jq '[.check_runs[] | select(.app.slug == "github-actions" and .conclusion == "success")] | length' 2>/dev/null || true)"
+          [ "${n:-0}" -gt 0 ] 2>/dev/null || exit 0
+          echo skip=true >>"$GITHUB_OUTPUT"
+          echo "### ${SHA:0:7} has a passing flow/ready check: it was reviewed when it was stamped" >>"$GITHUB_STEP_SUMMARY"
       # A fresh runner installs the plugin on every run: the marketplace's default branch, or the clone pinned above
       - uses: anthropics/claude-code-action@v1
         id: claude
+        if: steps.stamp.outputs.skip != 'true'
         # The action's SDK session ends when the agent ends its turn, so a subagent left running in the background
         # (the reviewer, a worker) is dropped and its result never used. Foreground subagents return in the same turn.
         env:

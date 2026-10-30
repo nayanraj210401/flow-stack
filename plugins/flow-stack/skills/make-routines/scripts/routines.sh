@@ -59,8 +59,53 @@ set_schedule() { # set_schedule <name> <cron> <tz or "">
   [ -z "$3" ] || set_key "$1" timezone "$3"
 }
 
+# ready.sh's stamp lives in .flow/ready.tsv on a runner that is thrown away. A routine that pushes carries it to the
+# open self-heal PR whose head it stamped, as a flow/ready check run from this repo's Actions (a PR body can be
+# forged; a check run on the SHA can't, without write access), then marks that draft ready. Events made with
+# github.token start no workflows, so the review routine isn't triggered for a commit that was just reviewed.
+stamp_step() {
+  cat <<'EOF'
+      # ready.sh's stamp is on this runner's disk, which is thrown away: carry it to the self-heal PR it stamped
+      - name: flow/ready
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          t=.flow/ready.tsv; [ -f "$t" ] || exit 0
+          gh pr list --state open --label self-heal --json number,headRefOid,headRefName,isCrossRepository,isDraft \
+            --jq '.[] | select((.isCrossRepository | not) and (.headRefName | startswith("self-heal/"))) | "\(.number) \(.headRefOid) \(.isDraft)"' |
+          while read -r n sha draft; do
+            awk -F'\t' -v s="$sha" '$2 == s && $3 == "ready" && $4 == "pass" { f = 1 } END { exit !f }' "$t" || continue
+            awk -F'\t' -v s="$sha" '$2 == s { print $1, $3, $4 }' "$t" |
+              jq -Rs --arg sha "$sha" '{name: "flow/ready", head_sha: $sha, status: "completed", conclusion: "success",
+                output: {title: "ready.sh stamped this commit", summary: ("```\n" + . + "```")}}' |
+              gh api "repos/$GITHUB_REPOSITORY/check-runs" --input - >/dev/null || { echo "::warning::flow/ready not posted on #$n"; continue; }
+            [ "$draft" != true ] || gh pr ready "$n" </dev/null || echo "::warning::#$n stays a draft"
+            echo "flow/ready on #$n at ${sha:0:7}" >>"$GITHUB_STEP_SUMMARY"
+          done
+EOF
+}
+# A pull_request routine skips a head that already has a passing flow/ready from this repo's Actions: it was reviewed
+# when it was stamped. A new commit has no check, so it gets the full run. Any API error means run, not skip.
+skip_step() {
+  cat <<'EOF'
+      - name: flow/ready
+        id: stamp
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          n="$(gh api "repos/$GITHUB_REPOSITORY/commits/$SHA/check-runs?check_name=flow/ready" \
+            --jq '[.check_runs[] | select(.app.slug == "github-actions" and .conclusion == "success")] | length' 2>/dev/null || true)"
+          [ "${n:-0}" -gt 0 ] 2>/dev/null || exit 0
+          echo skip=true >>"$GITHUB_OUTPUT"
+          echo "### ${SHA:0:7} has a passing flow/ready check: it was reviewed when it was stamped" >>"$GITHUB_STEP_SUMMARY"
+EOF
+}
+
 render_one() { # render_one <name>: the workflow on stdout
   local f="$dir/$1.md" auth trigger cron tz timeout labels grants ref g s on="" iff="" group="" cancel=false ctx="" mode="--auto"
+  local skip="" run_if="" stamp=""
   case "$(field "$f" auth oauth)" in
     oauth) auth='claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}' ;;
     api-key) auth='anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}' ;;
@@ -93,6 +138,10 @@ render_one() { # render_one <name>: the workflow on stdout
   for s in contents issues pull-requests; do
     if [[ " $grants " == *" $s "* ]]; then export "R_PERM_${s//-/_}=write"; else export "R_PERM_${s//-/_}=read"; fi
   done
+  # A routine that pushes posts ready.sh's stamp as a flow/ready check run, which needs checks: write; the rest read it
+  export R_PERM_checks=read
+  if [[ " $grants " == *" contents "* ]]; then R_PERM_checks=write stamp="$(stamp_step)"; fi
+  if [ "$trigger" = pull_request ]; then skip="$(skip_step)" run_if="        if: steps.stamp.outputs.skip != 'true'"; fi
   # Without github_token the action swaps in the Claude App's token, with every scope the App has. Only a
   # routine that pushes needs it (PRs opened with github.token don't trigger CI); the rest stay inside `grants`.
   local token='github_token: ${{ github.token }}' mkt="$market" clone=""
@@ -108,9 +157,11 @@ render_one() { # render_one <name>: the workflow on stdout
     clone="          git clone -q --depth 1 --branch '$ref' $market \"\$RUNNER_TEMP/flow-stack-plugin\""
     mkt='${{ runner.temp }}/flow-stack-plugin'
   fi
+  # a placeholder alone on its line that renders empty (a step this routine has no use for) leaves no blank line
   R_NAME="$1" R_ON="$on" R_IF="$iff" R_GROUP="$group" R_CANCEL="$cancel" R_TIMEOUT="$timeout" R_LABELS="$labels" \
   R_AUTH="$auth" R_TOKEN="$token" R_MARKET="$mkt" R_CLONE="$clone" R_MODE="$mode" R_CTX="$ctx" \
-    perl -pe 's/\@([A-Za-z_]+)\@/exists $ENV{"R_$1"} ? $ENV{"R_$1"} : die "unknown placeholder $1\n"/ge' "$tpl/workflow.yml"
+  R_SKIP="$skip" R_RUN_IF="$run_if" R_STAMP="$stamp" \
+    perl -pe '$w = /^\@[A-Za-z_]+\@$/; s/\@([A-Za-z_]+)\@/exists $ENV{"R_$1"} ? $ENV{"R_$1"} : die "unknown placeholder $1\n"/ge; $_ = "" if $w && $_ eq "\n"' "$tpl/workflow.yml"
 }
 
 names() {
