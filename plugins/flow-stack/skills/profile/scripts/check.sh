@@ -15,6 +15,29 @@ n="$(section Rules | grep -c '^- ' || true)"
 [ "$n" -le 20 ] || warn "Rules has $n lines (max 20); move preferences to Taste"
 [ "$n" -ge 1 ] || warn "Rules is empty; add at least your push/deploy rule"
 
+# Frontmatter values: the template's comments are the table ("key: default  # a | b | c: note").
+# Unknown keys warn (newer plugin, typo); missing keys keep their defaults.
+fm() { awk 'NR==1 && $0=="---" {on=1; next} on && $0=="---" {exit} on && /^[[:space:]]*[a-z_]+:/' "$1"; }
+tpl="$(dirname "$0")/../../../templates/profile.md"
+table="$(fm "$tpl" | awk '{
+  k = $1; sub(/:.*/, "", k); c = ""
+  if (match($0, / #/)) { c = substr($0, RSTART + 2); sub(/: .*/, "", c) }
+  n = (c ~ /\|/) ? split(c, a, "|") : 0; c = ""
+  for (i = 1; i <= n; i++) { v = a[i]; sub(/^[[:space:]]+/, "", v); sub(/[[:space:](].*/, "", v); c = c (i > 1 ? " | " : "") v }
+  print k "\t" c }')"
+trim() { local s="${1#"${1%%[![:space:]]*}"}"; printf %s "${s%"${s##*[![:space:]]}"}"; }
+while IFS= read -r line; do
+  k="$(trim "${line%%:*}")"
+  v="${line#*:}"; v="$(trim "${v%%#*}")"
+  row="$(grep -m1 "^$k"$'\t' <<<"$table")" || { echo "? unknown profile key: $k (not in the template; typo or newer plugin?)"; continue; }
+  allowed="${row#*$'\t'}"
+  [ -n "$allowed" ] && [ -n "$v" ] || continue
+  match=0
+  IFS='|' read -ra alts <<<"$allowed"
+  for a in "${alts[@]}"; do a="$(trim "$a")"; a="${a/<*>/?*}"; [[ "$v" == $a ]] && match=1; done
+  [ "$match" = 1 ] || warn "$k: $v is not one of: $allowed"
+done < <(fm "$f")
+
 section Taste | grep '^- ' | while IFS= read -r l; do
   [[ "$l" =~ ^-\ [0-9]{4}-[0-9]{2}-[0-9]{2}\ ·\ .+\ ·\ src:\ .+ ]] || echo "✗ taste entry not in '- YYYY-MM-DD · <pref> · src: <source>' form: $l"
 done
