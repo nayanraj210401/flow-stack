@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # detect-factory.test.sh: detect.sh's factory rows say which loop stages a repo has wired (#192).
 set -uo pipefail
-D="$(cd "$(dirname "$0")" && pwd)/detect.sh"
+here="$(cd "$(dirname "$0")" && pwd)"; D="$here/detect.sh"
 FAILS=0
 ok()  { echo "  ✓ $*"; }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
@@ -21,16 +21,22 @@ want implement missing make-routines
 want verify missing 'make-verifier.*feature-map'
 want review missing make-routines
 want ship missing '#184'
-want factory-ready missing
+want factory missing
 [ "$(grep -n '^routines ' <<<"$out" | cut -d: -f1)" -lt "$(grep -n '^FACTORY ' <<<"$out" | cut -d: -f1)" ] \
   && ok "factory rows come after every existing row" || bad "factory rows interleave existing rows"
+
+# Existing rows print as before: main's detect.sh output == this one's minus the FACTORY section.
+if old="$(git -C "$here" show "$(git -C "$here" merge-base HEAD origin/main 2>/dev/null || git -C "$here" merge-base HEAD main 2>/dev/null):./detect.sh" 2>/dev/null)" && [ -n "$old" ]; then
+  mkdir -p "$SB/old/skills/setup/scripts" && ln -s "$here/../../../hooks" "$SB/old/hooks" && printf '%s\n' "$old" >"$SB/old/skills/setup/scripts/detect.sh"
+  [ "$(bash "$SB/old/skills/setup/scripts/detect.sh" 2>&1)" = "$(sed '/^FACTORY /,$d' <<<"$out")" ] && ok "existing rows unchanged vs main" || bad "existing rows changed vs main"
+else echo "  - skip: no main to compare against (shallow clone)"; fi
 
 echo "-- driver and feature map on disk, not committed"
 mkdir -p .claude/skills/verify-toy .flow/features .github/routines
 printf -- '---\nid: a\nscenario: bash x.sh\n---\n' >.flow/features/a.md
 out="$("$D")"
 want verify missing 'commit .claude/skills/verify-toy.*commit .flow/features'
-want factory-ready missing
+want factory missing
 
 echo "-- committed driver + scenario, all routines"
 touch .claude/skills/verify-toy/SKILL.md
@@ -42,11 +48,21 @@ want implement ok self-heal
 want verify ok 'verify-toy.*1 feature'
 want review ok review
 want ship ok auto-merge
-want factory-ready ok
+want factory ok
 
 echo "-- a committed feature without a scenario does not count"
 printf -- '---\nid: a\nscenario: # later\n---\n' >.flow/features/a.md && git commit -qam noscen
 out="$("$D")"
 want verify missing feature-map
+
+echo "-- README is not a feature; a worktree is judged by its own commits"
+printf -- '---\nscenario: bash x.sh\n---\n' >.flow/features/README.md && git add -A && git commit -qm readme
+out="$("$D")"
+want verify missing feature-map
+git worktree add -q "$SB/wt" -b wt && cd "$SB/wt"
+printf -- '---\nid: a\nscenario: bash x.sh\n---\n' >.flow/features/a.md && git commit -qam wt
+out="$("$D")"
+want verify ok 'verify-toy.*1 feature'
+want factory ok
 [ "$FAILS" = 0 ] || { echo "$FAILS failed"; exit 1; }
 echo "all passed"

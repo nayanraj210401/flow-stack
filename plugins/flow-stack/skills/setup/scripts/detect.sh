@@ -47,18 +47,18 @@ if [ -n "$root" ]; then
   row triage planned "#185 triage, #186 ideate"
   row spec ok "intent + seal (plugin); edge-case matrix planned #187"
   routine self-heal implement "flow --auto works in a session"
-  tracked="$(git -C "$root" ls-files .claude/skills verify .flow/features 2>/dev/null)"
+  # The checkout itself (FLOW_ROOT, a worktree included), like hooks/lib.sh factory_ready.
+  tracked="$(git -C "$FLOW_ROOT" ls-files .claude/skills verify .flow/features 2>/dev/null)"
   tdrv="$(grep -oE '^(\.claude/skills/verify(-[^/]*)?|verify)/' <<<"$tracked" | head -n1)"
-  # Same rule as hooks/lib.sh factory_ready: a scenario line in a feature file at HEAD.
-  nsc="$(git -C "$root" grep -lE '^scenario:[[:space:]]*[^[:space:]#]' HEAD -- ':(top).flow/features/*.md' ':(top,exclude).flow/features/README.md' 2>/dev/null | wc -l | tr -d ' ')"
+  nsc="$(git -C "$FLOW_ROOT" grep -lE '^scenario:[[:space:]]*[^[:space:]#]' HEAD -- ':(top).flow/features/*.md' ':(top,exclude).flow/features/README.md' 2>/dev/null | wc -l | tr -d ' ')"
   fix=()
   if [ -z "$tdrv" ]; then [ -n "$drv" ] && fix+=("commit ${drv#"$root"/}") || fix+=(make-verifier); fi
   if [ "$nsc" = 0 ]; then
-    if [ "${nf:-0}" -gt 0 ] && ! grep -q '^\.flow/features/' <<<"$tracked"; then fix+=("commit .flow/features"); else fix+=("feature-map (a feature with a scenario)"); fi
+    if [ "${nf:-0}" -gt 0 ] && ! grep -q '^\.flow/features/' <<<"$tracked"; then fix+=("commit .flow/features"); else fix+=("feature-map (commit a feature with a scenario)"); fi
   fi
   fix="$(IFS=,; echo "${fix[*]-}" | sed 's/,/, /g')"
   if [ -z "$fix" ]; then row verify ok "committed ${tdrv%/} + $nsc feature(s) with scenarios"; else row verify missing "$fix"; fi
   routine review review "ready.sh works in a session"
   [ -f "$root/.github/routines/auto-merge.md" ] && row ship ok "auto-merge routine" || row ship missing "auto-merge routine (no make-routines template yet; #184)"
-  [ -z "$fix" ] && row factory-ready ok "impacted scenarios must also pass on HEAD (ready.sh)" || row factory-ready missing "needs the verify stage; #181: --auto ship warns, or refuses with factory_ready: enforce"
+  [ -z "$fix" ] && row factory ok "ready; impacted scenarios must also pass on HEAD (ready.sh)" || row factory missing "not ready: needs verify; #181: --auto ship warns, or runs as plain --auto with factory_ready: enforce"
 fi
