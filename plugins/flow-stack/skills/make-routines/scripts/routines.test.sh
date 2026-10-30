@@ -24,7 +24,10 @@ case "$1 $2" in
   "pr list") while [ "$1" != --jq ]; do shift; done; jq -r "$2" "$SB/prs.json" ;;
   "pr ready") ;;
   "api "*check-runs*) [ "$1 $2" = "api repos/o/r/check-runs" ] && { cat >>"$SB/posted"; exit; }
-    case "$2" in *stamped*) echo 1 ;; *broken*) exit 1 ;; *) echo 0 ;; esac ;;
+    run() { jq -nc --arg a "$1" --arg t "$2" '{check_runs: [{app: {slug: $a}, conclusion: "success", output: {title: $t}}]}'; }
+    case "$2" in */stamped/*) j="$(run github-actions "ready.sh stamped this commit")" ;; */named/*) j="$(run github-actions "a job")" ;;
+      */other-app/*) j="$(run evil "ready.sh stamped this commit")" ;; */broken/*) exit 1 ;; *) j='{"check_runs":[]}' ;; esac
+    jq -r "$4" <<<"$j" ;;
 esac
 EOF
 chmod +x "$SB/bin/gh"
@@ -52,7 +55,7 @@ jq -e '.name == "flow/ready" and .conclusion == "success" and (.output.summary |
 rm .flow/ready.tsv "$SB/posted"; bash -eo pipefail -c "$(step $W/flow-self-heal.yml)" && [ ! -f "$SB/posted" ] && ok "no ledger: nothing posted" || bad "posted without a ledger"
 
 echo "-- review: skip a stamped head, review a new or unknown one"
-for c in stamped:true fresh: broken:; do
+for c in stamped:true fresh: broken: named: other-app:; do
   : >"$SB/out"; SHA="${c%%:*}" bash -eo pipefail -c "$(step $W/flow-review.yml)" || bad "$c: step failed"
   [ "$(sed -n 's/^skip=//p' "$SB/out")" = "${c#*:}" ] && ok "${c%%:*} head: skip='${c#*:}'" || bad "${c%%:*}: out '$(cat "$SB/out")'"
 done
@@ -61,5 +64,10 @@ echo "-- routine contracts"
 grep -q 'More than 2 means two rework rounds' "$H/../templates/self-heal.md" && grep -q 'add `needs-human`' "$H/../templates/self-heal.md" && ok "rework capped at 2 rounds, then needs-human" || bad "self-heal has no rework cap"
 grep -q 'never push to any other PR' "$H/../templates/self-heal.md" && ok "rework only on PRs self-heal opened" || bad "no own-PR rule"
 grep -q 'gh pr ready <n> --undo`, then `gh pr edit <n> --add-label rework`' "$H/../templates/review.md" && ok "review sends blocked factory PRs to rework" || bad "review has no rework path"
+am="$(git -C "$H" rev-parse --show-toplevel)/.github/routines/auto-merge.md"
+if [ -f "$am" ]; then
+  grep -q '`self-create` alone, or a `heal-ok` a bot applied, never counts' "$am" && grep -q 'last `labeled` event for `heal-ok`' "$am" && ok "auto-merge: a self-heal PR needs a human heal-ok" || bad "auto-merge takes self-create alone"
+  grep -q 'also for a PR with `flow/ready`' "$am" && ok "auto-merge still reviews a stamped PR itself" || bad "auto-merge trusts the self-written stamp"
+fi
 
 [ "$FAILS" = 0 ] && echo "routines.test.sh: pass" || { echo "routines.test.sh: $FAILS failed"; exit 1; }

@@ -85,8 +85,8 @@ stamp_step() {
           done
 EOF
 }
-# A pull_request routine skips a head that already has a passing flow/ready from this repo's Actions: it was reviewed
-# when it was stamped. A new commit has no check, so it gets the full run. Any API error means run, not skip.
+# A pull_request routine skips a head that already has a passing flow/ready from this repo's Actions (the title tells it
+# from a job someone named flow/ready): it was reviewed when it was stamped. A new commit has no check, so it gets the full run. Any API error means run, not skip.
 skip_step() {
   cat <<'EOF'
       - name: flow/ready
@@ -96,7 +96,7 @@ skip_step() {
           SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           n="$(gh api "repos/$GITHUB_REPOSITORY/commits/$SHA/check-runs?check_name=flow/ready" \
-            --jq '[.check_runs[] | select(.app.slug == "github-actions" and .conclusion == "success")] | length' 2>/dev/null || true)"
+            --jq '[.check_runs[] | select(.app.slug == "github-actions" and .conclusion == "success" and .output.title == "ready.sh stamped this commit")] | length' 2>/dev/null || true)"
           [ "${n:-0}" -gt 0 ] 2>/dev/null || exit 0
           echo skip=true >>"$GITHUB_OUTPUT"
           echo "### ${SHA:0:7} has a passing flow/ready check: it was reviewed when it was stamped" >>"$GITHUB_STEP_SUMMARY"

@@ -37,7 +37,7 @@ jobs:
           SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           n="$(gh api "repos/$GITHUB_REPOSITORY/commits/$SHA/check-runs?check_name=flow/ready" \
-            --jq '[.check_runs[] | select(.app.slug == "github-actions" and .conclusion == "success")] | length' 2>/dev/null || true)"
+            --jq '[.check_runs[] | select(.app.slug == "github-actions" and .conclusion == "success" and .output.title == "ready.sh stamped this commit")] | length' 2>/dev/null || true)"
           [ "${n:-0}" -gt 0 ] 2>/dev/null || exit 0
           echo skip=true >>"$GITHUB_OUTPUT"
           echo "### ${SHA:0:7} has a passing flow/ready check: it was reviewed when it was stamped" >>"$GITHUB_STEP_SUMMARY"
