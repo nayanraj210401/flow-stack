@@ -56,6 +56,7 @@ is_kept() {
 stash="$(mktemp -d)"
 stash_copy() { mkdir -p "$(dirname "$stash/$1")" && cp "$1" "$stash/$1"; }
 reverted=()   # entries: "<kind> <path>"  kind = M (tracked modified), A (untracked/new), D (deleted)
+made=()       # topmost directories created to restore a deleted file; removed again if left empty
 restore() {
   for e in "${reverted[@]:-}"; do
     [ -n "$e" ] || continue
@@ -65,6 +66,9 @@ restore() {
       A) mkdir -p "$(dirname "$f")"; mv "$saved" "$f" ;;
       D) rm -f "$f" ;;
     esac
+  done
+  for d in "${made[@]:-}"; do
+    [ -n "$d" ] && [ -d "$d" ] && find "$d" -depth -type d -empty -delete
   done
   rm -rf "$stash"
 }
@@ -87,7 +91,10 @@ while IFS=$'\t' read -r status f; do
   [ -n "$f" ] || continue
   is_kept "$f" && continue
   case "$status" in
-    D) git show "HEAD:$f" >"$f" 2>/dev/null && reverted+=("D $f") ;;
+    D) top=""; d="$(dirname "$f")"
+       while [ ! -d "$d" ]; do top="$d"; d="$(dirname "$d")"; done
+       [ -z "$top" ] || { mkdir -p "$(dirname "$f")" && made+=("$top"); }
+       git show "HEAD:$f" >"$f" 2>/dev/null && reverted+=("D $f") ;;
     A) stash_copy "$f" && rm -f "$f" && reverted+=("A $f") ;;
     *) stash_copy "$f" && git show "HEAD:$f" >"$f" && reverted+=("M $f") ;;
   esac
