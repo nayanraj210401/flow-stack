@@ -158,7 +158,10 @@ add() {
   [ -z "$tz" ] || [ -n "$cron" ] || die "--tz needs --cron"
   [ -z "$cron" ] || valid_cron "$cron" || die "--cron must be five fields (minute hour day month weekday), got '$cron'"
   [ -z "$tz" ] || valid_tz "$tz" || die "--tz must be $tz_hint, got '$tz'"
-  local f="$dir/$name.md"
+  local f="$dir/$name.md" miss
+  case "$name" in self-heal|auto-merge)
+    miss="$(. "$here/../../../hooks/lib.sh"; factory_ready .)" || die "$name ships unattended, and this repo can't prove its changes yet. Missing: $miss. Commit them, then add $name." ;;
+  esac
   [ ! -f "$f" ] || [ -n "$force" ] || die "$f exists (--force replaces it)"
   if [ -n "$cron" ] && [ -f "$tpl/$name.md" ] && [ "$(field "$tpl/$name.md" trigger schedule)" != schedule ]; then
     die "$name runs on $(field "$tpl/$name.md" trigger schedule), which takes no --cron"
