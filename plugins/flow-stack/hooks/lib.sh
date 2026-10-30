@@ -188,9 +188,9 @@ flow_auto_ship() { local f; f="$(flow_auto_flag)" || return 1; [ "$(cat "$f" 2>/
 # Prints what is missing and fails when anything is.
 factory_ready() {
   local r="${1:-${FLOW_ROOT:-.}}" miss=""
-  [ -n "$(git -C "$r" ls-files -- '.claude/skills/verify-*' '.claude/skills/verify/*' 'verify/*' 2>/dev/null | head -n1)" ] \
+  [ -n "$(git -C "$r" ls-files -- ':(top).claude/skills/verify-*' ':(top).claude/skills/verify/*' ':(top)verify/*' 2>/dev/null | head -n1)" ] \
     || miss="a committed verify driver (/flow-stack:make-verifier)"
-  git -C "$r" grep -lqE '^scenario:[[:space:]]*[^[:space:]]' HEAD -- '.flow/features/*.md' 2>/dev/null \
+  git -C "$r" grep -lqE '^scenario:[[:space:]]*[^[:space:]#]' HEAD -- ':(top).flow/features/*.md' ':(top,exclude).flow/features/README.md' 2>/dev/null \
     || miss="${miss:+$miss; }a committed feature map with a scenario (/flow-stack:feature-map)"
   [ -z "$miss" ] || { echo "$miss"; return 1; }
 }

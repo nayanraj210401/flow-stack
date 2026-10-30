@@ -60,8 +60,8 @@ for n in self-heal auto-merge; do
   [ ! -f ".github/routines/$n.md" ] && ok "$n: nothing written" || bad "$n: wrote a routine"
 done
 
-echo "-- committed driver, map without a scenario: still not ready"
-printf -- '---\nid: toy\nscenario:\n---\n' >.flow/features/toy.md
+echo "-- committed driver, map with only a comment or README scenario: still not ready"
+printf -- '---\nid: toy\nscenario: # todo\n---\n' >.flow/features/toy.md; echo 'scenario: x' >.flow/features/README.md
 git add -f .claude .flow/features && git commit -qm drv
 out="$(prompt '--auto ship')"; grep -q 'feature map' <<<"$out" && ! grep -q 'verify driver' <<<"$out" \
   && ok "only the map is missing" || bad "$out"
@@ -75,7 +75,8 @@ grep -q 'factory' <<<"$out" && bad "warned in a ready repo: $out" || ok "no fact
 [ "$(flag)" = ship ] && ok "flag is ship (enforce profile)" || bad "flag '$(flag)'"
 stamp; [ "$(decide 'git push origin feat/x')" = allow ] && ok "stamped push allowed" || bad "push not allowed"
 prompt '--no-auto' >/dev/null
-"$R" add self-heal >/dev/null 2>&1 && [ -f .github/routines/self-heal.md ] && ok "self-heal added" || bad "self-heal refused in a ready repo"
+(cd .flow && "$R" add self-heal >/dev/null 2>&1) && [ -f .flow/.github/routines/self-heal.md ] && ok "self-heal added (from a subdirectory too)" || bad "self-heal refused in a ready repo"
+rm -rf .flow/.github
 
 echo "-- pair mode replays the base commit's hooks decision for decision"
 base="$(git -C "$H" merge-base HEAD origin/main 2>/dev/null || true)"
