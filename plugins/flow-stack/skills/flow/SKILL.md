@@ -46,6 +46,7 @@ Three currencies: tokens (cheap, capped), dollars (moderate), the human's attent
 | Rename, migration, sweep | `playbooks/refactor.md` | task folder |
 | Make a metric better | `playbooks/optimize.md` | task folder |
 | Spans days or sessions | `playbooks/multi-session.md` | task folder + handoffs |
+| Names no repo, and the profile lists several (`# Repos`) | `scripts/task.sh route "<request>"` first: `repo` → work there; `workspace` → the row below; `ask` → that one question (unattended: GATES.md, never a guess). Without flow-stack's hooks (a cloud multi-repo session), a `workspace` result is intake only: file a `factory-request` issue in the primary repo (repos, goal, links) and stop | none until routed |
 | Spans several repos (a ticket touching a profile workspace) | the matching playbook, opened with `task.sh new <slug> <playbook> --workspace <name>` | task folder in the primary repo; one slice per repo change; one PR per repo |
 | No playbook fits: ambitious, mixed kinds, or reviewed after stepping away | `playbooks/compose.md` | task folder, rigor +1 |
 | Source is a ticket someone else wrote | the matching playbook; `intent` fact-checks the ticket (§1a) | as that playbook |
