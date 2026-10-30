@@ -163,7 +163,7 @@ if on setup; then
   echo "-- setup: hosts in the inventory; fingerprint moves only with a host"
   : >"$LOG"; rm -f "$BIN/herdr" "$BIN/orca" "$BIN/cmux"
   export HOME="$SB/userhome"; mkdir -p "$HOME/.config/herdr"
-  git -C "$REPO" show main:plugins/flow-stack/skills/setup/scripts/inventory.sh >"$SB/inventory.main.sh"
+  { git -C "$REPO" show main:plugins/flow-stack/skills/setup/scripts/inventory.sh 2>/dev/null || git -C "$REPO" show origin/main:plugins/flow-stack/skills/setup/scripts/inventory.sh; } >"$SB/inventory.main.sh"
   fp_main="$(bash "$SB/inventory.main.sh" --fingerprint)"
   fp_new="$(bash "$INV" --fingerprint)"
   [ "$fp_main" = "$fp_new" ] && ok "no host: fingerprint same as main" || bad "no host: fingerprint moved ($fp_main → $fp_new)"
