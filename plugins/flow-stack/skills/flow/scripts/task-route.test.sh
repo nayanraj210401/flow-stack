@@ -19,7 +19,7 @@ cat >"$FLOW_STACK_HOME/profile.md" <<EOF
 ## api
 - path: $SB/api
 - role: dep
-- what: HTTP API server, auth and rate limiting
+- what: HTTP API server for customers, auth and rate limiting
 
 ## web
 - path: $SB/web
@@ -31,6 +31,9 @@ cat >"$FLOW_STACK_HOME/profile.md" <<EOF
 - what: documentation site
 
 # Workspaces
+## wide
+- repos: web, api, admin
+
 ## shop
 - repos: api, web
 EOF
@@ -39,9 +42,11 @@ route() { "$T" route "$1" 2>&1 | head -n1; }
 
 [ "$(route "add rate limits to login")" = "repo	api	$SB/api" ] && ok "a what: match routes to that repo" || bad "rate limits: $(route "add rate limits to login")"
 [ "$(route "fix the invoice export")" = "repo	web	$SB/web" ] && ok "a feature map owns: match routes to its repo" || bad "invoice: $(route "fix the invoice export")"
-[ "$(route "show rate limits on the dashboard")" = "workspace	shop" ] && ok "a match across a workspace's repos routes to the workspace" || bad "workspace: $(route "show rate limits on the dashboard")"
+[ "$(route "show rate limits on the dashboard")" = "workspace	shop" ] && ok "a match across a workspace's repos routes to the smallest workspace holding them" || bad "workspace: $(route "show rate limits on the dashboard")"
 out="$(route "documentation for the dashboard")"
-case "$out" in ask*web*docs*) ok "repos in no shared workspace: one question naming them" ;; *) bad "ambiguous: $out" ;; esac
+case "$out" in *api*) bad "ambiguous lists an unmatched repo: $out" ;; ask*web*docs*) ok "repos in no shared workspace: one question naming them" ;; *) bad "ambiguous: $out" ;; esac
+out="$(route "email customers")"
+case "$out" in ask*api*web*docs*) ok "a word two repos share decides nothing" ;; *) bad "shared word: $out" ;; esac
 out="$(route "tidy things up")"
 case "$out" in ask*api*web*docs*) ok "no match: one question listing every repo" ;; *) bad "no match: $out" ;; esac
 [ "$("$T" route "tidy things up" | wc -l | tr -d ' ')" = 1 ] && ok "the question is a single line" || bad "question spans lines"
