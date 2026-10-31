@@ -19,7 +19,7 @@ has "$step" "flow-stack.git" && ok "adds the flow-stack marketplace" || bad "no 
 has "$step" "--auto ship Run the routine in .github/routines/self-heal.md" && ok "prompt runs flow --auto ship on the routine" || bad "prompt"
 has "$step" 'secrets.CLAUDE_CODE_OAUTH_TOKEN' && ok "oauth secret by default" || bad "auth"
 grep -q 'FLOW_STACK_HOME=$RUNNER_TEMP/flow-stack' "$W" && ok "profile lives outside the checkout" || bad "FLOW_STACK_HOME"
-grep -q 'for l in self-heal heal-ok needs-repro;' "$W" && ok "labels created from frontmatter" || bad "labels"
+grep -q 'for l in self-heal heal-ok needs-repro rework needs-human;' "$W" && ok "labels created from frontmatter" || bad "labels"
 grep -q '^notify: off' .github/routines/profile.md && ok "CI profile has notifications off" || bad "notify"
 grep -q '^preset: solo-hacker' .github/routines/profile.md && ok "CI profile from a preset" || bad "preset"
 check "check passes on a fresh render" "$R" check

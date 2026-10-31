@@ -21,6 +21,9 @@
 # Feature file frontmatter (see references/feature-template.md):
 #   id, title, owns (space-separated globs), entries (" | "-separated),
 #   scenario (command), status, verified ("<date> <sha>")
+# Runs and marks record status and verified in $FLOW_DIR/verified.tsv ("id<TAB>status<TAB>verified",
+# the last row wins), never in the feature file, whose own lines are the fallback; so a tracked map
+# stays unchanged when scenarios run.
 set -uo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -28,6 +31,7 @@ root="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "features.sh: need
 cd "$root"
 . "$here/../../../hooks/roots.sh"; flow_roots
 dir="$FLOW_DIR/features"
+stamps="$FLOW_DIR/verified.tsv"
 evidence="$here/../../verify/scripts/evidence.sh"
 
 die() { echo "features.sh: $*" >&2; exit 2; }
@@ -36,21 +40,17 @@ fm() { # fm <file> <key>
   awk -v k="$2" 'NR==1 && $0=="---" {on=1; next} on && $0=="---" {exit}
     on && index($0, k ":") == 1 {v = substr($0, length(k) + 2); sub(/^[[:space:]]+/, "", v); sub(/[[:space:]]+$/, "", v); print v; exit}' "$1"
 }
+state() { # state <file> <status|verified>: the latest stamp, else the feature file's own line
+  local v; v="$(awk -F'\t' -v id="$(fm "$1" id)" -v c="$([ "$2" = status ] && echo 2 || echo 3)" '$1 == id { v = $c; f = 1 } END { if (f) print v; exit !f }' "$stamps" 2>/dev/null)" && printf '%s' "$v" || fm "$1" "$2"
+}
+stamp() { # stamp <file> <status> [verified]: keeps the last verified unless given
+  printf '%s\t%s\t%s\n' "$(fm "$1" id)" "$2" "${3:-$(state "$1" verified)}" >>"$stamps"
+}
 file_of() { local f="$dir/$1.md"; [ -f "$f" ] || die "no feature '$1' ($f)"; printf '%s' "$f"; }
 specs_of() { # pathspecs for a feature's owns globs
   local g; set -f
   for g in $(fm "$1" owns); do printf '%s\n' ":(glob)$g"; done
   set +f
-}
-set_fm() { # set_fm <file> <key> <value> [<key> <value> ...]: one rewrite, so readers never see half
-  local f="$1" kv="" tmp; shift
-  while [ $# -ge 2 ]; do kv="$kv$1"$'\t'"$2"$'\n'; shift 2; done
-  tmp="$(mktemp "$f.XXXXXX")"
-  KV="$kv" awk 'BEGIN { m = split(ENVIRON["KV"], L, "\n") - 1; for (i = 1; i <= m; i++) { split(L[i], p, "\t"); key[i] = p[1]; val[p[1]] = p[2] } }
-    NR==1 && $0=="---" {on=1; print; next}
-    on && $0=="---" { for (i = 1; i <= m; i++) if (!(key[i] in done)) print key[i] ": " val[key[i]]; on=0; print; next }
-    on { k = $0; sub(/:.*/, "", k); if (k in val) { print k ": " val[k]; done[k] = 1; next } }
-    { print }' "$f" >"$tmp" && mv "$tmp" "$f"
 }
 changed_files() { # changed_files <base>
   { git diff --name-only "$1" -- 2>/dev/null; git ls-files --others --exclude-standard; } | grep -v '^\.flow/' | sort -u
@@ -89,7 +89,7 @@ case "$cmd" in
     printf '%-28s %-10s %-22s %-7s %s\n' ID STATUS VERIFIED ENTRIES OWNS
     for f in $(files); do
       n="$(fm "$f" entries | awk -F' \\| ' '{print NF}')"
-      printf '%-28s %-10s %-22s %-7s %s\n' "$(fm "$f" id)" "$(fm "$f" status)" "$(fm "$f" verified)" "${n:-0}" "$(fm "$f" owns)"
+      printf '%-28s %-10s %-22s %-7s %s\n' "$(fm "$f" id)" "$(state "$f" status)" "$(state "$f" verified)" "${n:-0}" "$(fm "$f" owns)"
     done
     ;;
 
@@ -138,8 +138,8 @@ case "$cmd" in
       at="$(date +%F) $(git rev-parse --short HEAD)"
       if [ "$FLOW_ROOT" != "$FLOW_MAIN" ]; then # any linked worktree, lead or lane
         mkdir -p "$dir/lanes"; printf '%s\t%s\t%s\n' "$id" "$res" "$at" >>"$dir/lanes/${FLOW_LANE:-$(basename "$FLOW_ROOT")}.tsv"
-      elif [ "$res" = PASS ]; then set_fm "$f" status verified verified "$at"
-      else set_fm "$f" status broken
+      elif [ "$res" = PASS ]; then stamp "$f" verified "$at"
+      else stamp "$f" broken
       fi
       echo "feat:$id · $res"
       [ "$res" = PASS ] || tail -n 8 /tmp/feat.$$ | sed 's/^/    /'
@@ -152,14 +152,14 @@ case "$cmd" in
   mark)
     [[ "${2:-}" =~ ^(verified|unverified|stale|broken)$ ]] || die "usage: features.sh mark <id> <verified|unverified|stale|broken>"
     f="$(file_of "$1")"
-    if [ "$2" = verified ]; then set_fm "$f" status verified verified "$(date +%F) $(git rev-parse --short HEAD)"; else set_fm "$f" status "$2"; fi
+    if [ "$2" = verified ]; then stamp "$f" verified "$(date +%F) $(git rev-parse --short HEAD)"; else stamp "$f" "$2"; fi
     echo "$1 → $2"
     ;;
 
   stale)
     write=0; [ "${1:-}" = --write ] && write=1
     for f in $(files); do
-      id="$(fm "$f" id)"; sha="$(fm "$f" verified | awk '{print $2}')"
+      id="$(fm "$f" id)"; sha="$(state "$f" verified | awk '{print $2}')"
       [ -n "$sha" ] || { echo "$id · never verified"; continue; }
       git cat-file -e "$sha^{commit}" 2>/dev/null || { echo "$id · verified at unknown commit $sha"; continue; }
       specs=(); while IFS= read -r s_; do specs+=("$s_"); done < <(specs_of "$f")
@@ -167,7 +167,7 @@ case "$cmd" in
       n="$(git diff --name-only "$sha" -- "${specs[@]}" | wc -l | tr -d ' ')"
       if [ "$n" -gt 0 ]; then
         echo "$id · STALE · $n owned file(s) changed since $sha"
-        [ "$write" = 1 ] && set_fm "$f" status stale
+        [ "$write" = 1 ] && stamp "$f" stale
       fi
     done
     ;;
@@ -238,7 +238,7 @@ case "$cmd" in
       echo "|---|---|---|---|---|"
       for f in $(files); do
         printf '| [%s](%s) · %s | %s | %s | %s | `%s` |\n' "$(fm "$f" id)" "$(basename "$f")" "$(fm "$f" title)" \
-          "$(fm "$f" status)" "$(fm "$f" verified)" "$(fm "$f" entries | sed 's/ | /<br>/g')" "$(fm "$f" owns)"
+          "$(state "$f" status)" "$(state "$f" verified)" "$(fm "$f" entries | sed 's/ | /<br>/g')" "$(fm "$f" owns)"
       done
       echo
       echo "Status: \`verified\` (scenario passed at the recorded commit) · \`stale\` (owned code changed since) · \`broken\` (scenario failed) · \`unverified\`."

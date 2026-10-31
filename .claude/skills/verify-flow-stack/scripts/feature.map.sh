@@ -4,6 +4,7 @@
 . "$(dirname "$0")/lib.sh"; sandbox feature.map
 toy_features >/dev/null
 F="$S/feature-map/scripts/features.sh"
+st() { "$F" list | awk -v i="$1" '$1 == i { v = substr($0, 30, 33); gsub(/ +/, " ", v); sub(/ $/, "", v); print v }'; } # status [verified date sha]
 
 sees "check passes" "feature map ok (2 features)" "$F" check
 sees "list shows both" "export.csv" "$F" list
@@ -16,18 +17,20 @@ has "$out" export.csv && bad "export.csv flagged without a change" || ok "export
 [ "$("$F" impact --ids)" = calc.add ] && ok "--ids" || bad "--ids: $("$F" impact --ids)"
 git checkout -q src/calc.sh; rm src/loose.sh
 echo "-- run marks verified / broken"
+before="$(cat .flow/features/calc.add.md)"
 sees "run calc.add → PASS" "feat:calc.add · PASS" "$F" run calc.add
-grep -q '^status: verified' .flow/features/calc.add.md && grep -qE '^verified: [0-9-]{10} [0-9a-f]+' .flow/features/calc.add.md && ok "status + verified stamp written" || bad "not marked"
+[[ "$(st calc.add)" =~ ^verified\ [0-9-]{10}\ [0-9a-f]+$ ]] && ok "status + verified stamp written" || bad "not marked: $(st calc.add)"
+[ "$(cat .flow/features/calc.add.md)" = "$before" ] && grep -q $'^calc.add\tverified\t' .flow/verified.tsv && ok "stamp in .flow/verified.tsv, feature file unchanged" || bad "feature file rewritten"
 perl -pi -e 's/^scenario: .*/scenario: false/' .flow/features/export.csv.md
 sees "failing scenario → FAIL" "feat:export.csv · FAIL" "$F" run export.csv
-grep -q '^status: broken' .flow/features/export.csv.md && ok "marked broken" || bad "not broken"
+[ "$(st export.csv)" = "broken" ] && ok "marked broken" || bad "not broken: $(st export.csv)"
 perl -pi -e 's/^scenario: .*/scenario: /' .flow/features/export.csv.md
 sees "no scenario → says so" "NO SCENARIO" "$F" run export.csv
 echo "-- stale"
 git add -A && git commit -qm verified
 printf '# change\n' >>src/calc.sh && git commit -qam "change calc"
 sees "owned code changed since verified → STALE" "calc.add · STALE" "$F" stale --write
-grep -q '^status: stale' .flow/features/calc.add.md && ok "--write marks stale" || bad "not stale"
+[ "$(st calc.add | cut -d' ' -f1)" = stale ] && ok "--write marks stale" || bad "not stale: $(st calc.add)"
 echo "-- coverage, index, new, subs"
 printf 'y\n' >src/orphan.sh && git add src/orphan.sh
 sees "coverage lists unowned code" "src/orphan.sh" "$F" coverage

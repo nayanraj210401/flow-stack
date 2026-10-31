@@ -10,6 +10,7 @@ toy_slice mul S1 doing "bash tests/test_mul.sh" "src/**"
 git add -A && git commit -qm "task checks"
 toy_features
 F="$S/feature-map/scripts/features.sh"
+st() { "$F" list | awk -v i="$1" '$1 == i { v = substr($0, 30, 33); gsub(/ +/, " ", v); sub(/ $/, "", v); print v }'; } # status [verified date sha]
 MAIN="$PWD"; WT="$SB/wt"; TD="$MAIN/.flow/tasks/mul"; LANE="$TD/lanes/worker_s1"
 lane() { git worktree add -q "$1" -b "$2"; ( cd "$1" && "$T" join mul >/dev/null ); }
 git worktree add -q "$SB/free" -b worktree/free
@@ -40,7 +41,7 @@ sees "proofs read the lane" "green:" "$T" proofs S1
 
 echo "-- feature runs in a lane stay in the lane"
 "$F" run calc.add >/dev/null 2>&1
-grep -q '^status: unverified' "$MAIN/.flow/features/calc.add.md" && ok "shared feature status untouched by the lane" || bad "lane wrote shared status: $(grep '^status' "$MAIN/.flow/features/calc.add.md")"
+[ "$(st calc.add)" = unverified ] && ok "shared feature status untouched by the lane" || bad "lane wrote shared status: $(st calc.add)"
 grep -q $'^calc.add\tPASS\t' "$MAIN/.flow/features/lanes/worker_s1.tsv" 2>/dev/null && ok "lane result in features/lanes/worker_s1.tsv" || bad "no lane result"
 git add -A && git commit -qm "mul"
 
@@ -55,8 +56,8 @@ echo "-- delegate accepts from the main checkout"
 cd "$MAIN"
 git merge -q --no-edit worker/s1
 sees "accept imports lane evidence" "accepted: 2 evidence block" "$T" accept worker_s1
-grep -q '^status: verified' .flow/features/calc.add.md && grep -q "^verified: .* $(git rev-parse --short HEAD)\$" .flow/features/calc.add.md \
-  && ok "accept re-proves impacted features at the merged HEAD" || bad "after accept: $(grep -E '^(status|verified)' .flow/features/calc.add.md | tr '\n' ' ')"
+[[ "$(st calc.add)" =~ ^verified\ .*\ $(git rev-parse --short HEAD)$ ]] \
+  && ok "accept re-proves impacted features at the merged HEAD" || bad "after accept: $(st calc.add)"
 
 echo "-- a merge that breaks an impacted feature is refused"
 lane "$SB/wt2" worker/s2
@@ -66,7 +67,7 @@ rc=0; out="$("$T" accept worker_s2 2>&1)" || rc=$?
 [ $rc -ne 0 ] && has "$out" "calc.add" && ok "accept refused, names the broken feature" || bad "accept rc=$rc: $out"
 grep -q 'accepted from lane worker_s2' "$TD/EVIDENCE.md" && bad "evidence imported anyway" || ok "refused lane's evidence not imported"
 grep -qE '^### .* · feat:calc.add · FAIL' "$TD/EVIDENCE.md" && ok "the failing re-run is recorded as evidence" || bad "no feat:calc.add FAIL row"
-grep -q '^status: broken' .flow/features/calc.add.md && ok "feature marked broken" || bad "status: $(grep '^status' .flow/features/calc.add.md)"
+[ "$(st calc.add | cut -d' ' -f1)" = broken ] && ok "feature marked broken" || bad "status: $(st calc.add)"
 
 echo "-- undoing the merge doesn't let a retry through"
 git reset -q --hard HEAD^
