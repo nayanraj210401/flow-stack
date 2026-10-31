@@ -28,14 +28,14 @@ q='query($owner: String!, $number: Int!, $endCursor: String) { repositoryOwner(l
       ... on PullRequest { number title url state isDraft createdAt mergedAt repository { nameWithOwner } '"$labels"'
         closingIssuesReferences(first: 5) { nodes { number createdAt labels(first: 30) { nodes { name } } } }
         commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 50) { nodes { ... on CheckRun { name conclusion } } } } } } } } } } } } } } }'
-raw="$(gh api graphql --paginate -f query="$q" -F owner="${proj%/*}" -F number="${proj#*/}" 2>&1)" || { echo "factory.sh: gh api graphql failed: ${raw:0:300}" >&2; exit 1; }
+raw="$(gh api graphql --paginate -f query="$q" -f owner="${proj%/*}" -F number="${proj#*/}" 2>&1)" || { echo "factory.sh: gh api graphql failed: ${raw:0:300}" >&2; exit 1; }
 
 # one card per item: where it is (status) and where its state says it belongs (col)
 board="$(jq -sc '
   def names: [.nodes[]?.name];
   def col: if .type == "pr" and .state == "MERGED" then "Merged"
     elif .type == "issue" and .state == "CLOSED" and .reason == "COMPLETED" then "Merged"
-    elif .state != "OPEN" then .status
+    elif .state != "OPEN" then "Merged"
     elif any(.labels[]; . == "needs-human") then "Blocked"
     elif .type == "pr" and any(.labels[]; . == "rework") then "Rework"
     elif .type == "pr" and (.ready or (.draft | not)) then "Review"
