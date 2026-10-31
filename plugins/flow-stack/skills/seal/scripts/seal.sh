@@ -37,13 +37,16 @@ sha() { shasum -a 256 <"$1" | cut -d' ' -f1; }
 unmapped() {
   [ -f "$FLOW_TASK_DIR/INTENT.md" ] || return 0
   awk '
-    /^[ \t]*(```|~~~)/ { fence = !fence; next }
-    fence { next }
-    /^## / { sec = tolower($0); sub(/[ \t\r]+$/, "", sec); next }
+    # a fence closes only on its own marker; one still open at the end hides rows, so it is refused
+    fm != "" { if (index($0, fm) && $0 ~ /^[ \t]*(```|~~~)/) fm = ""; next }
+    /^[ \t]*(```|~~~)/ { match($0, /(```|~~~)/); fm = substr($0, RSTART, 3); fsec = sec; next }
+    /<!--/ { c = 1 } c { if (/-->/) c = 0; next }
+    /^##[ \t]/ { sec = tolower($0); gsub(/[ \t\r]+/, " ", sec); sub(/[ :]+$/, "", sec); next }
     sec == "## acceptance checks" && /^- \[.\] C[0-9]+/ { match($0, /C[0-9]+/); ids[substr($0, RSTART, RLENGTH)] = 1 }
-    # any list item is a row, so a bullet style the parser does not expect is refused, not skipped
-    sec == "## edge cases" && /^([-*+]|[0-9]+[.)])[ \t]/ { rows[++n] = $0 }
+    # any list item (up to 3 spaces in) is a row, so a bullet style the parser does not expect is refused, not skipped
+    sec == "## edge cases" && /^(   |  | )?([-*+]|[0-9]+[.)])[ \t]/ { rows[++n] = $0 }
     END {
+      if (fm != "" && fsec == "## edge cases") print "unclosed " fm " fence under ## Edge cases"
       for (i = 1; i <= n; i++) {
         t = rows[i]; ok = 0
         if (sub(/^.*→[ \t]*/, "", t)) {

@@ -48,5 +48,17 @@ seals && bad "'## Edge Cases' heading skipped" || ok "heading matched case-insen
 printf '# Intent · x\n\n## Acceptance checks\n- [ ] C1 · works\n\n## Edge cases\n```\n## Acceptance checks\n```\n- huge\n' >"$I"
 seals && bad "fenced heading switched sections" || ok "headings inside code fences ignored"
 
+intent "  - huge"; seals && bad "indented row sealed" || ok "row indented up to 3 spaces is a row"
+intent "$(printf '```\n- empty → C1')"; seals && bad "unclosed fence hid rows" || ok "unclosed fence under Edge cases refused"
+intent "$(printf '```\n~~~\n```\n- huge')"; seals && bad "~~~ closed a \`\`\` fence" || ok "fence closes only on its own marker"
+printf '# Intent · x\n\n## Acceptance checks\n- [ ] C1 · works\n<!--\n- [ ] C3 · not real\n-->\n\n## Edge cases\n- huge → C3\n' >"$I"
+seals && bad "check ID inside a comment counted" || ok "check IDs inside <!-- --> ignored"
+printf '# Intent · x\n\n## Acceptance checks\n- [ ] C1 · works\n\n## Edge cases\n<!--\n- example\n-->\n- empty → C1\n' >"$I"
+seals && ok "example row inside <!-- --> not a row" || bad "commented example refused: $(cat "$SB/out")"
+for h in '##  Edge cases' '## Edge cases:'; do
+  printf '# Intent · x\n\n## Acceptance checks\n- [ ] C1 · works\n\n%s\n- huge\n' "$h" >"$I"
+  seals && bad "heading '$h' turned the gate off" || ok "heading '$h' normalised"
+done
+
 [ "$FAILS" = 0 ] || { echo "== seal-matrix · FAIL ($FAILS)"; exit 1; }
 echo "== seal-matrix · PASS"
