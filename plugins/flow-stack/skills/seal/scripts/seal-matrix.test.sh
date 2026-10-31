@@ -35,6 +35,9 @@ intent "- empty → C2
 
 intent "- huge → non-goal:"; seals && bad "non-goal with no reason sealed" || ok "non-goal needs a reason"
 intent "- huge → C9"; seals && bad "unknown check ID sealed" || ok "check ID must exist in Acceptance checks"
+printf '## Acceptance checks\r\n- [ ] C1 · works\r\n## Edge cases  \r\n- huge → \r\n- empty → C1\r\n' >"$I"
+if seals; then bad "CRLF matrix with an unmapped row sealed"; else ok "CRLF / trailing-space heading still enforced"; fi
+grep -q 'empty' "$SB/out" && bad "CRLF mapped row reported" || ok "CRLF mapped row accepted"
 intent "- huge"; seals && bad "row with no arrow sealed" || ok "row with no mapping at all blocks"
 
 [ "$FAILS" = 0 ] || { echo "== seal-matrix · FAIL ($FAILS)"; exit 1; }

@@ -37,14 +37,14 @@ sha() { shasum -a 256 <"$1" | cut -d' ' -f1; }
 unmapped() {
   [ -f "$FLOW_TASK_DIR/INTENT.md" ] || return 0
   awk '
-    /^## / { sec = $0; next }
+    /^## / { sec = $0; sub(/[ \t\r]+$/, "", sec); next }
     sec == "## Acceptance checks" && /^- \[.\] C[0-9]+/ { match($0, /C[0-9]+/); ids[substr($0, RSTART, RLENGTH)] = 1 }
     sec == "## Edge cases" && /^- / { rows[++n] = $0 }
     END {
       for (i = 1; i <= n; i++) {
         t = rows[i]; ok = 0
         if (sub(/^.*→[ \t]*/, "", t)) {
-          sub(/[ \t]+$/, "", t)
+          sub(/[ \t\r]+$/, "", t)
           if (t ~ /^non-goal:[ \t]*[^ \t]/) ok = 1
           else if (t ~ /^C[0-9]+([ ,]+C[0-9]+)*$/) { ok = 1; k = split(t, a, /[ ,]+/); for (j = 1; j <= k; j++) if (!(a[j] in ids)) ok = 0 }
         }
