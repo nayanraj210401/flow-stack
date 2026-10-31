@@ -87,6 +87,9 @@ echo '/nothing/*' >.github/routines/safety-paths.txt
 "$H/routines.sh" safety .github/x.yml >/dev/null && "$H/routines.sh" safety --ref "$base" .github/x.yml >/dev/null; [ $? = 1 ] &&
   ok "--ref reads the base branch's list, not the PR's" || bad "a PR shortened its own safety list"
 "$H/routines.sh" safety --ref nope x >/dev/null 2>&1; [ $? = 2 ] && ok "a bad --ref is an error, not a pass" || bad "bad --ref passed"
+"$H/routines.sh" safety --ref '' .github/x.yml >/dev/null 2>&1; [ $? = 2 ] && ok "an empty --ref is an error" || bad "empty --ref read the working tree"
+printf '' | "$H/routines.sh" safety -z >/dev/null 2>&1; [ $? = 2 ] && printf '\n' | "$H/routines.sh" safety >/dev/null 2>&1; [ $? = 2 ] &&
+  ok "no paths (a failed git diff upstream) is an error, not clean" || bad "empty input passed"
 tt="$H/../templates/triage.md"
 grep -q 'routines.sh safety <files>` exits non-zero |$' "$tt" && grep -q '\*\*risk:high is never built.\*\* Add `needs-human`, and put a draft INTENT' "$tt" &&
   ok "triage: a safety path is risk:high, which gets a draft INTENT and needs-human" || bad "triage contract"
@@ -96,7 +99,7 @@ grep -q 'When `.github/routines/triage.md` exists' "$H/../templates/self-heal.md
 echo "-- one safety list"
 sp="$(git -C "$H" rev-parse --show-toplevel)/.github/routines/safety-paths.txt"
 if [ -f "$am" ] && [ -f "$sp" ]; then
-  grep -q 'routines.sh safety -z --ref origin/<base>' "$am" && grep -q '`.github/routines/safety-paths.txt`' "$am" && ok "auto-merge reads the safety list" || bad "auto-merge doesn't read the list"
+  grep -q 'origin/<base>...FETCH_HEAD | make-routines/scripts/routines.sh safety -z --ref origin/<base>' "$am" && grep -q '`.github/routines/safety-paths.txt`' "$am" && ok "auto-merge reads the safety list" || bad "auto-merge doesn't read the list"
   ! grep -qE 'plugins/flow-stack/(hooks|agents)/|`\.mcp\.json`|`make-gates/`' "$am" && ok "auto-merge has no path list of its own" || bad "auto-merge still lists paths in prose"
   diff <(grep -v '^#' "$H/../templates/safety-paths.txt") <(head -n "$(grep -vc '^#' "$H/../templates/safety-paths.txt")" < <(grep -v '^#' "$sp")) >/dev/null &&
     ok "this repo's list starts with the plugin default" || bad "this repo's list dropped a default glob"

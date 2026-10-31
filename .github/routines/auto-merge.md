@@ -35,8 +35,8 @@ The default branch must require the `tests` check, by classic protection or by a
 
 ## 2. Security review (per candidate)
 
-1. `gh pr checkout <n>`, then confirm `git rev-parse HEAD` equals the PR's `headRefOid`.
-   Check every changed path again, from git rather than the API, against the list as it is on the base branch (the checkout is the PR's, and a PR may edit its own copy): `git diff -z --name-only --no-renames origin/<base>...HEAD | make-routines/scripts/routines.sh safety -z --ref origin/<base>`. `--no-renames` lists both sides of a rename, so moving the guard out of `hooks/` is caught, and `-z` keeps unusual file names whole. A non-zero exit: label `auto-merge-blocked`, comment the paths, move on.
+1. Check every changed path again, from git rather than the API, before the checkout, so the list and the script that reads it are still the default branch's: `git fetch -q origin pull/<n>/head`, confirm `git rev-parse FETCH_HEAD` equals the PR's `headRefOid`, then `git diff -z --name-only --no-renames origin/<base>...FETCH_HEAD | make-routines/scripts/routines.sh safety -z --ref origin/<base>`. `--no-renames` lists both sides of a rename, so moving the guard out of `hooks/` is caught, and `-z` keeps unusual file names whole. A non-zero exit, an error included: label `auto-merge-blocked`, comment the paths, move on.
+   Then `gh pr checkout <n>`, and confirm `git rev-parse HEAD` equals the PR's `headRefOid`.
 2. Mechanical scan of `git diff origin/<base>...HEAD`, before any model judgment:
    - invisible or direction-changing Unicode: `git diff origin/<base>...HEAD | LC_ALL=C.UTF-8 grep -nP '[\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2060}-\x{2064}\x{2066}-\x{2069}\x{FEFF}]'`
    - long base64 or hex blobs, and new HTML comments in Markdown (`<!--`): read each one;

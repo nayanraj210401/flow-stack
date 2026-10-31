@@ -256,9 +256,9 @@ check() {
 }
 
 safety() { # prints "<path><TAB><glob>" for each path on the list
-  local z="" ref="" list p g pats=() hit=0
+  local z="" ref="" list p g pats=() hit=0 n=0
   while [ $# -gt 0 ]; do
-    case "$1" in -z) z=1; shift ;; --ref) ref="${2:-}"; shift 2 || die "--ref needs a ref" ;; --) shift; break ;; *) break ;; esac
+    case "$1" in -z) z=1; shift ;; --ref) [ -n "${2:-}" ] || die "--ref needs a ref"; ref="$2"; shift 2 ;; --) shift; break ;; *) break ;; esac
   done
   # With --ref the list comes from that commit, so a PR checked out in the working tree can't shorten its own list
   if [ -n "$ref" ]; then
@@ -274,9 +274,11 @@ safety() { # prints "<path><TAB><glob>" for each path on the list
     for g in "${pats[@]}"; do [[ "/${1#./}" == $g ]] && { printf '%s\t%s\n' "$1" "$g"; return 0; }; done
     return 1
   }
-  if [ $# -gt 0 ]; then for p; do on_list "$p" && hit=1; done
-  elif [ -n "$z" ]; then while IFS= read -r -d '' p; do on_list "$p" && hit=1; done
-  else while IFS= read -r p; do [ -z "$p" ] || ! on_list "$p" || hit=1; done; fi
+  if [ $# -gt 0 ]; then for p; do n=$((n + 1)); on_list "$p" && hit=1; done
+  elif [ -n "$z" ]; then while IFS= read -r -d '' p; do n=$((n + 1)); on_list "$p" && hit=1; done
+  else while IFS= read -r p; do [ -z "$p" ] && continue; n=$((n + 1)); on_list "$p" && hit=1; done; fi
+  # a change always has a path, so none means the command feeding this failed: that must not read as clean
+  [ "$n" -gt 0 ] || die "no paths to check"
   return "$hit"
 }
 
