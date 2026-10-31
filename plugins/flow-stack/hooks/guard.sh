@@ -41,7 +41,7 @@ lit="$(perl -e '
 #     ${VAR:?} aborts instead of expanding to nothing, so guarded targets pass.
 while IFS= read -r seg; do
   grep -Eq '[[:space:]](-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)([[:space:]]|$)' <<<"$seg" || continue
-  if grep -Eq "[[:space:]][\"']?(/|~|\\\$HOME|\\\$\{HOME\})/?\*?[\"']?([[:space:]]|\$)" <<<"$seg"; then
+  if grep -Eq "[[:space:]][\"']?(/|~|\\\$HOME|\\\$\{HOME\})[\"']?/?\*?[\"']?([[:space:]]|\$)" <<<"$seg"; then
     pre_decide deny "flow guard: recursive delete of / or home is never allowed."
   fi
   if sed -E 's/\$\{[A-Za-z_0-9]+:\?[^}]*\}//g' <<<"$seg" | grep -Eq '\$\{?[A-Za-z_0-9@*]'; then
