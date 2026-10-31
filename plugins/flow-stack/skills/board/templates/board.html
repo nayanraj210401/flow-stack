@@ -170,7 +170,7 @@ a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
     (r.features || []).filter(f => f.status === 'stale' || f.status === 'broken').forEach(f => needs.push([pill(f.status === 'broken' ? 'p-crit' : 'p-warn', f.status), `${esc(r.name)} · feature ${esc(f.id)}`, 'Re-run its scenario: features.sh run ' + f.id]));
   });
   const F = D.factory;
-  ((F && F.columns || []).find(c => c.name === 'Blocked') || {cards: []}).cards.forEach(c => needs.push([pill('p-gate', 'blocked'), `factory · ${link(c.url, c.ref)} ${esc(c.title)}`, 'Blocked on the factory board: answer it, then move the card.']));
+  ((F && F.columns || []).find(c => c.name === 'Blocked') || {cards: []}).cards.filter(c => c.open).forEach(c => needs.push([pill('p-gate', 'blocked'), `factory · ${link(c.url, c.ref)} ${esc(c.title)}`, 'Blocked on the factory board: answer it, then move the card.']));
   const A = D.attention;
   (A && A.warnings || []).forEach(w => needs.push([pill(w.level === 'crit' ? 'p-crit' : 'p-warn', 'attention'), esc(w.text), 'Your attention budget, today.']));
   $('needs-h').textContent = `Needs you · ${needs.length}`;

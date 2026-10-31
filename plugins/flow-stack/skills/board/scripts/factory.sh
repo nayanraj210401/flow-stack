@@ -80,7 +80,7 @@ case "$cmd" in
       | ([$prs[] | ([.labels[] | rank | values] | max) as $a | ([.issues[].labels[] | rank | values] | max) as $p
           | select($a != null and $p != null) | $a > $p]) as $risk
       | {url, title,
-         columns: [$cols[] as $n | {name: $n, cards: [$c[] | select((.col // .status // "No status") == $n) | {ref, title, url, type}]}],
+         columns: [$cols[] as $n | {name: $n, cards: [$c[] | select((.col // .status // "No status") == $n) | {ref, title, url, type, open: (.state == "OPEN")}]}],
          cycle: {merged: ($m | length),
            intake_h: ([$m[] | .created as $pc | .issues[] | h(.created; $pc)] | median),
            build_h: ([$m[] | h(.created; .merged)] | median)},
