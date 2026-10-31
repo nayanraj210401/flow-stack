@@ -13,6 +13,8 @@ scripts/seal.sh verify         # before presenting; non-zero exit = tampering
 scripts/seal.sh list
 ```
 
+`add` refuses while a row in INTENT.md's `## Edge cases` maps to no check and no `non-goal: <why>`; it names the rows. An INTENT with no rows seals as before.
+
 ## What happens after sealing
 
 - An Edit or Write to a sealed file prompts the human (edit-guard hook).

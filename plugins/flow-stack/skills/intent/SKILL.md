@@ -46,13 +46,15 @@ Each check proves one observable behavior:
 - `C1 · 101st request in 60s returns 429 · \`npm test -- rate-limit.spec\``: runnable, preferred.
 - `C3 · error message reads well · human-judged: read the 429 body`: only when no command can decide it.
 
+**Edge cases.** Fill INTENT's `## Edge cases` matrix: one row per case (empty, huge, concurrent, offline, unauthorized, retry, plus the domain's own), each `- <case> → C2` or `- <case> → non-goal: <why>`. A case worth a check gets one. `seal.sh add` refuses while any row maps to neither, or to a check ID the checks don't list.
+
 **Bind checks to features.** When `.flow/features/` exists, run `../feature-map/scripts/features.sh impact <paths the change will touch>` and cite sub-feature IDs in the checks (`C1 · auth.login.lockout · 6th failure returns 423 · \`…\``). New behavior gets a new sub-feature ID. A new user-facing capability gets a new feature (`features.sh new`), and that file is written after the intent gate.
 
 Write the check files now, before any code (test files, curl scripts, driver-skill scenarios), so they exist and fail. Then seal them: `../seal/scripts/seal.sh add <paths>`.
 
 ## 4. Blind checks
 
-Spawn the `checker` agent (flow-stack:checker) with INTENT.md's Goal, Non-goals, and checks, plus the repo's test conventions. It writes 1 to 3 held-out checks into `.flow/tasks/<slug>/blind/` with a `MANIFEST`, and returns only the count and the behavior area. **Do not read what it wrote**; the read-guard hook denies it anyway. Record the count and area in INTENT.md.
+Spawn the `checker` agent (flow-stack:checker) with INTENT.md's Goal, Non-goals, checks, and edge-case matrix, plus the repo's test conventions. It writes 1 to 3 held-out checks into `.flow/tasks/<slug>/blind/` with a `MANIFEST`, and returns only the count and the behavior area. **Do not read what it wrote**; the read-guard hook denies it anyway. Record the count and area in INTENT.md.
 
 Skip blind checks for tiny tasks and for the bug playbook unless a contract changes. Say that you skipped them.
 
