@@ -121,7 +121,8 @@ repo_json() {
   feats="$(for f in "$fd"/features/*.md; do [ -f "$f" ] && [ "$(basename "$f")" != README.md ] || continue
       awk 'NR==1&&$0=="---"{fm=1;next} fm&&$0=="---"{exit} fm{k=$0; sub(/:.*/,"",k); v=$0; sub(/^[^:]*:[[:space:]]*/,"",v); if(k=="id"||k=="status"||k=="verified") printf "%s\t%s\n", k, v}' "$f" |
       jq -Rsc 'split("\n") | map(select(length>0) | split("\t") | {(.[0]): .[1]}) | add'
-    done | jq -sc 'map(select(. != null))')"
+    done | jq -sc --rawfile t <(cat "$fd/verified.tsv" 2>/dev/null) '(reduce ($t | split("\n") | map(select(length > 0) | split("\t")))[] as $r ({}; .[$r[0]] = {status: $r[1], verified: $r[2]})) as $m
+      | map(select(. != null) | . + ($m[.id] // {}))')"
   decs="$(for t in "$fd"/tasks/*/DECISIONS.tsv; do [ -f "$t" ] || continue; s="$(basename "$(dirname "$t")")"
       tail -n +2 "$t" | awk -F'\t' -v s="$s" 'NF>=3{print $1"\t"s"\t"$2"\t"$3"\t"$4"\t"$6}'; done |
     jq -Rsc 'split("\n") | map(select(length>0) | split("\t") | {ts:.[0], task:.[1], who:.[2], decision:.[3], why:.[4], reversible:.[5]})
