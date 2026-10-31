@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # routines.sh: flow-stack routines on GitHub Actions. Run from the target repo's root.
 #   routines.sh list                                  the catalog: each template routine and when to use it
-#   routines.sh add <name> [--cron "<m h d M w>"] [--tz <zone>] [--preset <p>] [--force]
+#   routines.sh add <name> [--cron "<m h d M w>"] [--tz <zone>] [--preset <p>] [--force] [--local]
 #                                                     write .github/routines/<name>.md (from the catalog when the
 #                                                     name is in it, else a stub) and render it
 #   routines.sh schedule <name> "<m h d M w>" [--tz <zone>]
@@ -150,11 +150,13 @@ profile() { # profile <preset>: a headless profile for CI runs, notifications of
 }
 
 add() {
-  local name="${1:-}" preset=solo-hacker force="" cron="" tz=""; shift || true
+  local name="${1:-}" preset=solo-hacker force="" cron="" tz="" lcl=""; shift || true
   [[ "$name" =~ $name_re ]] || die "add <name>: lowercase letters, digits, dashes"
   while [ $# -gt 0 ]; do
-    case "$1" in --preset) preset="$2"; shift 2 ;; --cron) cron="$2"; shift 2 ;; --tz) tz="$2"; shift 2 ;; --force) force=1; shift ;; *) die "unknown flag $1" ;; esac
+    case "$1" in --preset) preset="$2"; shift 2 ;; --cron) cron="$2"; shift 2 ;; --tz) tz="$2"; shift 2 ;; --force) force=1; shift ;; --local) lcl=1; shift ;; *) die "unknown flag $1" ;; esac
   done
+  # --local: the shift, on this machine's scheduler (shift.sh); nothing under .github
+  [ -z "$lcl" ] || exec "$here/shift.sh" install "$name" ${force:+--force}
   [ -z "$tz" ] || [ -n "$cron" ] || die "--tz needs --cron"
   [ -z "$cron" ] || valid_cron "$cron" || die "--cron must be five fields (minute hour day month weekday), got '$cron'"
   [ -z "$tz" ] || valid_tz "$tz" || die "--tz must be $tz_hint, got '$tz'"

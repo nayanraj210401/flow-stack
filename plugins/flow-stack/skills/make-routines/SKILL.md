@@ -75,3 +75,32 @@ The workflow changes always get their own branch and PR. Never commit them to th
 `$S check`: every workflow matches a fresh render of its routine, no generated workflow outlives its routine, and the profile exists.
 
 Measure it after two weeks: the share of `self-heal` PRs merged, of `self-create` issues not closed as invalid, and of `review` findings you acted on. Below half, tighten that prompt before adding routines.
+
+## The shift: your own overnight work, on your machine
+
+Routines serve a repo. The shift serves you: work waiting on you overnight gets prepared, never sent, and you release it in the morning. It runs on your scheduler (launchd on macOS, cron elsewhere) because it needs your identity. Phase 1 has two read-only jobs, `review` and `brief`. Nothing happens without a `shift:` block in the profile's frontmatter:
+
+```yaml
+shift:
+  when: "0 5 * * 1-5"            # local time
+  repos: [acme/api, flow-stack]  # owner/name, or a name; items from other repos are dropped
+  max_items: 5
+  budget_usd: 5                  # the reviewer's spend cap for one run
+  jobs:
+    review: {from: github-review-requested}
+    brief:  {to: file}           # file | notify
+```
+
+- **Sources** are adapters: `github-review-requested`, `github-my-prs`, `github-assigned`, `github-project:<owner>/<n>[:<status>]`, or any command that prints a JSON array of `{id, url, repo, kind, title, updated}` (a Linear or Jira CLI from your Toolchain). A command with commas goes in the block form (`review:` then `from: <command>` on its own line), since `{…}` splits on commas.
+- **`review`**: for each PR, the `reviewer` agent reads the diff in a scratch dir with only Read, Grep, and Glob, so it never runs the PR's code and the PR's text is a file it is told is data. The result is a **pending** GitHub review on the PR's head commit: only you see it until you submit or discard it. Its checks say "not run" (no container yet).
+- **`brief`**: `$FLOW_STACK_HOME/digest/shift-<date>.md` (next to wrap's pages), one line per item: `✓` ready to release, `~` needs you, `✗` blocked (why), each with the command or link that releases it. `to: notify` also sends one notification through the profile's `notify:`.
+- **Idempotent**: an item is keyed by URL + `updated`; a re-run skips what it has seen and does nothing when nothing changed.
+- **Never outward**: no submit, push, comment, PR, or ticket move. The only GitHub write is the pending review.
+- **Access**: only the token in `$FLOW_STACK_HOME/shift/token`, a fine-grained token for `shift.repos` (Pull requests: read and write, Contents: read). The run re-executes itself in a clean env (no ssh agent, no cloud credentials, its own empty `gh` config), so it can't fall back to your `gh` login.
+
+```bash
+$S add shift --local          # writes $FLOW_STACK_HOME/shift/run.sh + a launchd plist (or crontab line); prints the install command
+<dir>/scripts/shift.sh run --dry-run   # plans and the digest under shift/dry/, nothing staged on GitHub
+```
+
+Installing the scheduler entry is yours to run (`--local` prints the command). Re-run `add shift --local --force` after the plugin moves (an update) or `when:` changes. `respond` and `start` come later.
