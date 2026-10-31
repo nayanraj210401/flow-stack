@@ -1,0 +1,13 @@
+# Safety paths: the machinery the routines run on. A change here is the human's to merge, however small:
+# auto-merge blocks the PR and triage scores the issue risk:high. Both read this file through
+# `make-routines/scripts/routines.sh safety`, so edit the list here, never in a prompt.
+# One bash glob per line, matched against "/<path>": a leading / anchors at the repo root, */ matches at any
+# depth, and * crosses directories. Text after the glob is a comment.
+/.github/*          the routines, their prompts, this list, and CI
+*/.flow/*           gitignored, so a PR that adds one forces it in: ready.sh runs its commands and reads its hook switches
+*/.claude/*         gitignored too: forced-in skills, agents or commands load into every later run
+*/CLAUDE.md
+*/AGENTS.md
+*/.mcp.json
+*/settings*.json
+*/.claude-plugin/*
