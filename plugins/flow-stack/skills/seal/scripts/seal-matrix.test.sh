@@ -40,5 +40,13 @@ if seals; then bad "CRLF matrix with an unmapped row sealed"; else ok "CRLF / tr
 grep -q 'empty' "$SB/out" && bad "CRLF mapped row reported" || ok "CRLF mapped row accepted"
 intent "- huge"; seals && bad "row with no arrow sealed" || ok "row with no mapping at all blocks"
 
+for row in '* huge' '+ huge' '1. huge' '2) huge' "$(printf -- '-\thuge')"; do
+  intent "$row"; seals && bad "bullet style '$row' sealed unmapped" || ok "bullet style '$row' is a row"
+done
+printf '# Intent · x\n\n## Acceptance checks\n- [ ] C1 · works\n\n## Edge Cases\n- huge\n' >"$I"
+seals && bad "'## Edge Cases' heading skipped" || ok "heading matched case-insensitively"
+printf '# Intent · x\n\n## Acceptance checks\n- [ ] C1 · works\n\n## Edge cases\n```\n## Acceptance checks\n```\n- huge\n' >"$I"
+seals && bad "fenced heading switched sections" || ok "headings inside code fences ignored"
+
 [ "$FAILS" = 0 ] || { echo "== seal-matrix · FAIL ($FAILS)"; exit 1; }
 echo "== seal-matrix · PASS"

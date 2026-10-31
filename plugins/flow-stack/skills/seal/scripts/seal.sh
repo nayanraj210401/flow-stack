@@ -37,9 +37,12 @@ sha() { shasum -a 256 <"$1" | cut -d' ' -f1; }
 unmapped() {
   [ -f "$FLOW_TASK_DIR/INTENT.md" ] || return 0
   awk '
-    /^## / { sec = $0; sub(/[ \t\r]+$/, "", sec); next }
-    sec == "## Acceptance checks" && /^- \[.\] C[0-9]+/ { match($0, /C[0-9]+/); ids[substr($0, RSTART, RLENGTH)] = 1 }
-    sec == "## Edge cases" && /^- / { rows[++n] = $0 }
+    /^[ \t]*(```|~~~)/ { fence = !fence; next }
+    fence { next }
+    /^## / { sec = tolower($0); sub(/[ \t\r]+$/, "", sec); next }
+    sec == "## acceptance checks" && /^- \[.\] C[0-9]+/ { match($0, /C[0-9]+/); ids[substr($0, RSTART, RLENGTH)] = 1 }
+    # any list item is a row, so a bullet style the parser does not expect is refused, not skipped
+    sec == "## edge cases" && /^([-*+]|[0-9]+[.)])[ \t]/ { rows[++n] = $0 }
     END {
       for (i = 1; i <= n; i++) {
         t = rows[i]; ok = 0
