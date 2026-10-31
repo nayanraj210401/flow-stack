@@ -14,7 +14,7 @@ cat >"$SB/bin/gh" <<'SH'
 echo "$*" >>"$FIX.log"
 [ -n "${GH_FAIL:-}" ] && { echo "HTTP 401" >&2; exit 1; }
 case "$1 $2" in
-  "api graphql") cat "$FIX" ;;
+  "api graphql") cat "$FIX"; [ ! -f "$FIX.page2" ] || cat "$FIX.page2" ;;
   "project item-edit") shift 2; while [ $# -gt 0 ]; do case "$1" in --id) id="$2" ;; --single-select-option-id) o="$2" ;; esac; shift 2; done
     jq --arg id "$id" --arg o "$o" '(.data.repositoryOwner.projectV2) as $p | ([$p.field.options[] | select(.id == $o)][0].name) as $n
       | .data.repositoryOwner.projectV2.items.nodes |= map(if .id == $id then .fieldValueByName = {name: $n} else . end)' "$FIX" >"$FIX.new" && mv "$FIX.new" "$FIX" ;;
@@ -81,6 +81,10 @@ cp "$SB/project.orig.json" "$FIX"
 "$H/factory.sh" json >"$SB/f.json" 2>"$SB/f.err"
 ck "json: columns in project order, cards in their implied column" 'jq -e "[.columns[] | {(.name): [.cards[].ref]}] | add == {Triage: [\"o/r#1\",\"o/r#9\",\"o/r#11\"], \"Spec review\": [\"o/r#2\"], Building: [\"o/r#4\"], Rework: [\"o/r#5\"], Ready: [\"o/r#6\"], Merged: [\"o/r#7\",\"o/r#8\"], Blocked: [\"o/r#3\"]}" "$SB/f.json" >/dev/null'
 ck "json: cycle time, rework rate, escaped bugs, risk misses" 'jq -e ".cycle == {merged: 1, intake_h: 24, build_h: 12} and .rework == {prs: 4, reworked: 2} and .escaped.bugs == 1 and .escaped.refs[0].ref == \"o/r#9\" and .risk == {scored: 1, misses: 1}" "$SB/f.json" >/dev/null'
+# --paginate: gh prints one document per page; the second page adds a card
+jq -c '.data.repositoryOwner.projectV2.items.nodes = [{"id":"P13","fieldValueByName":null,"content":(.data.repositoryOwner.projectV2.items.nodes[3].content | .number = 13 | .isDraft = false)}]' "$FIX" >"$FIX.page2"
+ck "two pages: cards from both, one set of columns" '"$H/factory.sh" json | jq -e "([.columns[].cards[]] | length) == 11 and (.columns | length) == 7 and ([.columns[] | select(.name == \"Ready\") | .cards[].ref] | index(\"o/r#13\"))" >/dev/null'
+rm -f "$FIX.page2"
 ck "a gh failure is an error, not an empty board" 'GH_FAIL=1 "$H/factory.sh" json >/dev/null 2>&1; [ $? != 0 ]'
 
 # collect.sh: factory key only when configured; render: the panel and Blocked in Needs you
@@ -89,9 +93,12 @@ git init -q "$SB/repo" && git -C "$SB/repo" commit -q --allow-empty -m init
 ck "collect: configured project → board.factory" 'jq -e ".factory.url == \"https://github.com/users/o/projects/3\" and (.factory.columns | length) == 7" "$SB/on.json" >/dev/null'
 (cd "$SB/repo" && "$H/collect.sh" --no-cost --no-attention --no-prs "$SB/repo") >"$SB/np.json" 2>/dev/null
 ck "collect --no-prs: factory says not collected" 'jq -e ".factory.error | test(\"no-prs\")" "$SB/np.json" >/dev/null'
+printf -- '---\nfactory:\n  project: o/repo\n---\n' >"$SB/home/profile.md"
+(cd "$SB/repo" && "$H/collect.sh" --no-cost --no-attention "$SB/repo") >"$SB/bad.json" 2>/dev/null
+ck "collect: malformed project → factory.error, not silently dropped" 'jq -e ".factory.error | test(\"owner\")" "$SB/bad.json" >/dev/null'
 printf -- '---\nrigor: lean\n---\n' >"$SB/home/profile.md"
 (cd "$SB/repo" && "$H/collect.sh" --no-cost --no-attention "$SB/repo") >"$SB/off.json" 2>/dev/null
-ck "collect: no factory config → no factory key, gh not called for it" 'jq -e "has(\"factory\") | not" "$SB/off.json" >/dev/null && [ "$(grep -c graphql "$FIX.log")" = 7 ]'
+ck "collect: no factory config → no factory key, gh not called for it" 'jq -e "has(\"factory\") | not" "$SB/off.json" >/dev/null && [ "$(grep -c graphql "$FIX.log")" = 8 ]'
 
 command -v node >/dev/null || { echo "  ~ node missing: factory render checks skipped"; [ $fail = 0 ] && echo PASS; exit $fail; }
 cat >"$SB/run.js" <<'JS'
@@ -106,7 +113,9 @@ console.log(JSON.stringify({needs: g('needs').innerHTML, views: g('views').inner
 JS
 "$H/render.sh" "$SB/on.json" "$SB/on.html" >/dev/null && node "$SB/run.js" "$SB/on.html" >"$SB/on.out" 2>"$SB/on.err" || { echo "  ✗ factory board failed to render: $(head -3 "$SB/on.err")"; fail=1; }
 ck "panel: columns with counts, metrics, card links" 'grep -qF "data-p=\\\"factory\\\"" "$SB/on.out" && grep -qF "Spec review" "$SB/on.out" && grep -qF "2 of 4" "$SB/on.out" && grep -qF "https://github.com/o/r/pull/6" "$SB/on.out" && grep -qF "1 of 1" "$SB/on.out"'
-ck "Needs you lists the Blocked card" 'node -e "const o=JSON.parse(require(\"fs\").readFileSync(process.argv[1]));process.exit(/o\/r#3/.test(o.needs)?0:1)" "$SB/on.out"'
+jq '.factory.columns |= map(if .name == "Blocked" then .cards += [{ref: "o/r#20", title: "closed", url: "u", type: "issue", open: false}] else . end)' "$SB/on.json" >"$SB/on2.json"
+"$H/render.sh" "$SB/on2.json" "$SB/on.html" >/dev/null && node "$SB/run.js" "$SB/on.html" >"$SB/on.out"
+ck "Needs you lists the open Blocked card, not a closed one" 'node -e "const o=JSON.parse(require(\"fs\").readFileSync(process.argv[1]));process.exit(/o\/r#3/.test(o.needs)&&!/o\/r#20/.test(o.needs)?0:1)" "$SB/on.out"'
 "$H/render.sh" "$SB/off.json" "$SB/off.html" >/dev/null && node "$SB/run.js" "$SB/off.html" >"$SB/off.out"
 ck "no factory config: no factory markup" '! grep -qiF "factory" "$SB/off.out"'
 [ $fail = 0 ] && echo PASS || exit 1

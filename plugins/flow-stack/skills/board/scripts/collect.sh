@@ -218,12 +218,13 @@ attention_json() { # null when skipped or no transcripts; else the day-by-day wi
     | {cap_secs: $cap, days: $days, budget_min: $budget, today: $t, by_day: $by, warnings: $w} end' "$att"
 }
 # the factory's GitHub Project (factory.sh), only when the profile names one: no key otherwise
-factory=""
-if fp="$("$here/factory.sh" project 2>/dev/null)"; then
+factory=""; fp="$("$here/factory.sh" project 2>"$att.f")"; rc=$?
+if [ "$rc" = 2 ]; then factory="$(jq -nc --arg e "$(head -c 300 "$att.f")" '{error: $e}')"
+elif [ "$rc" = 0 ]; then
   if [ "$prs" = 0 ]; then factory='{"error":"not collected (--no-prs)"}'
   else factory="$("$here/factory.sh" json "$fp" 2>"$att.f")" || factory="$(jq -nc --arg e "$(head -c 300 "$att.f")" '{error: $e}')"; fi
-  factory="$(jq -c --arg p "$fp" '{project: $p} + .' <<<"$factory")"; rm -f "$att.f"
-fi
+  factory="$(jq -c --arg p "$fp" '{project: $p} + .' <<<"$factory")"
+fi; rm -f "$att.f"
 budget="$(sed -n 's/^[[:space:]]*review_minutes_per_day:[[:space:]]*\([0-9]*\).*/\1/p' "$profile" 2>/dev/null | head -n1 | grep . || echo null)"
 
 board="$(printf '%s\n' "${rj[@]:-}" | jq -sc --arg at "$(date +%FT%T%z)" --argjson spend "${spend:-null}" --argjson prefs "$(board_prefs)" \
