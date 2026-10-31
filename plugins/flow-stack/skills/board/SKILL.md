@@ -26,6 +26,10 @@ It reads the profile's `# Repos` plus the current repo: `.flow/tasks/*`, `.flow/
 
 Per day the board shows minutes against `attention.review_minutes_per_day`, blocked-on-you minutes, switches (consecutive events in different sessions ≤ 10 min apart), and peak (most sessions with an event in one 30 min window). Today's warnings: over budget (🔴), over 80% of it, peak ≥ 3, or ≥ 15 switches (🟡; two or more make all 🔴). They also land in Needs you. `--no-attention` skips the transcript read.
 
+**Factory.** Opt-in: a profile with `factory:` then `  project: <owner>/<n>` names the GitHub Project that is the factory's live board (columns Triage, Ready, Building, Rework, Review, Merged, Blocked). `collect.sh` then adds `board.factory` from `scripts/factory.sh json`: the cards by column, median issue → PR and PR → merge hours, PRs sent to `rework`, escaped bugs (a `bug` or `type:bug` issue naming a merged PR on the board), and risk misses (a PR's `risk:` label above its issue's). Blocked cards go to Needs you. With no `factory:` there is no `factory` key and the board is unchanged. Reading a user-owned Project needs a token with the `project` scope.
+
+`scripts/factory.sh dry-run` prints the card moves the issue and PR states imply; `apply` makes them. Merged PR or any closed issue or PR → Merged (the done column); `needs-human` → Blocked; open PR with `rework` → Rework, non-draft or a passing `flow/ready` check run (posted once the factory PR loop, #184, lands) → Review, else Building; a card with no column → Triage. Ready is the intake gate: a human dragging a card from Triage to Ready approves it to be built. Nothing reads Ready yet: today self-heal picks issues by label; the shift's `start` and self-heal are planned to read it, and Project write access is a different trust boundary from that label rule, and the sync never moves a card into Ready. An open issue a human put in a column stays there. Re-running moves nothing.
+
 ## 2. Render
 
 ```bash
@@ -46,7 +50,7 @@ Personal board preferences live in `${FLOW_STACK_HOME:-~/.flow-stack}/profile.md
 | `accent` | `#rrggbb` |
 | `view` | `<title> · <jq over board.json> · table\|list\|count`, repeatable: a custom panel built from data the board already has |
 
-Panel ids are stable; renaming one breaks people's profiles: `needs spend attention tasks features quality decisions debt shipped estimate repos`. Views run with an empty environment, return at most 50 rows, and may not `import` or `include`. A view that needs data `collect.sh` doesn't gather is a `collect.sh` change, not a pref. Unknown keys, unknown panel ids, and bad values are skipped and listed in a footer on the board.
+Panel ids are stable; renaming one breaks people's profiles: `needs spend attention tasks features quality decisions debt shipped estimate repos factory`. Views run with an empty environment, return at most 50 rows, and may not `import` or `include`. A view that needs data `collect.sh` doesn't gather is a `collect.sh` change, not a pref. Unknown keys, unknown panel ids, and bad values are skipped and listed in a footer on the board.
 
 ## 3. Publish as the Artifact
 

@@ -119,6 +119,9 @@ a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
 .item{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;align-items:start}
 .item .q{font-weight:500}.item .rec{grid-column:2;color:var(--muted);font-size:13px}
 .tabs{flex-wrap:wrap}
+.cols{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px}
+.cols>div{background:var(--sunk);border-radius:6px;padding:8px 10px;display:flex;flex-direction:column;gap:4px;font-size:12px;min-width:0}
+.cols>div>a,.cols>div>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 </style>
 <script id="board-data" type="application/json">{{BOARD_JSON}}</script>
 
@@ -166,6 +169,8 @@ a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
     ((r.prs || {}).mine || []).forEach(p => needs.push([pill(p.draft ? 'p-mute' : 'p-pr', p.draft ? 'draft' : 'your PR'), `${esc(r.name)} · ${link(p.url, '#' + p.number)} ${esc(p.title)}`, p.review === 'APPROVED' ? 'Approved: ready to merge.' : p.review === 'CHANGES_REQUESTED' ? 'Changes requested.' : 'Open, awaiting merge or review.']));
     (r.features || []).filter(f => f.status === 'stale' || f.status === 'broken').forEach(f => needs.push([pill(f.status === 'broken' ? 'p-crit' : 'p-warn', f.status), `${esc(r.name)} · feature ${esc(f.id)}`, 'Re-run its scenario: features.sh run ' + f.id]));
   });
+  const F = D.factory;
+  ((F && F.columns || []).find(c => c.name === 'Blocked') || {cards: []}).cards.filter(c => c.open).forEach(c => needs.push([pill('p-gate', 'blocked'), `factory · ${link(c.url, c.ref)} ${esc(c.title)}`, 'Blocked on the factory board: answer it, then move the card.']));
   const A = D.attention;
   (A && A.warnings || []).forEach(w => needs.push([pill(w.level === 'crit' ? 'p-crit' : 'p-warn', 'attention'), esc(w.text), 'Your attention budget, today.']));
   $('needs-h').textContent = `Needs you · ${needs.length}`;
@@ -279,8 +284,17 @@ a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
       const p = r.prs || {}, prn = (p.mine || []).length + (p.review_requested || []).length, qs = (r.quality || {}).score;
       return `<tr><td class="mono">${esc(r.name)}</td><td>${qs == null ? pill('p-mute', 'n/a') : pill('p-' + tone(qs), qs)}</td><td>${open(r).length}</td><td>${g ? pill('p-gate', g + ' gate' + (g > 1 ? 's' : '')) : '—'}</td><td>${prn ? pill('p-pr', prn + ' PR' + (prn > 1 ? 's' : '')) : '—'}</td><td>${f.length ? pill(v === f.length ? 'p-ok' : 'p-warn', v + '/' + f.length) : pill('p-mute', 'no map')}</td><td>${(r.debt || []).filter(d => d.open).length || '—'}</td><td class="num">${(r.shipped || []).length}</td></tr>`;
     }).join('');
-    return panel('repos', 'c12', 'Repos', 'profile # Repos', `<div class="tbl"><table><thead><tr><th>Repo</th><th>Quality</th><th>Open tasks</th><th>Gates</th><th>PRs</th><th>Features</th><th>Debt</th><th class="num">Commits 7d</th></tr></thead><tbody>${rows}</tbody></table></div>`)
+    return (F ? factoryPanel() : '') + panel('repos', 'c12', 'Repos', 'profile # Repos', `<div class="tbl"><table><thead><tr><th>Repo</th><th>Quality</th><th>Open tasks</th><th>Gates</th><th>PRs</th><th>Features</th><th>Debt</th><th class="num">Commits 7d</th></tr></thead><tbody>${rows}</tbody></table></div>`)
       + (D.spend && D.spend.length ? panel('spend', 'c12', `Spend · ${D.spend.length} days`, 'ccusage', '<svg viewBox="0 0 560 150" id="spend" role="img" aria-label="Daily spend"></svg>') : '');
+  }
+
+  function factoryPanel() {
+    if (F.error) return panel('factory', 'c12', 'Factory', F.project || 'GitHub Project', `<p class="empty">Factory not collected: ${esc(F.error)}</p>`);
+    const hr = v => v == null ? 'n/a' : esc(v) + 'h', of = (a, b) => b ? `${esc(a)} of ${esc(b)}` : 'n/a';
+    const att = A && (A.by_day || []).length ? Math.round(A.by_day.reduce((a, d) => a + d.min, 0)) + ' min' : 'n/a';
+    const cols = `<div class="cols">${F.columns.map(c => `<div><span>${esc(c.name)} · <b class="num">${esc(c.cards.length)}</b></span>${c.cards.slice(0, 6).map(x => link(x.url, x.ref + ' ' + x.title)).join('')}${c.cards.length > 6 ? `<span class="src">+${esc(c.cards.length - 6)} more</span>` : ''}</div>`).join('')}</div>`;
+    const stats = `<div class="stats"><div><span class="num">${hr(F.cycle.intake_h)}</span><span class="l">issue → PR, median</span></div><div><span class="num">${hr(F.cycle.build_h)}</span><span class="l">PR → merge, median (${esc(F.cycle.merged)} merged)</span></div><div><span class="num">${of(F.rework.reworked, F.rework.prs)}</span><span class="l">PRs sent to rework</span></div><div><span class="num">${esc(F.escaped.bugs)}</span><span class="l">escaped bugs</span></div><div><span class="num">${of(F.risk.misses, F.risk.scored)}</span><span class="l">risk misses</span></div><div><span class="num">${att}</span><span class="l">your attention, ${esc(A ? A.days : 14)} days</span></div></div>`;
+    return panel('factory', 'c12', `Factory · ${link(F.url, F.title)}`, F.project, cols + stats + '<p class="note">Columns are where each card belongs by its issue or PR state (factory.sh apply moves them there), except Ready: a human moving a card from Triage to Ready approves it to be built, and the sync never moves a card into Ready. Escaped bug: a bug issue that names a merged PR on the board. Risk miss: a PR scored riskier than its issue.</p>');
   }
 
   // ---- charts (colors via theme tokens, so both themes work live) ----
