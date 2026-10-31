@@ -171,7 +171,7 @@ board_prefs() {
   perl -0pe 's/<!--.*?-->//gs' "$profile" 2>/dev/null |
     awk '/^# /{on = ($0 ~ /^# Board[[:space:]]*$/); next}
       on && /^-[[:space:]]+[A-Za-z_]+:/{l=$0; sub(/^-[[:space:]]+/,"",l); k=l; sub(/:.*/,"",k); sub(/^[^:]*:[[:space:]]*/,"",l); if (k == "view") { sub(/[[:space:]]+$/,"",l); if (match(l, / · (table|list|count)[[:space:]]+#[[:space:]].*$/)) { t = substr(l, RSTART); sub(/[[:space:]]+#.*$/,"",t); l = substr(l, 1, RSTART - 1) t } } else sub(/[[:space:]]+(#[[:space:]].*)?$/,"",l); print k"\t"l}' |
-    jq -Rsc '["needs","spend","attention","tasks","features","quality","decisions","debt","shipped","estimate","repos"] as $ids
+    jq -Rsc '["needs","spend","attention","tasks","features","quality","decisions","debt","shipped","estimate","repos","factory"] as $ids
       | reduce (split("\n")[] | select(length > 0) | split("\t") | {k: .[0], v: (.[1] // "")}) as $p
         ({hide: [], order: [], wide: [], theme: "auto", tab: "current", accent: null, views: [], warnings: []};
          if $p.k == "hide" or $p.k == "order" or $p.k == "wide" then
@@ -217,11 +217,19 @@ attention_json() { # null when skipped or no transcripts; else the day-by-day wi
        | map(.text = (if .level == "crit" then "🔴 " else "🟡 " end) + .text + " (" + (.sids | names) + ")")) as $w
     | {cap_secs: $cap, days: $days, budget_min: $budget, today: $t, by_day: $by, warnings: $w} end' "$att"
 }
+# the factory's GitHub Project (factory.sh), only when the profile names one: no key otherwise
+factory=""
+if fp="$("$here/factory.sh" project 2>/dev/null)"; then
+  if [ "$prs" = 0 ]; then factory='{"error":"not collected (--no-prs)"}'
+  else factory="$("$here/factory.sh" json "$fp" 2>"$att.f")" || factory="$(jq -nc --arg e "$(head -c 300 "$att.f")" '{error: $e}')"; fi
+  factory="$(jq -c --arg p "$fp" '{project: $p} + .' <<<"$factory")"; rm -f "$att.f"
+fi
 budget="$(sed -n 's/^[[:space:]]*review_minutes_per_day:[[:space:]]*\([0-9]*\).*/\1/p' "$profile" 2>/dev/null | head -n1 | grep . || echo null)"
 
 board="$(printf '%s\n' "${rj[@]:-}" | jq -sc --arg at "$(date +%FT%T%z)" --argjson spend "${spend:-null}" --argjson prefs "$(board_prefs)" \
-  --argjson budget "$budget" --argjson attention "$(attention_json "$budget" 2>/dev/null | grep . || echo null)" \
+  --argjson budget "$budget" --arg factory "$factory" --argjson attention "$(attention_json "$budget" 2>/dev/null | grep . || echo null)" \
   '{generated:$at, review_minutes_per_day:$budget, spend:$spend, attention:$attention, repos:map(select(. != null))}
+  + (if $factory == "" then {} else {factory: ($factory | fromjson)} end)
   | .prefs = ([.repos[].name] as $names | $prefs | if .tab | IN(("current", "all", $names[])) then . else .warnings += ["tab: no repo named \(.tab)"] | .tab = null end)')"
 
 # each view is jq over the board: empty environment (no secrets), 5 s, 50 rows. Its stderr is
