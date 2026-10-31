@@ -169,12 +169,6 @@ if [ -n "$FLOW_TASK_DIR" ] && [ -f "$FLOW_TASK_DIR/SEALS" ]; then
   done <"$FLOW_TASK_DIR/SEALS"
 fi
 
-# 3b. The ready ledger is ready.sh's alone: a stamp written by hand would skip the bar (and, in a routine, post a
-#     flow/ready check). A shell write that names it asks; reading it is fine.
-if has 'ready\.tsv' && has '(sed[[:space:]]+(-i|--in-place)|perl[[:space:]]+-p?i|>|tee|mv|rm|cp|truncate|dd[[:space:]]|(^|[^[:alnum:]_-])ln[[:space:]]|python|node|ruby)'; then
-  pre_decide ask "flow ready: .flow/ready.tsv is ready.sh's ledger, and a stamp written by hand would skip the bar. Record steps with ready.sh record; ready.sh writes the stamp."
-fi
-
 # 3a. TDD green: tests are locked against shell writes too. Write targets are redirects, tee's
 # files, in-place sed/perl files, rm/truncate and git checkout/restore/rm paths, and cp/mv's
 # destination, per command segment.
@@ -225,6 +219,14 @@ fi
 if has 'status:[[:space:]]*done' && ! has 'task\.sh' &&
    has '(>>?|tee([[:space:]]+-a)?)[[:space:]]*[^[:space:]|;&]*SLICES\.md|(sed[[:space:]]+-i|perl[[:space:]]+-[a-z]*i|mv|cp|truncate)[^|;&]*SLICES\.md'; then
   pre_decide deny "flow gate: mark a slice done with task.sh slice <id> done (proof-gated), not by rewriting SLICES.md."
+fi
+
+# 3b. The ready ledger is ready.sh's alone: a stamp written by hand would skip the bar (and, in a routine, post a
+#     flow/ready check). A write that names it asks: a redirect or tee into it, in-place sed/perl, or a file verb or
+#     interpreter word in the same command. Reading it (cat, tail, grep, 2>/dev/null) is fine.
+if has 'ready\.tsv' && { has '(>>?|tee([[:space:]]+-a)?)[[:space:]]*[^[:space:];&|<>]*ready\.tsv' \
+   || has '(^|[^[:alnum:]_.-])((sed|perl)[[:space:]]+(-[[:alnum:]]*i|--in-place)|(mv|rm|cp|truncate|dd|ln|install|python[0-9.]*|node|ruby)([[:space:]]|$))'; }; then
+  pre_decide ask "flow ready: .flow/ready.tsv is ready.sh's ledger, and a stamp written by hand would skip the bar. Record steps with ready.sh record; ready.sh writes the stamp."
 fi
 
 # 3c. Ready for review: in a flow-stack repo, a non-draft PR or `gh pr ready` needs ready.sh's stamp for HEAD.
