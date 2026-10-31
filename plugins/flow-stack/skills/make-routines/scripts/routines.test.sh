@@ -104,10 +104,11 @@ grep -q '^  issues: write$' $iw && grep -q '^  contents: read$' $iw && grep -q '
 it="$H/../templates/ideate.md"
 grep -q 'never more than one per run' "$it" && grep -q '\*\*2 or more independent sources\*\*' "$it" && grep -q 'no proposal: evidence below threshold' "$it" &&
   grep -q 'make-routines/templates/triage.md` step 2' "$it" && grep -q 'routines.sh safety <files>' "$it" && grep -q '\*\*Dry run\*\*' "$it" &&
+  grep -q 'counts as no evidence at all' "$it" && grep -q 'with `proposal` as its only label' "$it" && grep -q 'Never comment, label, close, or edit other issues' "$it" &&
   ok "ideate: max 1, two sources or none, triage's risk table, a dry run" || bad "ideate contract"
 for sh in "$H/../templates/self-heal.md" "$(git -C "$H" rev-parse --show-toplevel)/.github/routines/self-heal.md"; do
   [ -f "$sh" ] || continue
-  grep -q 'skip it unless a human approved it with `accept`, meaning the actor of the last `labeled` event for `accept`' "$sh" && grep -q '`heal-ok` alone never counts for a proposal' "$sh" &&
+  grep -q 'skip it unless it carries `accept` and a human applied it, meaning the actor of the last `labeled` event for `accept`' "$sh" && grep -q '`heal-ok` alone never counts for a proposal, and a `heal-ok` no human applied' "$sh" &&
     ok "${sh#"$(dirname "$(dirname "$sh")")"/}: a proposal needs a human accept" || bad "$sh builds a proposal without accept"
 done
 
