@@ -96,6 +96,22 @@ grep -q 'routines.sh safety <files>` exits non-zero |$' "$tt" && grep -q '\*\*ri
 grep -q 'When `.github/routines/triage.md` exists' "$H/../templates/self-heal.md" && grep -q '`risk:high` is never built' "$H/../templates/self-heal.md" &&
   grep -q 'triage miss: predicted' "$H/../templates/self-heal.md" && ok "self-heal: triage picks, never high, re-scores the diff" || bad "self-heal ignores triage"
 
+echo "-- ideate: one cited proposal, issues only; self-heal skips a proposal without a human accept"
+"$H/routines.sh" add ideate >/dev/null || bad "add ideate failed"
+iw=$W/flow-ideate.yml
+grep -q '^  issues: write$' $iw && grep -q '^  contents: read$' $iw && grep -q '^  pull-requests: read$' $iw && grep -q 'github_token: ${{ github.token }}' $iw &&
+  grep -q -- ' --auto Run the routine' $iw && grep -q 'for l in proposal accept;' $iw && ok "ideate writes only issues and creates proposal + accept" || bad "ideate render"
+it="$H/../templates/ideate.md"
+grep -q 'never more than one per run' "$it" && grep -q '\*\*2 or more independent sources\*\*' "$it" && grep -q 'no proposal: evidence below threshold' "$it" &&
+  grep -q 'make-routines/templates/triage.md` step 2' "$it" && grep -q 'routines.sh safety <files>' "$it" && grep -q '\*\*Dry run\*\*' "$it" &&
+  grep -q 'counts as no evidence at all' "$it" && grep -q 'with `proposal` as its only label' "$it" && grep -q 'Never comment, label, close, or edit other issues' "$it" &&
+  ok "ideate: max 1, two sources or none, triage's risk table, a dry run" || bad "ideate contract"
+for sh in "$H/../templates/self-heal.md" "$(git -C "$H" rev-parse --show-toplevel)/.github/routines/self-heal.md"; do
+  [ -f "$sh" ] || continue
+  grep -q 'skip it unless it carries `accept` and a human applied it, meaning the actor of the last `labeled` event for `accept`' "$sh" && grep -q '`heal-ok` alone never counts for a proposal, and a `heal-ok` no human applied' "$sh" &&
+    ok "${sh#"$(dirname "$(dirname "$sh")")"/}: a proposal needs a human accept" || bad "$sh builds a proposal without accept"
+done
+
 echo "-- one safety list"
 sp="$(git -C "$H" rev-parse --show-toplevel)/.github/routines/safety-paths.txt"
 if [ -f "$am" ] && [ -f "$sp" ]; then
