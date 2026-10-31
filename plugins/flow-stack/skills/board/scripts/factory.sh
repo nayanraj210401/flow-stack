@@ -7,6 +7,7 @@
 # The project comes from the profile ("factory:" then "  project: <owner>/<n>"). One GraphQL read
 # gets every card, its content, labels, label history, and the head's flow/ready check. The column
 # a card belongs in is col() below; a card already there is left alone, so re-runs move nothing.
+# Ready is the human's intake gate (Triage → Ready = approved to build): the sync never moves a card into it.
 set -uo pipefail
 profile="${FLOW_STACK_HOME:-$HOME/.flow-stack}/profile.md"
 cmd="${1:-}"; proj="${2:-}"
@@ -37,7 +38,7 @@ board="$(jq -sc '
     elif .state != "OPEN" then .status
     elif any(.labels[]; . == "needs-human") then "Blocked"
     elif .type == "pr" and any(.labels[]; . == "rework") then "Rework"
-    elif .type == "pr" and (.ready or (.draft | not)) then "Ready"
+    elif .type == "pr" and (.ready or (.draft | not)) then "Review"
     elif .type == "pr" then "Building"
     else .status // "Triage" end;
   map(.data.repositoryOwner.projectV2 // empty) as $p
@@ -53,7 +54,7 @@ board="$(jq -sc '
           refs: ([($c.body // "") | scan("#([0-9]+)") | .[0] | tonumber] | unique)}
        | . + {col: col}]}' <<<"$raw" 2>&1)" || { echo "factory.sh: $board" >&2; exit 1; }
 
-moves() { jq -c '.options as $o | .cards[] | select(.col != null and .col != .status)
+moves() { jq -c '.options as $o | .cards[] | select(.col != null and .col != .status and .col != "Ready")
   | .col as $to | {id, ref, from: (.status // "no status"), to: $to, option: ([$o[] | select(.name == $to)][0].id // null)}' <<<"$board"; }
 
 case "$cmd" in
