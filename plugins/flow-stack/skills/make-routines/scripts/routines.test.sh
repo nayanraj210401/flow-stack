@@ -25,6 +25,7 @@ g="$(line 'collaborators/$COMMENTER/permission')" a="$(line 'anthropics/claude-c
 home="$(line 'FLOW_STACK_HOME=')" plug="$(line 'plugins: flow-stack@flow-stack')"
 [ -n "$g" ] && [ -n "$a" ] && [ "$g" -lt "$a" ] && ok "permission check runs before the agent step" || bad "guard line $g, action line $a"
 [ -n "$home" ] && [ -n "$plug" ] && [ "$home" -lt "$a" ] && [ "$plug" -gt "$a" ] && ok "FLOW_STACK_HOME set and the plugin installed by the agent step" || bad "home $home, plugin $plug"
+grep -q 'group: flow-mention-.*-\${{ github.event.comment.id }}' "$W" && ok "concurrency group is per comment" || bad "group can cancel a queued request"
 grep -q '^            /flow-stack:flow --auto ship Run the routine in .github/routines/mention.md' "$W" && ok "prompt starts with /flow-stack:flow --auto ship" || bad "prompt"
 grep -q "^    if: contains(github.event.comment.body, '@claude') && contains(fromJSON(" "$W" && ok "job runs only on @claude from an associated user" || bad "job if:"
 grep -q '^  issue_comment:' "$W" && grep -q '^  pull_request_review_comment:' "$W" && ok "triggers on comments" || bad "on:"

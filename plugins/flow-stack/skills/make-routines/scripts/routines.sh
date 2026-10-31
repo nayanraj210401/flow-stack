@@ -87,7 +87,8 @@ render_one() { # render_one <name>: the workflow on stdout
       on=$'  issue_comment:\n    types: [created]\n  pull_request_review_comment:\n    types: [created]'
       # author_association drops most strangers for free; the step below asks GitHub for the commenter's real permission
       iff="    if: contains(github.event.comment.body, '@claude') && contains(fromJSON('[\"OWNER\",\"MEMBER\",\"COLLABORATOR\"]'), github.event.comment.author_association)"
-      group='-${{ github.event.issue.number || github.event.pull_request.number }}'
+      # every comment starts a run, even ones the job skips; a group per comment keeps a later comment from cancelling a queued request
+      group='-${{ github.event.issue.number || github.event.pull_request.number }}-${{ github.event.comment.id }}'
       ctx=' The request is comment ${{ github.event.comment.id }} (${{ github.event_name }}) on #${{ github.event.issue.number || github.event.pull_request.number }}.'
       # a GitHub login is letters, digits and dashes, so it can't break out of the quotes
       guard='          COMMENTER='"'"'${{ github.event.comment.user.login }}'"'"
