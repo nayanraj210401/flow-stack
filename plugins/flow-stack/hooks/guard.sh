@@ -169,6 +169,12 @@ if [ -n "$FLOW_TASK_DIR" ] && [ -f "$FLOW_TASK_DIR/SEALS" ]; then
   done <"$FLOW_TASK_DIR/SEALS"
 fi
 
+# 3b. The ready ledger is ready.sh's alone: a stamp written by hand would skip the bar (and, in a routine, post a
+#     flow/ready check). A shell write that names it asks; reading it is fine.
+if has 'ready\.tsv' && has '(sed[[:space:]]+(-i|--in-place)|perl[[:space:]]+-p?i|>|tee|mv|rm|cp|truncate|dd[[:space:]]|(^|[^[:alnum:]_-])ln[[:space:]]|python|node|ruby)'; then
+  pre_decide ask "flow ready: .flow/ready.tsv is ready.sh's ledger, and a stamp written by hand would skip the bar. Record steps with ready.sh record; ready.sh writes the stamp."
+fi
+
 # 3a. TDD green: tests are locked against shell writes too. Write targets are redirects, tee's
 # files, in-place sed/perl files, rm/truncate and git checkout/restore/rm paths, and cp/mv's
 # destination, per command segment.

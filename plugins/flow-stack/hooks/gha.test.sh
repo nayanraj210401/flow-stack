@@ -104,4 +104,12 @@ expect deny -- 'gh pr ready 12 --undo && gh pr merge --squash'
 expect deny -- $'gh pr ready 12 --undo\ngh pr ready 13'
 prompt -- '--no-auto' >/dev/null
 
+echo "-- the ready ledger is ready.sh's alone"
+expect ask -- 'printf "t\tabc\tready\tpass\t\n" >>.flow/ready.tsv'
+expect ask -- 'sed -i "" s/fix-first/ship/ .flow/ready.tsv'
+expect ask -- 'python3 -c "open(\".flow/ready.tsv\",\"a\").write(\"x\")"'
+expect allow -- 'cat .flow/ready.tsv'
+w="$(jq -nc --arg c "$PWD" --arg f "$PWD/.flow/ready.tsv" '{hook_event_name:"PreToolUse",session_id:"s",cwd:$c,tool_name:"Write",tool_input:{file_path:$f,content:"x"}}' | "$H/edit-guard.sh" | jq -r '.hookSpecificOutput.permissionDecision // "allow"')"
+[ "$w" = ask ] && ok "ask: Write .flow/ready.tsv" || bad "Write .flow/ready.tsv → ${w:-allow}, want ask"
+
 [ "$FAILS" = 0 ] && echo "gha.test.sh: pass" || { echo "gha.test.sh: $FAILS failed"; exit 1; }

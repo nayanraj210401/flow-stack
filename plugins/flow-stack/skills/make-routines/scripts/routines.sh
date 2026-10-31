@@ -59,10 +59,12 @@ set_schedule() { # set_schedule <name> <cron> <tz or "">
   [ -z "$3" ] || set_key "$1" timezone "$3"
 }
 
-# ready.sh's stamp lives in .flow/ready.tsv on a runner that is thrown away. A routine that pushes carries it to the
-# open self-heal PR whose head it stamped, as a flow/ready check run from this repo's Actions (a PR body can be
-# forged; a check run on the SHA can't, without write access), then marks that draft ready. Events made with
+# ready.sh's stamp lives in .flow/ready.tsv on a runner that is thrown away. The self-heal routine carries it to the
+# open self-heal PR whose head it stamped, as a flow/ready check run, then marks that draft ready. Events made with
 # github.token start no workflows, so the review routine isn't triggered for a commit that was just reviewed.
+# The check says "this run's ready.sh passed on this SHA", not "an independent reviewer passed it": the guard keeps the
+# agent's tools off the ledger, but code the agent runs in the same job could still write it. So the check only lets
+# the review routine skip a self-heal head; nothing merges on it.
 stamp_step() {
   cat <<'EOF'
       # ready.sh's stamp is on this runner's disk, which is thrown away: carry it to the self-heal PR it stamped
@@ -85,8 +87,8 @@ stamp_step() {
           done
 EOF
 }
-# A pull_request routine skips a head that already has a passing flow/ready from this repo's Actions (the title tells it
-# from a job someone named flow/ready): it was reviewed when it was stamped. A new commit has no check, so it gets the full run. Any API error means run, not skip.
+# A pull_request routine skips a self-heal head that already has a passing flow/ready from this repo's Actions (the
+# title tells it from a job someone named flow/ready): it was reviewed when it was stamped. A new commit has no check, so it gets the full run. Any API error means run, not skip.
 skip_step() {
   cat <<'EOF'
       - name: flow/ready
@@ -94,7 +96,9 @@ skip_step() {
         env:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ github.event.pull_request.head.sha }}
+          REF: ${{ github.event.pull_request.head.ref }}
         run: |
+          case "$REF" in self-heal/*) ;; *) exit 0 ;; esac
           n="$(gh api "repos/$GITHUB_REPOSITORY/commits/$SHA/check-runs?check_name=flow/ready" \
             --jq '[.check_runs[] | select(.app.slug == "github-actions" and .conclusion == "success" and .output.title == "ready.sh stamped this commit")] | length' 2>/dev/null || true)"
           [ "${n:-0}" -gt 0 ] 2>/dev/null || exit 0
@@ -138,9 +142,9 @@ render_one() { # render_one <name>: the workflow on stdout
   for s in contents issues pull-requests; do
     if [[ " $grants " == *" $s "* ]]; then export "R_PERM_${s//-/_}=write"; else export "R_PERM_${s//-/_}=read"; fi
   done
-  # A routine that pushes posts ready.sh's stamp as a flow/ready check run, which needs checks: write; the rest read it
+  # Only self-heal posts ready.sh's stamp as a flow/ready check run, which needs checks: write; the rest read it
   export R_PERM_checks=read
-  if [[ " $grants " == *" contents "* ]]; then R_PERM_checks=write stamp="$(stamp_step)"; fi
+  if [ "$1" = self-heal ] && [[ " $grants " == *" contents "* ]]; then R_PERM_checks=write stamp="$(stamp_step)"; fi
   if [ "$trigger" = pull_request ]; then skip="$(skip_step)" run_if="        if: steps.stamp.outputs.skip != 'true'"; fi
   # Without github_token the action swaps in the Claude App's token, with every scope the App has. Only a
   # routine that pushes needs it (PRs opened with github.token don't trigger CI); the rest stay inside `grants`.
