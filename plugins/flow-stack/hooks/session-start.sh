@@ -70,11 +70,11 @@ fi
 if [ -d "$FLOW_DIR/features" ]; then
   nfeat="$(ls "$FLOW_DIR"/features/*.md 2>/dev/null | grep -vc '/README\.md$' || true)"
   # the latest stamp in verified.tsv wins over a feature file's own status line (features.sh state)
-  nstale="$(cat "$FLOW_DIR/verified.tsv" 2>/dev/null | awk -F'\t' 'FILENAME == "-" { s[$1] = $2; next }
+  nstale="$(awk -v t="$FLOW_DIR/verified.tsv" 'BEGIN { while ((getline l < t) > 0) { split(l, a, "\t"); s[a[1]] = a[2] } }
     FNR == 1 { fm = ($0 == "---"); next } fm && $0 == "---" { fm = 0 }
     fm && /^(id|status):/ { k = $0; sub(/:.*/, "", k); v = $0; sub(/^[^:]*:[[:space:]]*/, "", v); m[FILENAME, k] = v; f[FILENAME] = 1 }
     END { for (x in f) { v = ((m[x, "id"]) in s) ? s[m[x, "id"]] : m[x, "status"]; n += (v == "stale" || v == "broken") } print n + 0 }' \
-    - "$FLOW_DIR"/features/*.md 2>/dev/null || echo 0)"
+    "$FLOW_DIR"/features/*.md 2>/dev/null || echo 0)"
   printf 'Feature map: .flow/features/ (%s features%s). Before changing behavior, run %s impact.\n' "$nfeat" "$([ "$nstale" -gt 0 ] && printf ', %s stale or broken' "$nstale")" "$(cd "$(dirname "$0")/../skills/feature-map/scripts" && pwd)/features.sh"
 fi
 
