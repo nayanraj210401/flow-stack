@@ -40,4 +40,25 @@ if [ -n "$root" ]; then
   ls -d "$root"/.claude/skills/run-* >/dev/null 2>&1 && row run-drv ok "" || row run-drv missing "make-runner"
   ls "$root"/.flow/playbooks/*.md >/dev/null 2>&1 && row playbooks ok "$(ls "$root"/.flow/playbooks/*.md | wc -l | tr -d ' ') repo playbook(s)" || row playbooks none "make-playbook (optional)"
   ls "$root"/.github/routines/*.md >/dev/null 2>&1 && row routines ok "$(ls "$root"/.github/routines/*.md | grep -vc '/profile\.md$' || true) routine(s)" || row routines none "make-routines (optional)"
+  # Factory: one row per loop stage (skills/flow/references/factory.md). Runners see only the clone, so verify counts committed files.
+  row FACTORY STATUS "loop stage: what serves it, or the fix"
+  routine() { [ -f "$root/.github/routines/$1.md" ] && row "$2" ok "$1 routine" || row "$2" missing "make-routines: $1${3:+ ($3)}"; }
+  routine self-create monitor
+  row triage planned "#185 triage, #186 ideate"
+  row spec ok "intent + seal (plugin); edge-case matrix planned #187"
+  routine self-heal implement "flow --auto works in a session"
+  # The checkout itself (FLOW_ROOT, a worktree included), like hooks/lib.sh factory_ready.
+  tracked="$(git -C "$FLOW_ROOT" ls-files .claude/skills verify .flow/features 2>/dev/null)"
+  tdrv="$(grep -oE '^(\.claude/skills/verify(-[^/]*)?|verify)/' <<<"$tracked" | head -n1)"
+  nsc="$(git -C "$FLOW_ROOT" grep -lE '^scenario:[[:space:]]*[^[:space:]#]' HEAD -- ':(top).flow/features/*.md' ':(top,exclude).flow/features/README.md' 2>/dev/null | wc -l | tr -d ' ')"
+  fix=()
+  if [ -z "$tdrv" ]; then [ -n "$drv" ] && fix+=("commit ${drv#"$root"/}") || fix+=(make-verifier); fi
+  if [ "$nsc" = 0 ]; then
+    if [ "${nf:-0}" -gt 0 ] && ! grep -q '^\.flow/features/' <<<"$tracked"; then fix+=("commit .flow/features"); else fix+=("feature-map (commit a feature with a scenario)"); fi
+  fi
+  fix="$(IFS=,; echo "${fix[*]-}" | sed 's/,/, /g')"
+  if [ -z "$fix" ]; then row verify ok "committed ${tdrv%/} + $nsc feature(s) with scenarios"; else row verify missing "$fix"; fi
+  routine review review "ready.sh works in a session"
+  [ -f "$root/.github/routines/auto-merge.md" ] && row ship ok "auto-merge routine" || row ship missing "auto-merge routine (no make-routines template yet; #184)"
+  [ -z "$fix" ] && row factory ok "ready; impacted scenarios must also pass on HEAD (ready.sh)" || row factory missing "not ready: needs verify; #181: --auto ship warns, or runs as plain --auto with factory_ready: enforce"
 fi

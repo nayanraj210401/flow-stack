@@ -65,6 +65,7 @@ Read [references/tools.md](references/tools.md). Offer only what the inventory s
    - deploy or migration configs present but no `.flow/gates.md` → `/flow-stack:make-gates`
    - a team repo without `.flow/taste.md` → offer `../../templates/team-taste.md`
    - a GitHub remote and no `.github/routines/` → `/flow-stack:make-routines` (optional: scheduled self-create and self-heal runs; it asks before opening a PR with the workflows)
+5. **Factory.** Show `detect.sh`'s `FACTORY` rows as their own table: one row per loop stage, `ok` / `missing` + the fix / `planned` + its issue, and the `factory` row: whether the repo is factory-ready. The stages and fixes are in [../flow/references/factory.md](../flow/references/factory.md). Offer the fixes for `missing` rows only when the human wants unattended work.
 
 ## 6. Done
 
