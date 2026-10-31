@@ -28,7 +28,10 @@ want factory missing
 # Existing rows print as before: main's detect.sh output == this one's minus the FACTORY section.
 if old="$(git -C "$here" show "$(git -C "$here" merge-base HEAD origin/main 2>/dev/null || git -C "$here" merge-base HEAD main 2>/dev/null):./detect.sh" 2>/dev/null)" && [ -n "$old" ]; then
   mkdir -p "$SB/old/skills/setup/scripts" && ln -s "$here/../../../hooks" "$SB/old/hooks" && printf '%s\n' "$old" >"$SB/old/skills/setup/scripts/detect.sh"
-  [ "$(bash "$SB/old/skills/setup/scripts/detect.sh" 2>&1)" = "$(sed '/^FACTORY /,$d' <<<"$out")" ] && ok "existing rows unchanged vs main" || bad "existing rows changed vs main"
+  old_out="$(bash "$SB/old/skills/setup/scripts/detect.sh" 2>&1)"
+  new_out="$(sed '/^FACTORY /,$d' <<<"$out")"
+  if [ "$old_out" = "$new_out" ]; then ok "existing rows unchanged vs main"
+  else bad "existing rows changed vs main"; diff <(printf '%s\n' "$old_out") <(printf '%s\n' "$new_out") | sed 's/^/    /'; fi
 else echo "  - skip: no main to compare against (shallow clone)"; fi
 
 echo "-- driver and feature map on disk, not committed"
