@@ -218,7 +218,7 @@ Type a skill yourself when you want a specific thing: `/flow-stack:challenge`, `
 | `make-runner` | Generates `.claude/skills/run-<repo>/` with verified install, start, seed, reset, and stop commands. |
 | `make-playbook` | Generates `.flow/playbooks/<name>.md` from past traces, for workflows this repo repeats. |
 | `make-gates` | Generates `.flow/gates.md`: this repo's irreversible commands as deny/ask rules the guard hook enforces. |
-| `make-routines` | Generates GitHub Actions routines picked from a catalog: `review` (the reviewer agent on every PR), `self-create` (files reproducible bugs), `self-heal` (proven draft PRs), or your own. Cloud routines can't load plugins; Actions installs flow-stack on every run, pinnable with `flow_ref`. Asks before opening a PR with the workflows. |
+| `make-routines` | Generates GitHub Actions routines picked from a catalog: `review` (the reviewer agent on every PR), `self-create` (files reproducible bugs), `self-heal` (proven draft PRs), `triage` (type, readiness, size and risk labels on new issues), or your own. Cloud routines can't load plugins; Actions installs flow-stack on every run, pinnable with `flow_ref`. Asks before opening a PR with the workflows. |
 | `make-skill` | Generates any other repo or personal skill, with a self-test. |
 | `tend` | Re-runs every generated skill's self-test and flags drift against the code. |
 

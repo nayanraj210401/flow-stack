@@ -8,6 +8,9 @@
 #                                                     change a scheduled routine's cron (in its timezone) and re-render it
 #   routines.sh render                                .github/routines/*.md → .github/workflows/flow-<name>.yml
 #   routines.sh check                                 every routine's workflow matches a fresh render; no orphans
+#   routines.sh safety [-z] [--ref <ref>] [path ...]  the paths (args, else stdin lines, or NUL-separated with -z) on
+#                                                     .github/routines/safety-paths.txt (at <ref> with --ref; the
+#                                                     plugin's default without one): exit 1 on any, 2 on an error
 # Frontmatter: trigger (schedule | pull_request), cron and timezone (schedule only; an IANA zone, default UTC), timeout (minutes), labels, auth
 # (oauth | api-key), grants (token scopes it may write: issues pull-requests contents; the rest are read),
 # flow_ref (pin the plugin to a tag or branch; empty = the default branch, fresh each run). The body is the prompt.
@@ -131,7 +134,7 @@ render_one() { # render_one <name>: the workflow on stdout
     *) die "$f: trigger must be schedule or pull_request" ;;
   esac
   [[ "$timeout" =~ ^[0-9]+$ ]] || die "$f: timeout must be whole minutes, got '$timeout'"
-  [[ "$labels" =~ ^([a-z0-9:._-]+( [a-z0-9:._-]+)*)?$ ]] || die "$f: labels are space-separated, no quotes, got '$labels'"
+  [[ "$labels" =~ ^([A-Za-z0-9:._-]+( [A-Za-z0-9:._-]+)*)?$ ]] || die "$f: labels are space-separated, no quotes, got '$labels'"
   for g in $grants; do case "$g" in issues|pull-requests|contents) ;; *) die "$f: grants takes issues pull-requests contents, got '$g'" ;; esac; done
   [[ "$ref" =~ ^[A-Za-z0-9._/-]*$ ]] || die "$f: flow_ref must be a tag or branch, got '$ref'"
   [[ ! "$ref" =~ ^[0-9a-f]{7,40}$ ]] || die "$f: flow_ref looks like a commit SHA; the clone takes a tag or branch (one that isn't 7-40 hex characters)"
@@ -215,6 +218,7 @@ add() {
     die "$name runs on $(field "$tpl/$name.md" trigger schedule), which takes no --cron"
   fi
   profile "$preset"
+  [ -f "$dir/safety-paths.txt" ] || { cp "$tpl/safety-paths.txt" "$dir/"; echo "wrote $dir/safety-paths.txt (the paths no routine merges or builds unattended; add your own)"; }
   if [ -f "$tpl/$name.md" ]; then cp "$tpl/$name.md" "$f"
   else printf -- '---\nabout: TODO one line: what it does and when to use it\ntrigger: schedule\ncron: "0 3 * * *"\ntimeout: 60\ngrants: issues\n---\n# %s\n\nTODO: what this routine does, its caps, and what it must never do.\n' "$name" >"$f"
   fi
@@ -251,11 +255,37 @@ check() {
   return "$bad"
 }
 
+safety() { # prints "<path><TAB><glob>" for each path on the list
+  local z="" ref="" list p g pats=() hit=0
+  while [ $# -gt 0 ]; do
+    case "$1" in -z) z=1; shift ;; --ref) ref="${2:-}"; shift 2 || die "--ref needs a ref" ;; --) shift; break ;; *) break ;; esac
+  done
+  # With --ref the list comes from that commit, so a PR checked out in the working tree can't shorten its own list
+  if [ -n "$ref" ]; then
+    git rev-parse -q --verify "$ref^{commit}" >/dev/null || die "--ref $ref is not a commit"
+    list="$(git show "$ref:$dir/safety-paths.txt" 2>/dev/null)" || list="$(cat "$tpl/safety-paths.txt")"
+  elif [ -f "$dir/safety-paths.txt" ]; then list="$(cat "$dir/safety-paths.txt")"
+  else list="$(cat "$tpl/safety-paths.txt")"; fi
+  while read -r g _; do case "$g" in ''|'#'*) ;; *) pats+=("$g") ;; esac; done < <(tr -d '\r' <<<"$list")
+  [ ${#pats[@]} -gt 0 ] || die "the safety list has no globs"
+  on_list() {
+    # git quotes a path with unusual bytes unless -z; a quoted path can't be matched, so it counts as a hit
+    [[ "$1" != \"* ]] || { printf '%s\tquoted path: list it with git -z and pass -z\n' "$1"; return 0; }
+    for g in "${pats[@]}"; do [[ "/${1#./}" == $g ]] && { printf '%s\t%s\n' "$1" "$g"; return 0; }; done
+    return 1
+  }
+  if [ $# -gt 0 ]; then for p; do on_list "$p" && hit=1; done
+  elif [ -n "$z" ]; then while IFS= read -r -d '' p; do on_list "$p" && hit=1; done
+  else while IFS= read -r p; do [ -z "$p" ] || ! on_list "$p" || hit=1; done; fi
+  return "$hit"
+}
+
 case "${1:-}" in
   list) list ;;
+  safety) shift; safety "$@" ;;
   add) shift; add "$@" ;;
   schedule) shift; schedule "$@" ;;
   render) render ;;
   check) check ;;
-  *) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac
