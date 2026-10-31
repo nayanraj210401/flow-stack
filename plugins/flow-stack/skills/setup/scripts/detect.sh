@@ -51,12 +51,11 @@ if [ -n "$root" ]; then
   tracked="$(git -C "$FLOW_ROOT" ls-files .claude/skills verify .flow/features 2>/dev/null)"
   tdrv="$(grep -oE '^(\.claude/skills/verify(-[^/]*)?|verify)/' <<<"$tracked" | head -n1)"
   nsc="$(git -C "$FLOW_ROOT" grep -lE '^scenario:[[:space:]]*[^[:space:]#]' HEAD -- ':(top).flow/features/*.md' ':(top,exclude).flow/features/README.md' 2>/dev/null | wc -l | tr -d ' ')"
-  fix=()
-  if [ -z "$tdrv" ]; then [ -n "$drv" ] && fix+=("commit ${drv#"$root"/}") || fix+=(make-verifier); fi
+  fix=""
+  if [ -z "$tdrv" ]; then [ -n "$drv" ] && fix="commit ${drv#"$root"/}" || fix=make-verifier; fi
   if [ "$nsc" = 0 ]; then
-    if [ "${nf:-0}" -gt 0 ] && ! grep -q '^\.flow/features/' <<<"$tracked"; then fix+=("commit .flow/features"); else fix+=("feature-map (commit a feature with a scenario)"); fi
+    if [ "${nf:-0}" -gt 0 ] && ! grep -q '^\.flow/features/' <<<"$tracked"; then fix="${fix:+$fix, }commit .flow/features"; else fix="${fix:+$fix, }feature-map (commit a feature with a scenario)"; fi
   fi
-  fix="$(IFS=,; echo "${fix[*]-}" | sed 's/,/, /g')"
   if [ -z "$fix" ]; then row verify ok "committed ${tdrv%/} + $nsc feature(s) with scenarios"; else row verify missing "$fix"; fi
   routine review review "ready.sh works in a session"
   [ -f "$root/.github/routines/auto-merge.md" ] && row ship ok "auto-merge routine" || row ship missing "auto-merge routine (no make-routines template yet; #184)"
