@@ -251,6 +251,7 @@ add() {
     case "$1" in --preset) preset="$2"; shift 2 ;; --cron) cron="$2"; shift 2 ;; --tz) tz="$2"; shift 2 ;; --force) force=1; shift ;; --local) lcl=1; shift ;; *) die "unknown flag $1" ;; esac
   done
   # --local: the shift, on this machine's scheduler (shift.sh); nothing under .github
+  [ -z "$lcl" ] || [ -z "$cron$tz" ] || die "--local takes its schedule from the profile's shift.when, not --cron/--tz"
   [ -z "$lcl" ] || exec "$here/shift.sh" install "$name" ${force:+--force}
   [ -z "$tz" ] || [ -n "$cron" ] || die "--tz needs --cron"
   [ -z "$cron" ] || valid_cron "$cron" || die "--cron must be five fields (minute hour day month weekday), got '$cron'"
