@@ -1,0 +1,7 @@
+{
+  "env": { "FLOW_STACK_HOME": "spike-marker-from-settings-env" },
+  "hooks": {
+    "SessionStart": [ { "hooks": [ { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/spike/session-start.sh\"" } ] } ],
+    "PreToolUse": [ { "matcher": "Bash", "hooks": [ { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/spike/trampoline.sh\"" } ] } ]
+  }
+}
