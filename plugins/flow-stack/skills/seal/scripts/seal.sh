@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # seal.sh: lock the acceptance checks of the active task.
-#   seal.sh add <path> [path ...]   seal files (directories expand to their files); exit 1 if any path sealed nothing
+#   seal.sh add <path> [path ...]   seal files (directories expand to their files); exit 1 if any path sealed nothing,
+#                                   or if an INTENT.md "## Edge cases" row maps to no check ID and no "non-goal: <why>"
 #   seal.sh verify                  exit 1 if any sealed file changed or vanished
 #   seal.sh list                    show sealed files
 #   seal.sh reseal                  re-hash every sealed file (after an approved change)
@@ -31,6 +32,33 @@ cd "$root"
 # Hash from stdin: shasum prefixes "\" to the hash of a file whose name has a backslash.
 sha() { shasum -a 256 <"$1" | cut -d' ' -f1; }
 
+# Edge-case rows ("- <case> → C1, C2" or "- <case> → non-goal: <why>") that map to neither.
+# A check ID counts only if INTENT's "## Acceptance checks" lists it.
+unmapped() {
+  [ -f "$FLOW_TASK_DIR/INTENT.md" ] || return 0
+  awk '
+    # a fence closes only on its own marker; one still open at the end hides rows, so it is refused
+    fm != "" { if (index($0, fm) && $0 ~ /^[ \t]*(```|~~~)/) fm = ""; next }
+    /^[ \t]*(```|~~~)/ { match($0, /(```|~~~)/); fm = substr($0, RSTART, 3); fsec = sec; next }
+    /<!--/ { c = 1 } c { if (/-->/) c = 0; next }
+    /^##[ \t]/ { sec = tolower($0); gsub(/[ \t\r]+/, " ", sec); sub(/[ :]+$/, "", sec); next }
+    sec == "## acceptance checks" && /^- \[.\] C[0-9]+/ { match($0, /C[0-9]+/); ids[substr($0, RSTART, RLENGTH)] = 1 }
+    # any list item (up to 3 spaces in) is a row, so a bullet style the parser does not expect is refused, not skipped
+    sec == "## edge cases" && /^(   |  | )?([-*+]|[0-9]+[.)])[ \t]/ { rows[++n] = $0 }
+    END {
+      if (fm != "" && fsec == "## edge cases") print "unclosed " fm " fence under ## Edge cases"
+      for (i = 1; i <= n; i++) {
+        t = rows[i]; ok = 0
+        if (sub(/^.*→[ \t]*/, "", t)) {
+          sub(/[ \t\r]+$/, "", t)
+          if (t ~ /^non-goal:[ \t]*[^ \t]/) ok = 1
+          else if (t ~ /^C[0-9]+([ ,]+C[0-9]+)*$/) { ok = 1; k = split(t, a, /[ ,]+/); for (j = 1; j <= k; j++) if (!(a[j] in ids)) ok = 0 }
+        }
+        if (!ok) print rows[i]
+      }
+    }' "$FLOW_TASK_DIR/INTENT.md"
+}
+
 expand() {
   local p="${1#./}"
   if [ -d "$p" ]; then
@@ -47,6 +75,8 @@ expand() {
 case "${1:-}" in
   add)
     shift; [ $# -gt 0 ] || { echo "usage: seal.sh add <path> ..." >&2; exit 2; }
+    u="$(unmapped)"
+    [ -z "$u" ] || { printf 'seal.sh: INTENT.md edge-case rows map to no check and no non-goal:\n%s\nmap each to a check ID (→ C2) or "→ non-goal: <why>", then seal\n' "$u" >&2; exit 1; }
     touch "$seals"; rc=0
     for p in "$@"; do
       n=0
