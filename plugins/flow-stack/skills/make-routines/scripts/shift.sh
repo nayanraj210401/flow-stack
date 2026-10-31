@@ -131,18 +131,20 @@ checkout() { # checkout <repo> <dir>: a fresh clone the agent can commit in but 
   gh repo clone "$1" "$2" -- -q >/dev/null 2>&1 || { echo "could not clone $1"; return 1; }
   why="$(factory_ready "$2")" || { echo "factory not ready: $why"; return 1; }
   git -C "$2" remote set-url --push origin release-with-shift.sh   # pushing waits for shift.sh push|open
-  mkdir -p "$2/.flow/shift"
+  mkdir -p "$2/.flow/shift"; echo /.flow/shift/ >>"$2/.git/info/exclude"   # others' text there is never committable
 }
 
-build() { # build <dir> <prompt>: flow --auto writes commits in <dir> without any credential; its JSON on stdout
+sealed() { # sealed <dir> <cmd...>: run in <dir> with no shift token, gh config, git credential helper or ssh: it can commit, never send
   local n e; n="$(git -C "$1" config user.name || true)" e="$(git -C "$1" config user.email || true)"
-  # no shift token, no gh config, no git credential helper or ssh: the agent can commit, never send
-  (cd "$1" && env -u GH_TOKEN GH_CONFIG_DIR="$home/shift/gh-none" GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
+  (cd "$1" && shift && env -u GH_TOKEN GH_CONFIG_DIR="$home/shift/gh-none" GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
     GIT_SSH_COMMAND=false GIT_TERMINAL_PROMPT=0 GIT_AUTHOR_NAME="${n:-flow-stack shift}" GIT_AUTHOR_EMAIL="${e:-shift@localhost}" \
-    GIT_COMMITTER_NAME="${n:-flow-stack shift}" GIT_COMMITTER_EMAIL="${e:-shift@localhost}" \
-    claude -p "/flow-stack:flow --auto $2" --plugin-dir "$plugin" --permission-mode bypassPermissions \
-      --disallowedTools 'Bash(git push:*),Bash(gh:*),WebFetch,WebSearch' --strict-mcp-config \
-      --max-budget-usd "$left" --output-format json </dev/null 2>/dev/null)
+    GIT_COMMITTER_NAME="${n:-flow-stack shift}" GIT_COMMITTER_EMAIL="${e:-shift@localhost}" "$@" </dev/null)
+}
+
+build() { # build <dir> <prompt>: flow --auto writes commits in <dir>, sealed; its JSON on stdout
+  sealed "$1" claude -p "/flow-stack:flow --auto $2" --plugin-dir "$plugin" --permission-mode bypassPermissions \
+    --disallowedTools 'Bash(git push:*),Bash(gh:*),WebFetch,WebSearch' --strict-mcp-config \
+    --max-budget-usd "$left" --output-format json 2>/dev/null
 }
 
 respond_one() { # respond_one <item json>: commits answering my PR's open feedback in a local checkout; result like review_one
@@ -181,9 +183,9 @@ the reply under it.")" || ok=""
   # what it did, checked here rather than taken from its word: new commits, each item named, every Check: passing on HEAD
   local log; log="$(git -C "$w" log --cherry-pick --right-only --no-merges --format='%B' "$headsha...HEAD" 2>/dev/null)"
   [ -n "$log" ] || { result ✗ "the agent made no commit"; return; }
-  left_items="$(jq -r '.todo[]' "$w/.flow/shift/feedback.json" | while IFS= read -r t; do grep -qF -- "$t" <<<"$log" || echo "$t"; done)"
+  left_items="$(jq -r '.todo[]' "$w/.flow/shift/feedback.json" | while IFS= read -r t; do tr -s '[:space:]' '\n' <<<"$log" | grep -qxF -- "$t" || echo "$t"; done)"
   local checks failed=""; checks="$(sed -n 's/^Check:[[:space:]]*//p' <<<"$log")"
-  while IFS= read -r c; do [ -z "$c" ] || (cd "$w" && bash -c "$c" >/dev/null 2>&1 </dev/null) || failed="$failed; $c"; done <<<"$checks"
+  while IFS= read -r c; do [ -z "$c" ] || sealed "$w" bash -c "$c" >/dev/null 2>&1 || failed="$failed; $c"; done <<<"$checks"
   if [ "$(jq .conflicts "$w/.flow/shift/feedback.json")" = true ] && ! git -C "$w" merge-base --is-ancestor "origin/$base" HEAD; then
     failed="$failed; not rebased onto $base"
   fi
@@ -245,7 +247,7 @@ release() { # release push|open <id>: the human's outward step, from a normal sh
   f="$home/shift/out/${id//[^A-Za-z0-9._-]/-}.release.json"
   [ -f "$f" ] || die "nothing prepared for $id ($f); run the shift first"
   case "$verb:$(jq -r .job "$f")" in push:respond|open:start) ;; *) die "$id was prepared by $(jq -r .job "$f"); use shift.sh $([ "$verb" = push ] && echo open || echo push) $id" ;; esac
-  d="$(jq -r .dir "$f")"; url="$(git -C "$d" remote get-url origin)"
+  d="$(jq -r .dir "$f")"; url="$(git -C "$d" remote get-url origin)"   # the fetch URL: checkout's push URL goes nowhere on purpose
   (cd "$d" && "$plugin/skills/review/scripts/ready.sh") || die "not ready: fix what ready.sh lists in $d, then run this again"
   if [ "$verb" = push ]; then
     git -C "$d" push --force-with-lease="refs/heads/$(jq -r .branch "$f"):$(jq -r .lease "$f")" "$url" "HEAD:refs/heads/$(jq -r .branch "$f")"

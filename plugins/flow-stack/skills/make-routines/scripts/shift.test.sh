@@ -43,7 +43,7 @@ case "$*" in *"--auto Respond"*|*"--auto Start"*)   # the flow agent: what a rea
   rec() { for k in "review ship" "deslop done" "tour done"; do "$SB/plugin/skills/review/scripts/ready.sh" record $k >/dev/null; done; }
   case "$*" in
     *"--auto Respond"*) t="$(jq -r '.todo[0]' .flow/shift/feedback.json)"
-      c="test -f fix.txt"; case "$t" in *r3) c="test -f missing.txt" ;; esac   # r3: a check that fails
+      c='test -f fix.txt && [ -z "${GH_TOKEN:-}${GH_CONFIG_DIR##*gh-none}" ]'; case "$t" in *r3) c="test -f missing.txt" ;; esac   # r3: a check that fails
       echo fixed >fix.txt; git add fix.txt; git commit -qm "fix: answer the review thread" -m "$t" -m "Check: $c"; rec
       jq -n --arg t "$t" '{result: ("## " + $t + "\nDone: fix.txt"), total_cost_usd: 0.5}' ;;
     *) mkdir -p .flow/tasks/x; printf '# Intent\n\n## Goal\nRate limits on the API.\n\n## Non-goals\n' >.flow/tasks/x/INTENT.md
@@ -219,6 +219,8 @@ check "acme/api#5 ✓ with its release command" 'grep -q "^✓ acme/api#5 · 1 c
 check "the commit names the thread and carries its Check:" 'git -C "$w/acme-api-5" log -1 --format=%B | grep -qF "$T5" && git -C "$w/acme-api-5" log -1 --format=%B | grep -q "^Check: test -f fix.txt"'
 check "a failing Check: or an unanswered failing CI check is ~ needs you, not ✓" \
   'grep -q "^~ acme/api#10 · .*unanswered: check:lint .*failing: test -f missing.txt" <<<"$out"'
+check "Check: lines run without the shift token" 'grep -q "^Check: test -f fix.txt && \[ -z" <<<"$(git -C "$w/acme-api-5" log -1 --format=%B)"'
+check "the feedback file can't be committed" 'git -C "$w/acme-api-5" check-ignore -q .flow/shift/feedback.json'
 check "drafted reply per thread" 'grep -qF "## $T5" "$o/acme-api-5.replies.md"'
 check "not factory-ready: ✗ and no agent run there" 'grep -q "^✗ acme/bare#6 · factory not ready: a committed verify driver" <<<"$out" && ! grep -q "cwd=$w/acme-bare-6" "$SB/claude.log"'
 check "a PR with nothing open is skipped: no clone, no line" '[ ! -e "$w/acme-api-7" ] && ! grep -q "acme/api#7" <<<"$out"'
