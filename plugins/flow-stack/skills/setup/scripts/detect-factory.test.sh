@@ -26,7 +26,11 @@ want factory missing
   && ok "factory rows come after every existing row" || bad "factory rows interleave existing rows"
 
 # Existing rows print as before: main's detect.sh output == this one's minus the FACTORY section.
-if old="$(git -C "$here" show "$(git -C "$here" merge-base HEAD origin/main 2>/dev/null || git -C "$here" merge-base HEAD main 2>/dev/null):./detect.sh" 2>/dev/null)" && [ -n "$old" ]; then
+# In CI, actions/checkout checks out the PR merge (HEAD has 2 parents; HEAD^1 is the base=main) at
+# fetch-depth 1, so origin/main and main refs don't exist and merge-base can't resolve. On a plain
+# branch checkout, HEAD has one parent, so use the merge-base with origin/main (then main) instead.
+if git -C "$here" rev-parse HEAD^2 >/dev/null 2>&1; then base="$(git -C "$here" rev-parse HEAD^1)"; else base="$(git -C "$here" merge-base HEAD origin/main 2>/dev/null || git -C "$here" merge-base HEAD main 2>/dev/null)"; fi
+if [ -n "${base:-}" ] && old="$(git -C "$here" show "$base:./detect.sh" 2>/dev/null)" && [ -n "$old" ]; then
   mkdir -p "$SB/old/skills/setup/scripts" && ln -s "$here/../../../hooks" "$SB/old/hooks" && printf '%s\n' "$old" >"$SB/old/skills/setup/scripts/detect.sh"
   old_out="$(bash "$SB/old/skills/setup/scripts/detect.sh" 2>&1)"
   new_out="$(sed '/^FACTORY /,$d' <<<"$out")"
