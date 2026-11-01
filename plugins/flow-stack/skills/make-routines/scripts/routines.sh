@@ -85,6 +85,11 @@ render_one() { # render_one <name>: the workflow on stdout
       ctx=' The pull request is #${{ github.event.pull_request.number }}.' ;;
     *) die "$f: trigger must be schedule or pull_request" ;;
   esac
+  # one repo variable pauses every routine: FLOW_FACTORY=off
+  if [ -n "$iff" ]; then iff+=" && vars.FLOW_FACTORY != 'off'"; else iff="    if: vars.FLOW_FACTORY != 'off'"; fi
+  group="flow-$1$group"
+  # routines that push (contents) take turns, so self-heal's rework and auto-merge never act on a PR at once
+  [ "$trigger" = schedule ] && [[ " $grants " == *" contents "* ]] && group=flow-writers
   [[ "$timeout" =~ ^[0-9]+$ ]] || die "$f: timeout must be whole minutes, got '$timeout'"
   [[ "$labels" =~ ^([a-z0-9:._-]+( [a-z0-9:._-]+)*)?$ ]] || die "$f: labels are space-separated, no quotes, got '$labels'"
   for g in $grants; do case "$g" in issues|pull-requests|contents) ;; *) die "$f: grants takes issues pull-requests contents, got '$g'" ;; esac; done

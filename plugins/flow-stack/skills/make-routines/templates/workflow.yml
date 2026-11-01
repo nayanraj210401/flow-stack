@@ -4,7 +4,7 @@ name: flow @NAME@
 on:
 @ON@
 concurrency:
-  group: flow-@NAME@@GROUP@
+  group: @GROUP@
   cancel-in-progress: @CANCEL@
 permissions:
   contents: @PERM_contents@
@@ -27,11 +27,14 @@ jobs:
           mkdir -p "$RUNNER_TEMP/flow-stack"
           cp .github/routines/profile.md "$RUNNER_TEMP/flow-stack/profile.md"
           echo "FLOW_STACK_HOME=$RUNNER_TEMP/flow-stack" >>"$GITHUB_ENV"
-          for l in @LABELS@; do gh label create "$l" --force >/dev/null; done
+          # create only the labels this repo lacks; never edit an existing one (its color and description are the repo's)
+          have="$(gh label list --limit 1000 --json name --jq '.[].name')"
+          for l in @LABELS@; do grep -qxF "$l" <<<"$have" || gh label create "$l" >/dev/null; done
 @CLONE@
       # A fresh runner installs the plugin on every run: the marketplace's default branch, or the clone pinned above
       - uses: anthropics/claude-code-action@v1
         id: claude
+        continue-on-error: true
         # The action's SDK session ends when the agent ends its turn, so a subagent left running in the background
         # (the reviewer, a worker) is dropped and its result never used. Foreground subagents return in the same turn.
         env:
@@ -75,3 +78,16 @@ jobs:
             .flow/GATES.md
             .flow/tasks/*/GATES.md
           if-no-files-found: ignore
+      # A usage limit is not a verdict: the run says "not run" in the summary and ends green, so a re-run after the
+      # reset picks it up. Any other failure of the agent still fails the job.
+      - name: Outcome
+        if: always() && steps.claude.outcome == 'failure'
+        env:
+          RUN_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          said="$(jq -rs '[.. | objects | select(.type? == "text") | .text] | join("\n")' "$RUN_FILE" 2>/dev/null)"
+          if grep -qiE "hit your [a-z ]*limit|usage limit" <<<"$said"; then
+            echo "### Not run: Claude usage limit ($(grep -oiE 'resets [^·]*' <<<"$said" | head -1)). Re-run after the reset." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          exit 1

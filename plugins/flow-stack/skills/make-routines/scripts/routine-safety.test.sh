@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# routine-safety.test.sh: every rendered routine
+#   - stops when the repo variable FLOW_FACTORY is off (#236),
+#   - takes turns with the other routines that push (one flow-writers group) while review keeps a group per PR (#235),
+#   - creates only the labels the repo lacks and never edits an existing one (#246),
+#   - ends green with a "Not run" summary when the agent hit a Claude usage limit, and red on any other failure (#234).
+set -uo pipefail
+H="$(cd "$(dirname "$0")" && pwd)"
+REPO="$(cd "$H/../../../../.." && pwd)"
+FAILS=0
+ok()  { echo "  ✓ $*"; }
+bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
+SB="$(mktemp -d "${TMPDIR:-/tmp}/routine-safety.XXXXXX")"; trap 'rm -rf "$SB"' EXIT
+mkdir -p "$SB/repo/.github" && cp -R "$REPO/.github/routines" "$SB/repo/.github/" && cd "$SB/repo"
+bash "$H/routines.sh" render >/dev/null || bad "render failed"
+y() { ruby -ryaml -e "w = YAML.load_file(ARGV[0]); puts($1)" "$2"; }
+
+echo "-- kill switch, groups, labels"
+for w in .github/workflows/flow-*.yml; do
+  n="${w##*/flow-}"; n="${n%.yml}"
+  [[ "$(y 'w["jobs"]["run"]["if"]' "$w")" == *"vars.FLOW_FACTORY != 'off'"* ]] && ok "$n: FLOW_FACTORY=off skips it" || bad "$n: no kill switch"
+  grep -q 'gh label create "$l" --force' "$w" && bad "$n: overwrites existing labels" || ok "$n: never edits an existing label"
+done
+for n in self-heal auto-merge; do
+  [ "$(y 'w["concurrency"]["group"]' ".github/workflows/flow-$n.yml")" = flow-writers ] && ok "$n: in the flow-writers group" || bad "$n: own group"
+done
+[[ "$(y 'w["concurrency"]["group"]' .github/workflows/flow-review.yml)" == 'flow-review-${{ github.event.pull_request.number }}' ]] \
+  && ok "review: one group per PR" || bad "review group: $(y 'w["concurrency"]["group"]' .github/workflows/flow-review.yml)"
+
+# the label step and the Outcome step, run as written in the rendered workflow
+step() { y "w[\"jobs\"][\"run\"][\"steps\"].find { |s| s[\"name\"] == \"$1\" }[\"run\"]" .github/workflows/flow-self-heal.yml; }
+mkdir -p bin; cat >bin/gh <<'GH'
+#!/bin/sh
+echo "$*" >>"$GH_LOG"
+case "$1 $2" in "label list") printf 'self-heal\nbug\n' ;; esac
+GH
+chmod +x bin/gh
+step "flow-stack home and labels" | sed '/RUNNER_TEMP/d; /GITHUB_ENV/d; /profile.md/d' >labels.sh
+GH_LOG="$SB/repo/gh.log" PATH="$SB/repo/bin:$PATH" bash labels.sh || bad "label step failed"
+[ -s gh.log ] && ! grep -q -- "--force" gh.log && ok "label step: no --force" || bad "label step: --force, or gh never ran"
+grep -qx 'label create self-heal' gh.log && bad "re-created an existing label" || ok "existing label left alone"
+grep -qx 'label create heal-ok' gh.log && ok "missing label created" || bad "missing label not created: $(cat gh.log)"
+
+echo "-- usage limit vs real failure"
+step Outcome >outcome.sh
+outcome() { # outcome <assistant text> → exit code; summary in $SB/summary
+  jq -nc --arg t "$1" '[{type:"assistant",message:{content:[{type:"text",text:$t}]}},{type:"result",is_error:true}]' >run.json
+  : >summary; RUN_FILE="$SB/repo/run.json" GITHUB_STEP_SUMMARY="$SB/summary" bash outcome.sh >/dev/null 2>&1
+}
+outcome "You've hit your weekly limit · resets 6pm (UTC)" && ok "usage limit ends green" || bad "usage limit failed the job"
+grep -q 'Not run: Claude usage limit (resets 6pm (UTC)' "$SB/summary" && ok "summary says not run, with the reset" || bad "summary: $(cat "$SB/summary")"
+! outcome "Error: tool crashed" && ok "any other failure stays red" || bad "a real failure went green"
+RUN_FILE=/nonexistent GITHUB_STEP_SUMMARY=/dev/null bash outcome.sh >/dev/null 2>&1 && bad "missing run file went green" || ok "missing run file stays red"
+
+[ "$FAILS" -eq 0 ] && echo "== routine-safety · PASS" || { echo "== routine-safety · FAIL ($FAILS)"; exit 1; }
