@@ -13,22 +13,27 @@ bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 SB="$(mktemp -d "${TMPDIR:-/tmp}/routine-safety.XXXXXX")"; trap 'rm -rf "$SB"' EXIT
 mkdir -p "$SB/repo/.github" && cp -R "$REPO/.github/routines" "$SB/repo/.github/" && cd "$SB/repo"
 bash "$H/routines.sh" render >/dev/null || bad "render failed"
-y() { ruby -ryaml -e "w = YAML.load_file(ARGV[0]); puts($1)" "$2"; }
+# the rendered layout is the template's, so plain line reads find the job if:, the group and a step's run: block
+job_if() { sed -n 's/^    if: //p' "$1" | head -n 1; }
+group() { sed -n 's/^  group: //p' "$1"; }
+step() { # step <name>: the run: block of that step in flow-self-heal.yml, unindented
+  awk -v n="      - name: $1" '$0 == n { s = 1; next } s && /^        run: \|/ { r = 1; next }
+    r && /^          / { print substr($0, 11); next } r { exit }' .github/workflows/flow-self-heal.yml
+}
 
 echo "-- kill switch, groups, labels"
 for w in .github/workflows/flow-*.yml; do
   n="${w##*/flow-}"; n="${n%.yml}"
-  [[ "$(y 'w["jobs"]["run"]["if"]' "$w")" == *"vars.FLOW_FACTORY != 'off'"* ]] && ok "$n: FLOW_FACTORY=off skips it" || bad "$n: no kill switch"
+  [[ "$(job_if "$w")" == *"vars.FLOW_FACTORY != 'off'"* ]] && ok "$n: FLOW_FACTORY=off skips it" || bad "$n: no kill switch"
   grep -q 'gh label create "$l" --force' "$w" && bad "$n: overwrites existing labels" || ok "$n: never edits an existing label"
 done
 for n in self-heal auto-merge; do
-  [ "$(y 'w["concurrency"]["group"]' ".github/workflows/flow-$n.yml")" = flow-writers ] && ok "$n: in the flow-writers group" || bad "$n: own group"
+  [ "$(group ".github/workflows/flow-$n.yml")" = flow-writers ] && ok "$n: in the flow-writers group" || bad "$n: own group"
 done
-[[ "$(y 'w["concurrency"]["group"]' .github/workflows/flow-review.yml)" == 'flow-review-${{ github.event.pull_request.number }}' ]] \
-  && ok "review: one group per PR" || bad "review group: $(y 'w["concurrency"]["group"]' .github/workflows/flow-review.yml)"
+[ "$(group .github/workflows/flow-review.yml)" = 'flow-review-${{ github.event.pull_request.number }}' ] \
+  && ok "review: one group per PR" || bad "review group: $(group .github/workflows/flow-review.yml)"
 
 # the label step and the Outcome step, run as written in the rendered workflow
-step() { y "w[\"jobs\"][\"run\"][\"steps\"].find { |s| s[\"name\"] == \"$1\" }[\"run\"]" .github/workflows/flow-self-heal.yml; }
 mkdir -p bin; cat >bin/gh <<'GH'
 #!/bin/sh
 echo "$*" >>"$GH_LOG"
@@ -49,6 +54,7 @@ outcome() { # outcome <earlier assistant text> <last assistant text> → exit co
     {type:"assistant",message:{content:[{type:"text",text:$b}]}},{type:"result",subtype:"success",is_error:true}]' >run.json
   : >summary; RUN_FILE="$SB/repo/run.json" GITHUB_STEP_SUMMARY="$SB/summary" bash outcome.sh >/dev/null 2>&1
 }
+outcome "Starting." "You’ve hit your limit · resets 3am" && ok "curly apostrophe: usage limit ends green" || bad "curly apostrophe not matched"
 outcome "Starting." "You've hit your weekly limit · resets 6pm (UTC)" && ok "usage limit ends green" || bad "usage limit failed the job"
 grep -q 'Not run: Claude usage limit (resets 6pm (UTC)' "$SB/summary" && ok "summary says not run, with the reset" || bad "summary: $(cat "$SB/summary")"
 ! outcome "Error: tool crashed" "Giving up." && ok "any other failure stays red" || bad "a crash went green"
