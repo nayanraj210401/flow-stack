@@ -54,9 +54,13 @@ outcome() { # outcome <earlier assistant text> <last assistant text> → exit co
     {type:"assistant",message:{content:[{type:"text",text:$b}]}},{type:"result",subtype:"success",is_error:true}]' >run.json
   : >summary; RUN_FILE="$SB/repo/run.json" GITHUB_STEP_SUMMARY="$SB/summary" bash outcome.sh >/dev/null 2>&1
 }
+# the 5-hour line is verbatim from a real review run (#247, run 41298484012)
+outcome "Confirm finding 1 and 4 against the code." "You've hit your 5-hour limit · resets 11:20am (UTC)" && ok "real 5-hour limit ends green" || bad "real 5-hour limit failed the job"
+grep -q 'Stopped by a Claude usage limit (resets 11:20am (UTC))' "$SB/summary" && ok "summary says stopped, with the reset" || bad "summary: $(cat "$SB/summary")"
 outcome "Starting." "You’ve hit your limit · resets 3am" && ok "curly apostrophe: usage limit ends green" || bad "curly apostrophe not matched"
-outcome "Starting." "You've hit your weekly limit · resets 6pm (UTC)" && ok "usage limit ends green" || bad "usage limit failed the job"
-grep -q 'Not run: Claude usage limit (resets 6pm (UTC)' "$SB/summary" && ok "summary says not run, with the reset" || bad "summary: $(cat "$SB/summary")"
+outcome "Starting." "Claude AI usage limit reached|1761998400" && ok "epoch form ends green" || bad "epoch form failed the job"
+grep -q 'Stopped by a Claude usage limit\. ' "$SB/summary" && ok "epoch form: no empty () in the summary" || bad "epoch summary: $(cat "$SB/summary")"
+! outcome "Starting." "You've hit your GitHub API rate limit, so I stopped." && ok "a GitHub rate limit stays red" || bad "a GitHub rate limit went green"
 ! outcome "Error: tool crashed" "Giving up." && ok "any other failure stays red" || bad "a crash went green"
 ! outcome "Fixing #234 so a usage limit ends neutral." "I could not finish." && ok "a run that only mentions a usage limit stays red" || bad "a real failure went green"
 ! outcome "Starting." "$(printf 'Summary of #234:\nYou have hit your limit text is now detected.')" && ok "a limit phrase on a later line stays red" || bad "a later-line limit phrase went green"
