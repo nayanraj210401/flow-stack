@@ -18,6 +18,8 @@ run
 
 set_fm rigor fast; run
 [ "$rc" != 0 ] && grep -q '✗ rigor: fast.*lean | standard | strict' <<<"$out" && ok "rigor: fast fails with the valid list" || bad "rigor: fast: rc=$rc $out"
+set_fm rigor '"strict"'; run
+[ "$rc" = 0 ] && ! grep -q '✗ rigor' <<<"$out" && ok 'rigor: "strict" passes (the hooks strip the quotes too)' || bad "quoted rigor: rc=$rc $out"
 set_fm rigor strict
 
 set_fm review_gate off; run
