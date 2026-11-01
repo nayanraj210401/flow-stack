@@ -362,10 +362,17 @@ gh_method_write="$lead$gh_api"'[[:space:]](-X|--method)[[:space:]]*=?[[:space:]]
 gh_fields="$lead$gh_api"'[[:space:]](-[fF]|--field|--raw-field|--input)'
 gh_get="$lead$gh_api"'[[:space:]](-X|--method)[[:space:]]*=?[[:space:]]*GET([[:space:];&|]|$)'
 gh_verb="$lead"'gh'"$gopt"'[[:space:]]+((issue|pr)[[:space:]]+(comment|review|edit|close|reopen|lock|delete|transfer)|issue[[:space:]]+create)'
-if flow_auto && ! flow_on_runner && { grep -Eiq "$gh_method_write|$gh_verb" <<<"$code" \
-     || { grep -Eiq "$gh_fields" <<<"$code" && ! grep -Eiq "$gh_get" <<<"$code"; }; }; then
+gh_writes() { # each command in a chain is judged alone, so a GET in one can't excuse a write in another
+  local seg
+  while IFS= read -r seg; do
+    grep -Eiq "$gh_method_write|$gh_verb" <<<"$seg" && return 0
+    grep -Eiq "$gh_fields" <<<"$seg" && ! grep -Eiq "$gh_get" <<<"$seg" && return 0
+  done < <(tr ';&|' '\n\n\n' <<<"$code")
+  return 1
+}
+if flow_auto && ! flow_on_runner && gh_writes; then
   rest_pr='^gh api( (-X|--method) POST)? repos/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+/pulls(/[0-9]+/ccr/ready_for_review)?( -[fF] [A-Za-z0-9_]+=[A-Za-z0-9._/-]*)*$'
-  if ! { flow_auto_ship && grep -Eq "$rest_pr" <<<"$(sed -E 's/^[[:space:]]+|[[:space:]]+$//g' <<<"$cmd")" \
+  if ! { flow_auto_ship && [[ "$cmd" != *$'\n'* ]] && grep -Eq "$rest_pr" <<<"$(sed -E 's/^[[:space:]]+|[[:space:]]+$//g' <<<"$cmd")" \
          && (cd "$FLOW_ROOT" && "$(dirname "$0")/../skills/review/scripts/ready.sh" stamped) 2>/dev/null; }; then
     pre_decide ask "flow: outward-facing GitHub write (gh api write, comment, review, edit). Off a runner it uses your own token, so in auto mode it waits.$(flow_auto_ship && echo " --auto ship allows only the REST twins of gh pr create/ready (gh api -X POST repos/o/r/pulls -f k=v…, …/pulls/<n>/ccr/ready_for_review), once ready.sh has stamped HEAD.")"
   fi
