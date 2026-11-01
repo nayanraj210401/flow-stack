@@ -190,8 +190,14 @@ factory_ready() {
   local r="${1:-${FLOW_ROOT:-.}}" miss=""
   [ -n "$(git -C "$r" ls-files -- ':(top).claude/skills/verify-*' ':(top).claude/skills/verify/*' ':(top)verify/*' 2>/dev/null | head -n1)" ] \
     || miss="a committed verify driver (/flow-stack:make-verifier)"
-  git -C "$r" grep -lqE '^scenario:[[:space:]]*[^[:space:]#]' HEAD -- ':(top).flow/features/*.md' ':(top,exclude).flow/features/README.md' 2>/dev/null \
-    || miss="${miss:+$miss; }a committed feature map with a scenario (/flow-stack:feature-map)"
+  # a feature file directly in .flow/features/ (not README.md) whose frontmatter has a non-empty scenario
+  local f map=""
+  while IFS= read -r f; do
+    case "$f" in README.md) continue ;; *.md) ;; *) continue ;; esac
+    git -C "$r" show "HEAD:.flow/features/$f" 2>/dev/null | awk 'NR == 1 && $0 == "---" { fm = 1; next } fm && $0 == "---" { exit }
+      fm && /^scenario:[[:space:]]*[^[:space:]#"'"'"']/ { found = 1; exit } END { exit !found }' && { map=1; break; }
+  done < <(git -C "$r" ls-tree --full-tree --name-only HEAD:.flow/features 2>/dev/null)
+  [ -n "$map" ] || miss="${miss:+$miss; }a committed feature map with a scenario (/flow-stack:feature-map)"
   [ -z "$miss" ] || { echo "$miss"; return 1; }
 }
 FLOW_AUTO_QUEUE="Add it to .flow/tasks/<slug>/GATES.md (question, options, recommendation), keep going on work it doesn't block, and list GATES.md first in the handoff."

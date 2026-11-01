@@ -44,6 +44,11 @@ grep -q 'factory not ready' <<<"$out" && grep -q 'plain --auto' <<<"$out" && ok 
 [ -f "$FLOW_STACK_HOME/auto/s" ] && [ -z "$(flag)" ] && ok "flag is plain auto" || bad "flag '$(flag)'"
 [ "$(decide 'git push origin feat/x')" = deny ] && ok "stamped push waits" || bad "push not denied"
 prompt '--no-auto' >/dev/null
+mkdir -p "$SB/runner"
+out="$(GITHUB_ACTIONS=true GITHUB_RUN_ID=1 RUNNER_ENVIRONMENT=github-hosted RUNNER_TEMP="$SB/runner" prompt 'routine --gha')"
+grep -q 'factory not ready' <<<"$out" && grep -q 'plain --auto' <<<"$out" && [ -z "$(flag)" ] \
+  && ok "--gha on a runner downgrades too" || bad "--gha not downgraded: flag '$(flag)' $out"
+prompt '--no-auto' >/dev/null
 
 echo "-- on disk but not committed is not ready"
 mkdir -p .claude/skills/verify-toy .flow/features
@@ -61,7 +66,9 @@ for n in self-heal auto-merge; do
 done
 
 echo "-- committed driver, map with only a comment or README scenario: still not ready"
-printf -- '---\nid: toy\nscenario: # todo\n---\n' >.flow/features/toy.md; echo 'scenario: x' >.flow/features/README.md
+printf -- '---\nid: toy\nscenario: # todo\n---\nscenario: in the body\n' >.flow/features/toy.md; echo 'scenario: x' >.flow/features/README.md
+mkdir -p .flow/features/sub && printf -- '---\nscenario: bash x.sh\n---\n' >.flow/features/sub/nested.md
+printf -- '---\nid: q\nscenario: ""\n---\n' >.flow/features/quoted.md
 git add -f .claude .flow/features && git commit -qm drv
 out="$(prompt '--auto ship')"; grep -q 'feature map' <<<"$out" && ! grep -q 'verify driver' <<<"$out" \
   && ok "only the map is missing" || bad "$out"
@@ -75,12 +82,15 @@ grep -q 'factory' <<<"$out" && bad "warned in a ready repo: $out" || ok "no fact
 [ "$(flag)" = ship ] && ok "flag is ship (enforce profile)" || bad "flag '$(flag)'"
 stamp; [ "$(decide 'git push origin feat/x')" = allow ] && ok "stamped push allowed" || bad "push not allowed"
 prompt '--no-auto' >/dev/null
-(cd .flow && "$R" add self-heal >/dev/null 2>&1) && [ -f .flow/.github/routines/self-heal.md ] && ok "self-heal added (from a subdirectory too)" || bad "self-heal refused in a ready repo"
+err="$(cd .flow && "$R" add self-heal 2>&1)" && [ -f .flow/.github/routines/self-heal.md ] && ok "self-heal added (from a subdirectory too)" || bad "self-heal refused in a ready repo: $err"
 rm -rf .flow/.github
 
 echo "-- pair mode replays the base commit's hooks decision for decision"
 base="$(git -C "$H" merge-base HEAD origin/main 2>/dev/null || true)"
-if [ -z "$base" ]; then echo "  ~ skipped: no origin/main to compare with"; else
+if [ -z "$base" ]; then
+  # CI must compare (test.yml fetches full history); a local clone without origin/main may skip
+  [ -n "${CI:-}" ] && bad "no origin/main to compare with in CI" || echo "  ~ skipped: no origin/main to compare with"
+else
   mkdir -p "$SB/old" && git -C "$H/../../.." archive "$base" plugins/flow-stack | tar -x -C "$SB/old"
   O="$SB/old/plugins/flow-stack/hooks"
   for repo in ready not-ready; do
