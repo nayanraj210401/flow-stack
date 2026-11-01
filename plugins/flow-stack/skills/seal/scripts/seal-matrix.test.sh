@@ -60,5 +60,22 @@ for h in '##  Edge cases' '## Edge cases:'; do
   seals && bad "heading '$h' turned the gate off" || ok "heading '$h' normalised"
 done
 
+head='# Intent · x\n\n## Acceptance checks\n- [ ] C1 · works\n\n'
+blocks() { printf "$head$1\n" >"$I"; seals && bad "$2 sealed" || ok "$2 refused"; }
+blocks '## Edge cases\n- huge <!-- TODO -->' "row with a trailing comment"
+blocks '## Edge cases\n- body "<!--" → C1\n- huge' "unclosed comment hiding later rows"
+blocks '## Goal\n```sh\n## Edge cases\n- huge' "fence from an earlier section hiding the matrix"
+blocks '## Edge cases ##\n- huge' "heading with closing hashes"
+blocks '## Edge cases <!-- #187 -->\n- huge' "heading with a trailing comment"
+blocks "## Edge cases\n- empty → C1\n\t- huge" "tab-indented nested row"
+blocks '## Edge cases\n- empty → C1\n        - huge' "8-space nested row"
+blocks '## Edge cases\nsome prose, not a row' "prose line in the matrix"
+printf "$head"'## Edge cases\n<!--\n```\n-->\n- empty → C1\n' >"$I"
+seals && ok "fence marker inside a comment opens nothing" || bad "comment fence refused: $(cat "$SB/out")"
+printf "$head"'## Edge cases\n- a→b transition → C1\n' >"$I"
+seals && ok "arrow inside case text still maps" || bad "inner arrow refused: $(cat "$SB/out")"
+printf '# Intent · x\n\n## Goal\n```sh\nno matrix here\n' >"$I"
+seals && ok "unclosed fence without a matrix seals as before" || bad "no-matrix INTENT blocked: $(cat "$SB/out")"
+
 [ "$FAILS" = 0 ] || { echo "== seal-matrix · FAIL ($FAILS)"; exit 1; }
 echo "== seal-matrix · PASS"

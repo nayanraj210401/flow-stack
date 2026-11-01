@@ -37,19 +37,28 @@ sha() { shasum -a 256 <"$1" | cut -d' ' -f1; }
 unmapped() {
   [ -f "$FLOW_TASK_DIR/INTENT.md" ] || return 0
   awk '
-    # a fence closes only on its own marker; one still open at the end hides rows, so it is refused
-    fm != "" { if (index($0, fm) && $0 ~ /^[ \t]*(```|~~~)/) fm = ""; next }
-    /^[ \t]*(```|~~~)/ { match($0, /(```|~~~)/); fm = substr($0, RSTART, 3); fsec = sec; next }
-    /<!--/ { c = 1 } c { if (/-->/) c = 0; next }
-    /^##[ \t]/ { sec = tolower($0); gsub(/[ \t\r]+/, " ", sec); sub(/[ :]+$/, "", sec); next }
-    sec == "## acceptance checks" && /^- \[.\] C[0-9]+/ { match($0, /C[0-9]+/); ids[substr($0, RSTART, RLENGTH)] = 1 }
-    # any list item (up to 3 spaces in) is a row, so a bullet style the parser does not expect is refused, not skipped
-    sec == "## edge cases" && /^(   |  | )?([-*+]|[0-9]+[.)])[ \t]/ { rows[++n] = $0 }
+    # Fail closed: once an INTENT has an Edge cases heading, every non-blank line in that section must be a
+    # list row, and an unclosed fence or comment anywhere is refused, since either could hide rows.
+    { l = $0; sub(/\r$/, "", l); if (tolower(l) ~ /^[ \t]*#+[ \t]*edge cases/) has = 1 }
+    fm != "" { if (index(l, fm) && l ~ /^[ \t]*(```|~~~)/) fm = ""; next }
+    {
+      if (cm) { i = index(l, "-->"); if (!i) next; l = substr(l, i + 3); cm = 0 }
+      while ((i = index(l, "<!--"))) {
+        r = substr(l, i + 4); j = index(r, "-->")
+        if (j) l = substr(l, 1, i - 1) substr(r, j + 3); else { l = substr(l, 1, i - 1); cm = 1 }
+      }
+    }
+    l ~ /^[ \t]*(```|~~~)/ { match(l, /(```|~~~)/); fm = substr(l, RSTART, 3); next }
+    l ~ /^##?[ \t]/ { sec = tolower(l); sub(/^#+[ \t]+/, "", sec); sub(/[ \t#:]+$/, "", sec); gsub(/[ \t]+/, " ", sec); next }
+    l ~ /^[ \t]*$/ { next }
+    sec == "acceptance checks" && l ~ /^[ \t]*- \[.\] C[0-9]+/ { match(l, /C[0-9]+/); ids[substr(l, RSTART, RLENGTH)] = 1 }
+    sec == "edge cases" && l !~ /^#/ { rows[++n] = l }
     END {
-      if (fm != "" && fsec == "## edge cases") print "unclosed " fm " fence under ## Edge cases"
+      if (has && fm != "") print "unclosed " fm " fence: it could hide edge-case rows"
+      if (has && cm) print "unclosed <!-- comment: it could hide edge-case rows"
       for (i = 1; i <= n; i++) {
         t = rows[i]; ok = 0
-        if (sub(/^.*→[ \t]*/, "", t)) {
+        if (t ~ /^[ \t]*([-*+]|[0-9]+[.)])[ \t]/ && sub(/^.*→[ \t]*/, "", t)) {
           sub(/[ \t\r]+$/, "", t)
           if (t ~ /^non-goal:[ \t]*[^ \t]/) ok = 1
           else if (t ~ /^C[0-9]+([ ,]+C[0-9]+)*$/) { ok = 1; k = split(t, a, /[ ,]+/); for (j = 1; j <= k; j++) if (!(a[j] in ids)) ok = 0 }
