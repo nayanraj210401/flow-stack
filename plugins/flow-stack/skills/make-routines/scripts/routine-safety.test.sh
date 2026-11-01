@@ -32,24 +32,27 @@ step() { y "w[\"jobs\"][\"run\"][\"steps\"].find { |s| s[\"name\"] == \"$1\" }[\
 mkdir -p bin; cat >bin/gh <<'GH'
 #!/bin/sh
 echo "$*" >>"$GH_LOG"
-case "$1 $2" in "label list") printf 'self-heal\nbug\n' ;; esac
+case "$1 $2" in "label list") printf 'Self-Heal\nbug\n' ;; esac
 GH
 chmod +x bin/gh
 step "flow-stack home and labels" | sed '/RUNNER_TEMP/d; /GITHUB_ENV/d; /profile.md/d' >labels.sh
 GH_LOG="$SB/repo/gh.log" PATH="$SB/repo/bin:$PATH" bash labels.sh || bad "label step failed"
 [ -s gh.log ] && ! grep -q -- "--force" gh.log && ok "label step: no --force" || bad "label step: --force, or gh never ran"
-grep -qx 'label create self-heal' gh.log && bad "re-created an existing label" || ok "existing label left alone"
+grep -qix 'label create self-heal' gh.log && bad "re-created an existing label (Self-Heal)" || ok "existing label left alone, even in another case"
 grep -qx 'label create heal-ok' gh.log && ok "missing label created" || bad "missing label not created: $(cat gh.log)"
 
 echo "-- usage limit vs real failure"
 step Outcome >outcome.sh
-outcome() { # outcome <assistant text> → exit code; summary in $SB/summary
-  jq -nc --arg t "$1" '[{type:"assistant",message:{content:[{type:"text",text:$t}]}},{type:"result",is_error:true}]' >run.json
+outcome() { # outcome <earlier assistant text> <last assistant text> → exit code; summary in $SB/summary
+  jq -nc --arg a "$1" --arg b "$2" '[{type:"assistant",message:{content:[{type:"text",text:$a}]}},
+    {type:"user",message:{content:[{type:"tool_result",content:"# A usage limit is not a verdict"}]}},
+    {type:"assistant",message:{content:[{type:"text",text:$b}]}},{type:"result",subtype:"success",is_error:true}]' >run.json
   : >summary; RUN_FILE="$SB/repo/run.json" GITHUB_STEP_SUMMARY="$SB/summary" bash outcome.sh >/dev/null 2>&1
 }
-outcome "You've hit your weekly limit · resets 6pm (UTC)" && ok "usage limit ends green" || bad "usage limit failed the job"
+outcome "Starting." "You've hit your weekly limit · resets 6pm (UTC)" && ok "usage limit ends green" || bad "usage limit failed the job"
 grep -q 'Not run: Claude usage limit (resets 6pm (UTC)' "$SB/summary" && ok "summary says not run, with the reset" || bad "summary: $(cat "$SB/summary")"
-! outcome "Error: tool crashed" && ok "any other failure stays red" || bad "a real failure went green"
+! outcome "Error: tool crashed" "Giving up." && ok "any other failure stays red" || bad "a crash went green"
+! outcome "Fixing #234 so a usage limit ends neutral." "I could not finish." && ok "a run that only mentions a usage limit stays red" || bad "a real failure went green"
 RUN_FILE=/nonexistent GITHUB_STEP_SUMMARY=/dev/null bash outcome.sh >/dev/null 2>&1 && bad "missing run file went green" || ok "missing run file stays red"
 
 [ "$FAILS" -eq 0 ] && echo "== routine-safety · PASS" || { echo "== routine-safety · FAIL ($FAILS)"; exit 1; }

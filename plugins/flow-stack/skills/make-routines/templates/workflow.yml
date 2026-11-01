@@ -27,9 +27,9 @@ jobs:
           mkdir -p "$RUNNER_TEMP/flow-stack"
           cp .github/routines/profile.md "$RUNNER_TEMP/flow-stack/profile.md"
           echo "FLOW_STACK_HOME=$RUNNER_TEMP/flow-stack" >>"$GITHUB_ENV"
-          # create only the labels this repo lacks; never edit an existing one (its color and description are the repo's)
+          # create only the labels this repo lacks (names match case-insensitively, as on GitHub); never edit an existing one
           have="$(gh label list --limit 1000 --json name --jq '.[].name')"
-          for l in @LABELS@; do grep -qxF "$l" <<<"$have" || gh label create "$l" >/dev/null; done
+          for l in @LABELS@; do grep -qixF "$l" <<<"$have" || gh label create "$l" >/dev/null; done
 @CLONE@
       # A fresh runner installs the plugin on every run: the marketplace's default branch, or the clone pinned above
       - uses: anthropics/claude-code-action@v1
@@ -85,8 +85,10 @@ jobs:
         env:
           RUN_FILE: ${{ steps.claude.outputs.execution_file }}
         run: |
-          said="$(jq -rs '[.. | objects | select(.type? == "text") | .text] | join("\n")' "$RUN_FILE" 2>/dev/null)"
-          if grep -qiE "hit your [a-z ]*limit|usage limit" <<<"$said"; then
+          # only the run's last assistant words count, and only the limit message itself
+          said="$(jq -rs '[if length == 1 and (.[0] | type) == "array" then .[0][] else .[] end | select(.type == "assistant")
+            | .message.content[]? | select(.type == "text") | .text] | last // ""' "$RUN_FILE" 2>/dev/null)"
+          if grep -qiE "^(You've hit your [a-z ]*limit|Claude AI usage limit reached)" <<<"$said"; then
             echo "### Not run: Claude usage limit ($(grep -oiE 'resets [^·]*' <<<"$said" | head -1)). Re-run after the reset." | tee -a "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
