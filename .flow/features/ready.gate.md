@@ -4,8 +4,8 @@ title: Ready-for-review gate
 owns: plugins/flow-stack/skills/review/scripts/ready.sh .claude/skills/verify-flow-stack/scripts/ready.gate.sh
 entries: hook PreToolUse Bash gh pr create|gh pr ready | cli skills/review/scripts/ready.sh | config review_gate (profile, .flow/config.json) | config .flow/config.json ready[]
 scenario: bash .claude/skills/verify-flow-stack/scripts/ready.gate.sh
-status: broken
-verified: 2026-10-11 fd4429b
+status: verified
+verified: 2026-11-01 d46e1d4
 ---
 # Ready-for-review gate
 
