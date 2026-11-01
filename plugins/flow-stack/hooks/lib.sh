@@ -235,7 +235,9 @@ profile_fm() {
       line = $0; sub(/^[[:space:]]+/, "", line)
       if (index(line, k ":") == 1) {
         v = substr(line, length(k) + 2); sub(/#.*/, "", v)
-        gsub(/^[[:space:]]+|[[:space:]]+$/, "", v); print v; exit
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
+        if (v ~ /^".*"$/ || v ~ /^\047.*\047$/) v = substr(v, 2, length(v) - 2)
+        print v; exit
       }
     }'
 }

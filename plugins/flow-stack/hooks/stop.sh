@@ -37,9 +37,9 @@ events="$(tail -n 3000 "$transcript" | jq -nrR --argjson roots "$roots" --arg ch
   def shell_write: unheredoc | expand | gsub("(>>?|\\btee( -a)?)[[:space:]]*(?![^[:space:];|&]*\\.\\.)[^[:space:];|&]*(\\.flow/|/tmp/|\\$\\{?TMPDIR\\b|scratchpad|\\.md|\\.txt)[^[:space:];|&]*"; "")
     | gsub("\"[^\"]*\"|'"'"'[^'"'"']*'"'"'"; "")
     | gsub("[0-9]*>>?[[:space:]]*(/dev/null|&[0-9]-?)"; "")
-    | test("\\bsed -[a-zA-Z]*i|\\bperl -[a-z]*i|\\btee\\b|>>?[[:space:]]*[^[:space:]=>&]"
+    | test("\\bsed -[a-zA-Z]*i(?!([[:space:]]+(-[A-Za-z]+|[^;&|\\n[:space:]]+\\.(md|txt)))+[[:space:]]*($|[;&|\\n]))|\\bperl -[a-z]*i(?!([[:space:]]+(-[A-Za-z]+|[^;&|\\n[:space:]]+\\.(md|txt)))+[[:space:]]*($|[;&|\\n]))|\\btee\\b|>>?[[:space:]]*[^[:space:]=>&]"
       + "|(^|[;&|][[:space:]]*)(cp|mv)( -[A-Za-z]+)*( [^-;&|[:space:]][^;&|[:space:]]*)+"
-      + " (?![^;&|[:space:]]*(/tmp/|scratchpad|\\.flow/)(?![^;&|[:space:]]*\\.\\.))[^-;&|[:space:]][^;&|[:space:]]*[[:space:]]*($|[;&|])"
+      + " (?![^;&|[:space:]]*\\.(md|txt)[[:space:]]*($|[;&|]))(?![^;&|[:space:]]*(/tmp/|scratchpad|\\.flow/)(?![^;&|[:space:]]*\\.\\.))[^-;&|[:space:]][^;&|[:space:]]*[[:space:]]*($|[;&|])"
       + "|(^|[;&|][[:space:]]*)patch[[:space:]]"
       + "|git apply[[:space:]]+(?!--(check|stat|numstat|summary))");
   # The harness can append its own line (e.g. "Shell cwd was reset to …") after the output of the command.

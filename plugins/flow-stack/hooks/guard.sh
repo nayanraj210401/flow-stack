@@ -352,6 +352,13 @@ if grep -Eiq "$lead"'(git'"$gopt"'[[:space:]]+push|gh'"$gopt"'[[:space:]]+(pr[[:
     pre_decide ask "flow: outward-facing action$(flow_auto_gha && echo ". --gha adds only gh release create <tag> --target <current branch> (plain flags) to the --auto ship set.")$(flow_auto_ship && echo ". --auto ship allows only \`git push [-u] <remote> <current branch>\` (not main), gh pr create/ready (body via --body-file or --fill, no shell expansions), and gh pr merge of the current branch's PR, once review/scripts/ready.sh has stamped HEAD")."
   fi
 fi
+# 4c. Off a runner, auto mode also holds GitHub writes the rule above can't see: gh api with a write method or
+# fields (REST and the cloud CCR routes), and issue/PR comments, reviews and edits. A runner's token is already
+# bounded by the workflow's grants, and the routines rely on these writes there.
+gh_write='gh'"$gopt"'[[:space:]]+(api([[:space:]][^;&|]*)?([[:space:]](-X|--method)[[:space:]]*=?[[:space:]]*(POST|PATCH|PUT|DELETE)|[[:space:]](-f|-F|--field|--raw-field|--input)([[:space:]=]|$))|(issue|pr)[[:space:]]+(comment|review|edit|close|reopen|lock|delete|transfer)|issue[[:space:]]+create)'
+if flow_auto && ! flow_on_runner && grep -Eiq "$lead$gh_write" <<<"$code"; then
+  pre_decide ask "flow: outward-facing GitHub write (gh api write, comment, review, edit). Off a runner it uses your own token, so in auto mode it waits."
+fi
 
 # 5. Built-in escalations: reversible only with effort, so the human decides.
 if [ -n "$force_push" ]; then
