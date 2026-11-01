@@ -34,20 +34,23 @@ grep -q '^  issue_comment:' "$W" && grep -q '^  pull_request_review_comment:' "$
 mkdir bin; cat >bin/gh <<'GH'
 #!/bin/sh
 case "$2" in
-  repos/o/r/collaborators/someone/permission) [ "$PERM" = fail ] && exit 1; echo "$PERM" ;;
+  repos/o/r/collaborators/*/permission) [ "$PERM" = fail ] && exit 1; echo "$PERM" ;;
   repos/o/r/pulls/7) [ "$HEAD" = fail ] && exit 1; echo "$HEAD" ;;
   *) echo "unexpected gh $*" >&2; exit 1 ;;
 esac
 GH
 chmod +x bin/gh
-sed -n '/^          COMMENTER=/,/^          \[ -z "\$PR" \]/p' "$W" | sed 's/^          //; s/\${{ github.event.comment.user.login }}/someone/' >guard.sh
-[ "$(wc -l <guard.sh)" -eq 5 ] || bad "guard extract: $(cat guard.sh)"
+sed -n '/^          COMMENTER=/,/^          \[ -z "\$PR" \]/p' "$W" | sed 's/^          //; s/\${{ github.event.comment.user.login }}/@LOGIN@/' >guard.sh
+[ "$(wc -l <guard.sh)" -eq 6 ] || bad "guard extract: $(cat guard.sh)"
 guard() { # guard <perm> <pr number or ""> <head repo>
-  sed "s/\${{ github.event.pull_request.number .* }}/$2/" guard.sh >g.sh
+  sed "s/\${{ github.event.pull_request.number .* }}/$2/; s/@LOGIN@/${LOGIN:-someone}/" guard.sh >g.sh
   PERM="$1" HEAD="${3:-}" PATH="$SB/bin:$PATH" GITHUB_REPOSITORY=o/r GITHUB_STEP_SUMMARY="$SB/summary" bash g.sh >/dev/null 2>&1
 }
 for p in admin maintain write; do guard "$p" "" && ok "$p passes on an issue" || bad "$p refused"; done
 for p in read triage none fail; do ! guard "$p" "" && ok "$p refused" || bad "$p passed"; done
+LOGIN='app[bot]' guard write "" && bad "an app with write access passed" || ok "an app (login ending [bot]) is refused even with write"
+grep -q 'refused: app\[bot\] is an app' summary && ok "app refusal in the run summary" || bad "app summary: $(cat summary)"
+grep -q "user.type != 'Bot'" "$W" && ok "job if: skips Bot accounts" || bad "job if: lets bots in"
 grep -q 'refused: someone has read access' summary && ok "refusal written to the run summary" || bad "summary: $(cat summary)"
 guard write 7 o/r && ok "same-repo PR passes" || bad "same-repo PR refused"
 ! guard write 7 evil/r && ok "fork PR refused" || bad "fork PR passed"

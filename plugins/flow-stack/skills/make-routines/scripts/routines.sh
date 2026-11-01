@@ -85,13 +85,15 @@ render_one() { # render_one <name>: the workflow on stdout
       ctx=' The pull request is #${{ github.event.pull_request.number }}.' ;;
     mention)
       on=$'  issue_comment:\n    types: [created]\n  pull_request_review_comment:\n    types: [created]'
-      # author_association drops most strangers for free; the step below asks GitHub for the commenter's real permission
-      iff="    if: contains(github.event.comment.body, '@claude') && contains(fromJSON('[\"OWNER\",\"MEMBER\",\"COLLABORATOR\"]'), github.event.comment.author_association)"
+      # author_association drops most strangers for free, and bots and apps never trigger a run (a factory can't
+      # call itself in a loop); the step below asks GitHub for the commenter's real permission
+      iff="    if: contains(github.event.comment.body, '@claude') && contains(fromJSON('[\"OWNER\",\"MEMBER\",\"COLLABORATOR\"]'), github.event.comment.author_association) && github.event.comment.user.type != 'Bot'"
       # every comment starts a run, even ones the job skips; a group per comment keeps a later comment from cancelling a queued request
       group='-${{ github.event.issue.number || github.event.pull_request.number }}-${{ github.event.comment.id }}'
       ctx=' The request is comment ${{ github.event.comment.id }} (${{ github.event_name }}) on #${{ github.event.issue.number || github.event.pull_request.number }}.'
-      # a GitHub login is letters, digits and dashes, so it can't break out of the quotes
+      # a GitHub login is letters, digits and dashes (apps add [bot]), so it can't break out of the quotes
       guard='          COMMENTER='"'"'${{ github.event.comment.user.login }}'"'"
+      guard+=$'\n''          case "$COMMENTER" in *"[bot]") echo "refused: $COMMENTER is an app, not a person" | tee -a "$GITHUB_STEP_SUMMARY"; exit 1 ;; esac'
       guard+=$'\n''          perm="$(gh api "repos/$GITHUB_REPOSITORY/collaborators/$COMMENTER/permission" --jq .permission)" || perm=none'
       guard+=$'\n''          case "$perm" in admin|maintain|write) ;; *) echo "refused: $COMMENTER has $perm access, not write" | tee -a "$GITHUB_STEP_SUMMARY"; exit 1 ;; esac'
       # the run holds write tokens, so a fork PR's code must never be checked out: refuse it here, not in the prompt
