@@ -53,6 +53,8 @@ outcome "Starting." "You've hit your weekly limit · resets 6pm (UTC)" && ok "us
 grep -q 'Not run: Claude usage limit (resets 6pm (UTC)' "$SB/summary" && ok "summary says not run, with the reset" || bad "summary: $(cat "$SB/summary")"
 ! outcome "Error: tool crashed" "Giving up." && ok "any other failure stays red" || bad "a crash went green"
 ! outcome "Fixing #234 so a usage limit ends neutral." "I could not finish." && ok "a run that only mentions a usage limit stays red" || bad "a real failure went green"
+! outcome "Starting." "$(printf 'Summary of #234:\nYou have hit your limit text is now detected.')" && ok "a limit phrase on a later line stays red" || bad "a later-line limit phrase went green"
+! outcome "Starting." "$(printf "Summary of #234:\nYou've hit your weekly limit is detected now.")" && ok "the exact message on a later line stays red" || bad "a later-line limit message went green"
 RUN_FILE=/nonexistent GITHUB_STEP_SUMMARY=/dev/null bash outcome.sh >/dev/null 2>&1 && bad "missing run file went green" || ok "missing run file stays red"
 
 [ "$FAILS" -eq 0 ] && echo "== routine-safety · PASS" || { echo "== routine-safety · FAIL ($FAILS)"; exit 1; }
