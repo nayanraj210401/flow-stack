@@ -43,6 +43,10 @@ printf '' >"$FLOW_STACK_HOME/auto/plain"
 is deny plain 'gh api -X GET user; gh api repos/o/r/issues/1/comments -f body=x'
 is deny plain 'gh api repos/o/r/issues/1/comments -f body=x && gh api -X GET user'
 is allow plain 'gh api -X GET user; gh api repos/o/r/pulls/1 --jq .title'
+is deny plain 'gh api -X GET user $(gh api repos/o/r/issues/1/comments -f body=x)'
+is deny plain 'gh api -X GET user `gh api repos/o/r/issues/1/comments -f body=x`'
+is deny plain "gh api repos/o/r/issues/1/comments -f 'body=a -X GET b'"
+is allow plain "gh api -X GET search/issues -f 'q=is:open label:bug'"
 RUNNER_TEMP="$SB" GITHUB_ACTIONS=true GITHUB_RUN_ID=1 RUNNER_ENVIRONMENT=github-hosted is allow ship 'gh pr review 1 --comment --body ok'
 
 echo "-- --auto ship with a stamped HEAD: the REST twins of gh pr create/ready pass (cloud has no GraphQL)"
