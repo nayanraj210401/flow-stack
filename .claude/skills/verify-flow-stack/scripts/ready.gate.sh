@@ -105,7 +105,8 @@ o="$("$R" record review fix-first)"; has "$o" "review round 2" && ! has "$o" "ch
 printf 'r3\n' >>README.md && git commit -qam r3
 sees "round 3 without ship says challenge" "round 3 without ship: stop patching findings; run the challenge skill" "$R" record review fix-first
 o="$("$R" record review ship)"; ! has "$o" "challenge" && ok "ship at round 3: no challenge" || bad "ship at round 3: $o"
-git switch -q feat
+# the rounds branch's ledger is untracked there but committed on feat, so drop it before switching back
+rm -f .flow/ready.tsv; git switch -q feat
 
 echo "-- yolo and the repo override"
 git checkout -q .flow; printf 'more\n' >>README.md && git commit -qam "more"
