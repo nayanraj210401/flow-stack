@@ -352,12 +352,23 @@ if grep -Eiq "$lead"'(git'"$gopt"'[[:space:]]+push|gh'"$gopt"'[[:space:]]+(pr[[:
     pre_decide ask "flow: outward-facing action$(flow_auto_gha && echo ". --gha adds only gh release create <tag> --target <current branch> (plain flags) to the --auto ship set.")$(flow_auto_ship && echo ". --auto ship allows only \`git push [-u] <remote> <current branch>\` (not main), gh pr create/ready (body via --body-file or --fill, no shell expansions), and gh pr merge of the current branch's PR, once review/scripts/ready.sh has stamped HEAD")."
   fi
 fi
-# 4c. Off a runner, auto mode also holds GitHub writes the rule above can't see: gh api with a write method or
-# fields (REST and the cloud CCR routes), and issue/PR comments, reviews and edits. A runner's token is already
+# 4c. Off a runner, auto mode also holds the GitHub writes the rule above can't see: gh api with a write method,
+# or with fields (gh sends those as POST unless -X GET), and issue/PR comments, reviews and edits. --auto ship with
+# a stamped HEAD lets the REST twins of gh pr create/ready through (cloud sessions have no GraphQL). Other gh write
+# verbs (labels, secrets, workflows, releases, repo settings) aren't covered here. A runner's token is already
 # bounded by the workflow's grants, and the routines rely on these writes there.
-gh_write='gh'"$gopt"'[[:space:]]+(api([[:space:]][^;&|]*)?([[:space:]](-X|--method)[[:space:]]*=?[[:space:]]*(POST|PATCH|PUT|DELETE)|[[:space:]](-f|-F|--field|--raw-field|--input)([[:space:]=]|$))|(issue|pr)[[:space:]]+(comment|review|edit|close|reopen|lock|delete|transfer)|issue[[:space:]]+create)'
-if flow_auto && ! flow_on_runner && grep -Eiq "$lead$gh_write" <<<"$code"; then
-  pre_decide ask "flow: outward-facing GitHub write (gh api write, comment, review, edit). Off a runner it uses your own token, so in auto mode it waits."
+gh_api='gh'"$gopt"'[[:space:]]+api([[:space:]][^;&|]*)?'
+gh_method_write="$lead$gh_api"'[[:space:]](-X|--method)[[:space:]]*=?[[:space:]]*(POST|PATCH|PUT|DELETE)'
+gh_fields="$lead$gh_api"'[[:space:]](-[fF]|--field|--raw-field|--input)'
+gh_get="$lead$gh_api"'[[:space:]](-X|--method)[[:space:]]*=?[[:space:]]*GET([[:space:];&|]|$)'
+gh_verb="$lead"'gh'"$gopt"'[[:space:]]+((issue|pr)[[:space:]]+(comment|review|edit|close|reopen|lock|delete|transfer)|issue[[:space:]]+create)'
+if flow_auto && ! flow_on_runner && { grep -Eiq "$gh_method_write|$gh_verb" <<<"$code" \
+     || { grep -Eiq "$gh_fields" <<<"$code" && ! grep -Eiq "$gh_get" <<<"$code"; }; }; then
+  rest_pr='^gh api( (-X|--method) POST)? repos/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+/pulls(/[0-9]+/ccr/ready_for_review)?( -[fF] [A-Za-z0-9_]+=[A-Za-z0-9._/-]*)*$'
+  if ! { flow_auto_ship && grep -Eq "$rest_pr" <<<"$(sed -E 's/^[[:space:]]+|[[:space:]]+$//g' <<<"$cmd")" \
+         && (cd "$FLOW_ROOT" && "$(dirname "$0")/../skills/review/scripts/ready.sh" stamped) 2>/dev/null; }; then
+    pre_decide ask "flow: outward-facing GitHub write (gh api write, comment, review, edit). Off a runner it uses your own token, so in auto mode it waits.$(flow_auto_ship && echo " --auto ship allows only the REST twins of gh pr create/ready (gh api -X POST repos/o/r/pulls -f k=v…, …/pulls/<n>/ccr/ready_for_review), once ready.sh has stamped HEAD.")"
+  fi
 fi
 
 # 5. Built-in escalations: reversible only with effort, so the human decides.

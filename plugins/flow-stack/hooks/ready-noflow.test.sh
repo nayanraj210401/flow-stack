@@ -34,5 +34,16 @@ is allow ship 'gh api repos/o/r/pulls/1'
 is deny ship 'gh api -X DELETE repos/o/r/git/refs/heads/x'
 is allow ship 'gh api repos/o/r/pulls/1 --jq .title'
 is allow pair 'gh api -X POST repos/o/r/pulls -f head=x'
+is deny ship 'gh api repos/o/r/issues/1/comments -fbody=x'
+is deny ship 'gh api repos/o/r/issues/1/comments -Fbody=@f'
+is deny ship 'gh api --method post repos/o/r/pulls/1/merge'
+is allow ship 'gh api -X GET search/issues -f q=is:open'
 RUNNER_TEMP="$SB" GITHUB_ACTIONS=true GITHUB_RUN_ID=1 RUNNER_ENVIRONMENT=github-hosted is allow ship 'gh pr review 1 --comment --body ok'
+
+echo "-- --auto ship with a stamped HEAD: the REST twins of gh pr create/ready pass (cloud has no GraphQL)"
+mkdir -p .flow && printf '%s\t%s\tready\tpass\n' "$(date +%s)" "$(git rev-parse HEAD)" >.flow/ready.tsv
+is allow ship 'gh api -X POST repos/o/r/pulls -f head=feat -f base=main'
+is allow ship 'gh api -X POST repos/o/r/pulls/1/ccr/ready_for_review'
+is deny ship 'gh api -X POST repos/o/r/pulls/1/merge'
+is deny ship 'gh pr comment 1 --body hi'
 [ "$FAILS" -eq 0 ] && echo "== ready-noflow · PASS" || { echo "== ready-noflow · FAIL ($FAILS)"; exit 1; }

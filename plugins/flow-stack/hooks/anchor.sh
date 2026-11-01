@@ -8,9 +8,12 @@ flow_enabled anchor || exit 0
 # --auto / --no-auto anywhere in a prompt switch this session's auto mode. Only the human's own
 # prompts count: agent hand-backs, task notifications, system reminders and T3 Code relays
 # (delegate reports, PR-watch updates) arrive as prompts too.
+# Inside a relayed prompt only --no-auto counts: turning auto off is always the safe direction.
 prompt="$(flow_field .prompt)"
-grep -Eq '<(agent-message|task-notification|system-reminder)[[:space:]>]|^(Delegated task node:|Update on pull request #)' <<<"$prompt" && prompt=""
+relayed=""
+grep -Eq '<(agent-message|task-notification|system-reminder)[[:space:]>]|^(Delegated task node:|Update on pull request #)' <<<"$prompt" && relayed=1
 if flag="$(flow_auto_flag)"; then
+  [ -n "$relayed" ] && { grep -Eq '(^|[[:space:]])--no-auto([[:space:],.;:!?)]|$)' <<<"$prompt" && prompt="--no-auto" || prompt=""; }
   if grep -Eq '(^|[[:space:]])--no-auto([[:space:],.;:!?)]|$)' <<<"$prompt"; then
     rm -f "$flag"; echo "[flow auto] off: the human is back; gates ask again."
   elif grep -Eq '(^|[[:space:]])--gha([[:space:],.;:!?)]|$)' <<<"$prompt" && flow_on_runner; then

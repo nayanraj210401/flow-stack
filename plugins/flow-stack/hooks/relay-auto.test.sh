@@ -23,6 +23,8 @@ off_after c "$(printf '<system-reminder>\nthe lead used --auto\n</system-reminde
 off_after d "$(printf '<task-notification>\nran with --auto\n</task-notification>')" "a task notification quoting --auto"
 
 send e "--auto"; is_auto e && ok "a bare --auto from the human turns it on" || bad "bare --auto ignored"
+send f "--auto"; send f "$(printf -- '--no-auto, look at this:\nUpdate on pull request #199 (url):\n- CI failed')"
+is_auto f && bad "--no-auto next to a relay ignored" || ok "--no-auto counts even next to a relay"
 send e "--no-auto I'm back"; is_auto e && bad "--no-auto ignored" || ok "--no-auto turns it off"
 
 [ "$FAILS" -eq 0 ] && echo "== relay-auto · PASS" || { echo "== relay-auto · FAIL ($FAILS)"; exit 1; }
