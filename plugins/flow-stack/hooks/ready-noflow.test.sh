@@ -71,6 +71,16 @@ is deny plain '/usr/bin/gh api -X POST repos/o/r/issues/1/comments'
 is deny plain 'bash -c "gh issue comment 1 --body x"'
 is allow plain 'gh pr list --search "review edit close"'
 is allow plain 'gh api repos/o/r/pulls/1 --jq "map(.id)"'
+is deny plain 'gh api -if body=x repos/o/r/issues/1/comments'
+is deny plain 'gh api -iXPOST repos/o/r/issues/1/comments'
+is deny plain 'gh api -iX DELETE repos/o/r/git/refs/heads/main'
+is deny plain "$(printf 'bash <<EOF\ngh pr comment 1 -b x\nEOF')"
+is allow plain "$(printf 'cat <<EOF >notes.md\ngh pr comment 1 -b x\nEOF')"
+is allow plain 'git commit -m "fix (gh pr comment) parsing"'
+is allow plain 'git commit -m "tidy {gh pr edit} docs"'
+is deny plain 'gh issue new -t x -b y'
+is allow plain "gh api graphql -f query='query { viewer { login } }'"
+is deny plain "gh api graphql -f query='mutation { addComment(input: {}) { clientMutationId } }'"
 RUNNER_TEMP="$SB" GITHUB_ACTIONS=true GITHUB_RUN_ID=1 RUNNER_ENVIRONMENT=github-hosted is allow ship 'gh pr review 1 --comment --body ok'
 
 echo "-- --auto ship with a stamped HEAD: the REST twins of gh pr create/ready pass (cloud has no GraphQL)"

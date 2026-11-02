@@ -40,6 +40,8 @@ events="$(tail -n 3000 "$transcript" | jq -nrR --argjson roots "$roots" --arg ch
     | test("\\bsed -[a-zA-Z]*i(?!([[:space:]]+(-[A-Za-z]+|[^;&|\\n[:space:]]+\\.(md|txt)))+[[:space:]]*($|[;&|\\n]))|\\bperl -[a-z]*i(?!([[:space:]]+(-[A-Za-z]+|[^;&|\\n[:space:]]+\\.(md|txt)))+[[:space:]]*($|[;&|\\n]))|\\btee\\b|>>?[[:space:]]*[^[:space:]=>&]"
       + "|(^|[;&|][[:space:]]*)(cp|mv)( -[A-Za-z]+)*( [^-;&|[:space:]][^;&|[:space:]]*)+"
       + " (?![^;&|[:space:]]*\\.(md|txt)[[:space:]]*($|[;&|]))(?![^;&|[:space:]]*(/tmp/|scratchpad|\\.flow/)(?![^;&|[:space:]]*\\.\\.))[^-;&|[:space:]][^;&|[:space:]]*[[:space:]]*($|[;&|])"
+      # mv removes its sources, so a code source makes it a code write even when the destination is a doc
+      + "|(^|[;&|][[:space:]]*)mv( -[A-Za-z]+)*( [^;&|[:space:]]+)*? (?![^;&|[:space:]]*(\\.(md|txt)|/tmp/|scratchpad|\\.flow/))[^-;&|[:space:]][^;&|[:space:]]*( [^;&|[:space:]]+)+[[:space:]]*($|[;&|])"
       + "|(^|[;&|][[:space:]]*)patch[[:space:]]"
       + "|git apply[[:space:]]+(?!--(check|stat|numstat|summary))");
   # The harness can append its own line (e.g. "Shell cwd was reset to …") after the output of the command.

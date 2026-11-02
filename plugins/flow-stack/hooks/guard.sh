@@ -361,56 +361,63 @@ fi
 # a stamped HEAD lets the REST twins of gh pr create/ready through (cloud sessions have no GraphQL). Other gh write
 # verbs (labels, secrets, workflows, releases, repo settings) aren't covered here. A runner's token is already
 # bounded by the workflow's grants, and the routines rely on these writes there.
-gh_api='gh'"$gopt"'[[:space:]]+api([[:space:]][^;&|]*)?'
-gh_method_write="$lead$gh_api"'[[:space:]](-X|--method)[[:space:]]*=?[[:space:]]*(POST|PATCH|PUT|DELETE|\$)'
-gh_fields="$lead$gh_api"'[[:space:]](-[fF]|--field|--raw-field|--input)'
-gh_get="$lead$gh_api"'[[:space:]](-X|--method)[[:space:]]*=?[[:space:]]*GET([[:space:];&|]|$)'
-gh_flags='([[:space:]]+-[A-Za-z-]+([[:space:]=]+[^-[:space:]][^[:space:]]*)?)*' # e.g. -R o/r between the noun and the verb
-gh_verb="$lead"'gh'"$gopt"'[[:space:]]+((issue|pr)'"$gh_flags"'[[:space:]]+(comment|review|edit|close|reopen|lock|delete|transfer)|issue'"$gh_flags"'[[:space:]]+create)'
-gh_writes() { # each command in a chain or a substitution is judged alone, so a GET in one can't excuse a write in another
-  local seg
-  while IFS= read -r seg; do
-    # a quoted method (-X "DELETE") is still a write
-    grep -Eiq "$gh_verb" <<<"$seg" || tr -d "\"'" <<<"$seg" | grep -Eiq "$gh_method_write" && return 0
-    # a -X GET counts only outside quoted values (escapes dropped first) and outside a # comment
-    grep -Eiq "$gh_fields" <<<"$seg" && ! sed -E "s/'[^']*'//g; s/\\\\.//g; s/\"[^\"]*\"//g; s/(^|[[:space:]])#.*//" <<<"$seg" | grep -Eiq "$gh_get" && return 0
-  # separators and substitutions inside quotes don't split a command; inside single quotes nothing substitutes
-  done < <(perl -pe 's{(\x27[^\x27]*\x27)}{($1 =~ tr/;&|`()/       /r)}ge; s{("(?:[^"\\]|\\.)*")}{($1 =~ tr/;&|/   /r)}ge' <<<"$code" |
-    sed -E 's/\$\(|`|[<>]\(|\)/\n/g' | tr ';&|' '\n\n\n')
-  # the same command split into shell words (quotes and escapes resolved, eval / sh -c / "$(…)" recursed), as
-  # pr_drafts does: a quoting trick that hides a write from the regexes above can't hide it from this
+gh_writes() { # gh writes in $cmd, judged on shell words (quotes and escapes resolved), one command at a time
+  # a heredoc body is data unless a shell runs it (bash <<EOF, ssh host <<EOF), as in stop.sh
+  awk -v q="'" '
+    hd != "" { if ($0 == hd) hd = ""; else if (run) print; next }
+    { print
+      if (match($0, "<<-?[ \t]*[\"" q "]?[A-Za-z_][A-Za-z0-9_]*")) {
+        run = substr($0, 1, RSTART - 1) ~ /(^|[;&|( \t\/])(bash|sh|zsh|ksh|dash|ssh)([ \t]|$)/
+        hd = substr($0, RSTART, RLENGTH); sub("<<-?[ \t]*[\"" q "]?", "", hd) } }' <<<"$cmd" |
   awk -v q="'" "$split_awk"'
-    function wr(s,   T, K, C, CS, n, i, k, start, g, noun, verb, m, f, ev, sh, w, lw) {
-      n = split_cmds(s, T, K, C, CS); start = 1
+    # unbt(s): an unquoted `…` is a command of its own, so it becomes one (split_cmds splits only `…` inside "…")
+    function unbt(s,   i, c, o, sq, dq) {
+      for (i = 1; i <= length(s); i++) { c = substr(s, i, 1)
+        if (c == "\\" && !sq) { o = o c substr(s, ++i, 1); continue }
+        if (c == q && !dq) sq = !sq; else if (c == "\"" && !sq) dq = !dq
+        else if (c == "`" && !sq && !dq) c = "\n"
+        o = o c }
+      return o
+    }
+    # wr(s): 1 when s holds a gh write: gh api with a write method, or with fields unless -X GET (a GraphQL
+    # query without "mutation" is a read); gh pr|issue comment/review/edit/close/reopen/lock/delete/transfer; gh issue
+    # create|new. eval, sh -c and substitutions are checked as scripts of their own.
+    function wr(s,   T, K, C, CS, n, i, k, j, c, r, start, g, noun, verb, ep, m, f, mut, ev, sh, w, lw) {
+      n = split_cmds(unbt(s), T, K, C, CS); start = 1
       for (i = 1; i <= n + 1; i++) {
         if (i <= n && K[i] != "op") continue
-        g = 0; noun = verb = m = ""; f = ev = sh = 0
+        g = 0; noun = verb = ep = m = ""; f = mut = ev = sh = 0
         for (k = start; k < i; k++) {
           if (K[k] == "op") continue
           if (ev || sh > 1) { if (wr(T[k])) return 1 } else if (CS[k] && wr(C[k])) return 1
           w = T[k]; lw = tolower(w)
           if (lw == "eval") ev = 1
           if (w ~ /^(ba|z|da|k)?sh$/ || w ~ /\/(ba|z|da|k)?sh$/) sh = 1; else if (sh && w ~ /^-[A-Za-z]*c[A-Za-z]*$/) sh = 2
-          if (!g) { if (w == "gh" || w ~ /\/gh$/) g = 1; continue }
+          if (!g) { if (lw == "gh" || lw ~ /\/gh$/) g = 1; continue }
           if (noun == "") { if (lw ~ /^(api|pr|issue)$/) noun = lw; continue }
-          if (noun == "api") {
-            if (w ~ /^(-X|--method)$/ && k + 1 < i) m = toupper(T[++k])
-            else if (w ~ /^-X./) m = toupper(substr(w, 3))
-            else if (w ~ /^--method=/) m = toupper(substr(w, 10))
-            else if (w ~ /^(-[fF]|--field|--raw-field|--input)/) f = 1
-          } else if (verb == "") {
-            if (w ~ /^(-R|--repo)$/) k++; else if (w !~ /^-/) verb = lw
-          }
+          if (noun != "api") { if (verb == "") { if (w ~ /^(-R|--repo)$/) k++; else if (w !~ /^-/) verb = lw }; continue }
+          if (w ~ /^--method=/) m = toupper(substr(w, 10))
+          else if (w == "--method") m = toupper(T[++k])
+          else if (w ~ /^--(field|raw-field|input)(=|$)/) { f = 1; if (w !~ /=/) k++ }
+          else if (w ~ /^--(header|preview|jq|template|cache|hostname)$/) k++
+          else if (w ~ /^-[^-]/) {
+            # grouped short flags: -iXPOST, -iX DELETE, -if body=x
+            for (j = 2; j <= length(w); j++) { c = substr(w, j, 1); r = substr(w, j + 1)
+              if (c == "X") { m = toupper(r != "" ? r : T[++k]); break }
+              if (c ~ /[fF]/) { f = 1; if (r == "") k++; break }
+              if (c ~ /[Hpqt]/) { if (r == "") k++; break } }
+          } else if (w !~ /^-/ && ep == "") ep = lw
         }
-        if (noun == "api" && (m ~ /^(POST|PATCH|PUT|DELETE|\$)/ || (f && m != "GET"))) return 1
+        for (j = start; j < i; j++) if (tolower(T[j]) ~ /(^|[^a-z])mutation([^a-z]|$)/) mut = 1
+        if (noun == "api" && (m ~ /^(POST|PATCH|PUT|DELETE|\$)/ || (f && m != "GET" && (ep != "graphql" || mut)))) return 1
         if (noun ~ /^(pr|issue)$/ && verb ~ /^(comment|review|edit|close|reopen|lock|delete|transfer)$/) return 1
-        if (noun == "issue" && verb == "create") return 1
+        if (noun == "issue" && verb ~ /^(create|new)$/) return 1
         start = i + 1
       }
       return 0
     }
     { all = all $0 "\n" }
-    END { exit !wr(all) }' <<<"$code"
+    END { exit !wr(all) }'
 }
 if flow_auto && ! flow_on_runner && gh_writes; then
   rest_pr='^gh api( (-X|--method) POST)? repos/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+/pulls(/[0-9]+/ccr/ready_for_review)?( -[fF] [A-Za-z0-9_]+=[A-Za-z0-9._/-]*)*$'

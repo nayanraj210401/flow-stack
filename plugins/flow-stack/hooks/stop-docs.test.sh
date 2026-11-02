@@ -27,6 +27,9 @@ is allow 'cp draft.txt README.txt'
 is allow "sed -i '' 's/a/b/' docs/SKILL.md"
 is allow "perl -pi -e 's/a/b/' CHANGELOG.md"
 is block 'mv build.sh.new build.sh'
+is block 'mv build.sh notes.md'
+is block 'mv src/app.sh src/lib.sh docs/x.md'
+is allow 'mv a.md b.md'
 is block "sed -i '' 's/a/b/' src/app.sh"
 is block "sed -i '' 's/a/b/' README.md src/app.sh"
 
