@@ -156,7 +156,11 @@ is deny plain "$(printf 'echo \\\"  \"<<EOF\"\ngh pr comment 1 -b x\nEOF')"
 is allow plain '$NPM run build'
 is allow plain '"$CARGO" run --release'
 is allow plain '$MAKE release'
-is allow plain 'git log --grep gh'
+is deny plain "$(printf 'echo \x27a\\\\\x27 \x27<<EOF\x27\ngh pr comment 1 -b x\nEOF')"
+is deny plain 'echo gh pr close 1 | /bin/sh'
+is deny plain 'echo gh pr close 1 | /usr/bin/env bash'
+is deny plain 'git bisect run gh pr close 1'
+is deny plain 'git rebase --exec "gh pr close 1" HEAD~1'
 RUNNER_TEMP="$SB" GITHUB_ACTIONS=true GITHUB_RUN_ID=1 RUNNER_ENVIRONMENT=github-hosted is allow ship 'gh pr review 1 --comment --body ok'
 
 echo "-- --auto ship with a stamped HEAD: the REST twins of gh pr create/ready pass (cloud has no GraphQL)"

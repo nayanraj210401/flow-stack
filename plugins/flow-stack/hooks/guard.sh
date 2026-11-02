@@ -235,7 +235,14 @@ code="$(awk -v q="'" '
     u = $0
     # unquote a quoted delimiter (<<'EOF') first, so the blanking below keeps it
     while (match(u, "<<-?[ \t]*[\"" q "][A-Za-z_][A-Za-z0-9_]*[\"" q "]")) { m = substr(u, RSTART, RLENGTH); gsub("[\"" q "]", "", m); u = substr(u, 1, RSTART - 1) m substr(u, RSTART + RLENGTH) }
-    gsub(/\\./, "", u); gsub(q "[^" q "]*" q, "", u); gsub(/"[^"]*"/, "", u); sub(/(^|[ \t])#.*/, "", u)
+    v = ""; sq = dq = 0
+    # blank quoted text quote-aware: a backslash is literal in single quotes and escapes elsewhere
+    for (x = 1; x <= length(u); x++) { c = substr(u, x, 1)
+      if (sq) { if (c == q) sq = 0; continue }
+      if (c == "\\") { x++; continue }
+      if (dq) { if (c == "\"") dq = 0; continue }
+      if (c == q) sq = 1; else if (c == "\"") dq = 1; else v = v c }
+    u = v; sub(/(^|[ \t])#.*/, "", u)
     if (match(u, "(^|[^<])<<-?[ \t]*[\"" q "]?[A-Za-z_][A-Za-z0-9_]*")) {
       hd = substr(u, RSTART, RLENGTH); dash = hd ~ /<<-/; sub("^[^<]?<<-?[ \t]*[\"" q "]?", "", hd) } }
   END { printf "%s", body }' <<<"$cmd")"
@@ -367,7 +374,7 @@ fi
 # 4c. Off a runner, auto mode also holds the GitHub writes the rule above can't see: gh api with a write method,
 # or with fields (gh sends those as POST unless -X GET), and issue/PR comments, reviews and edits. --auto ship with
 # a stamped HEAD lets the REST twins of gh pr create/ready through (cloud sessions have no GraphQL). Other gh write
-# verbs (labels, secrets, workflows, releases, repo settings) aren't covered here. A runner's token is already
+# commands are held too, since only listed reads pass. A runner's token is already
 # bounded by the workflow's grants, and the routines rely on these writes there.
 gh_writes() { # gh writes in $cmd, judged on shell words (quotes and escapes resolved), one command at a time
   # a heredoc body is data unless a shell runs it (bash <<EOF, ssh host <<EOF), as in stop.sh
@@ -377,7 +384,14 @@ gh_writes() { # gh writes in $cmd, judged on shell words (quotes and escapes res
       u = $0
     # unquote a quoted delimiter (<<'EOF') first, so the blanking below keeps it
     while (match(u, "<<-?[ \t]*[\"" q "][A-Za-z_][A-Za-z0-9_]*[\"" q "]")) { m = substr(u, RSTART, RLENGTH); gsub("[\"" q "]", "", m); u = substr(u, 1, RSTART - 1) m substr(u, RSTART + RLENGTH) }
-    gsub(/\\./, "", u); gsub(q "[^" q "]*" q, "", u); gsub(/"[^"]*"/, "", u); sub(/(^|[ \t])#.*/, "", u)
+    v = ""; sq = dq = 0
+    # blank quoted text quote-aware: a backslash is literal in single quotes and escapes elsewhere
+    for (x = 1; x <= length(u); x++) { c = substr(u, x, 1)
+      if (sq) { if (c == q) sq = 0; continue }
+      if (c == "\\") { x++; continue }
+      if (dq) { if (c == "\"") dq = 0; continue }
+      if (c == q) sq = 1; else if (c == "\"") dq = 1; else v = v c }
+    u = v; sub(/(^|[ \t])#.*/, "", u)
       if (match(u, "(^|[^<])<<-?[ \t]*[\"" q "]?[A-Za-z_][A-Za-z0-9_]*")) {
         # the shell must be in the same command as the heredoc (cat <<EOF | bash), not a later one (…; ls /bin/sh)
         a = substr(u, 1, RSTART); sub(/.*[;&]/, "", a); b = substr(u, RSTART + RLENGTH); sub(/[;&].*/, "", b)
@@ -398,17 +412,18 @@ gh_writes() { # gh writes in $cmd, judged on shell words (quotes and escapes res
     # wr(s): 1 when s holds a gh command that is not a known read. An allowlist, so a spelling nobody listed is held:
     # a read is a literal list/view/status/diff/checks/checkout/download/watch/search/browse (clone: repo only), or
     # gh api with no method but GET/HEAD and no fields (GraphQL: a literal query without "mutation"). gh counts
-    # in command position (if ! gh …, xargs -I {} gh …, sudo -u bob gh …), and so does a computed command word
-    # followed by a gh noun ("$GH" pr …, sudo $GH repo delete …). A $ or
+    # in command position (if ! gh …, xargs -I {} gh …, sudo -u bob gh …); any other command that names gh is held
+    # unless it starts with a known reader, and so is a shell reading stdin when gh is named. A $VAR command word
+    # is not gh. A $ or
     # a backtick in the noun or verb (in gh api: the method, a flag position, or the start of the endpoint) is held;
     # after a literal read verb it is only an argument. gh pr create/ready/merge and gh release create belong to
     # rule 4. eval, sh -c and every substitution, flag values included, are checked as scripts of their own.
-    function wr(s,   T, K, C, CS, n, i, k, j, c, r, start, g, look, noun, verb, ep, m, f, mut, ev, sh, w, lw, comp, hlp, cp, skip, wrap, dur, first, other, bare, anygh) {
+    function wr(s,   T, K, C, CS, n, i, k, j, c, r, start, g, look, noun, verb, ep, m, f, mut, ev, sh, w, lw, comp, hlp, cp, skip, wrap, dur, other, bare, anygh, bn) {
       n = split_cmds(unbt(s), T, K, C, CS); start = 1
       for (i = 1; i <= n + 1; i++) {
         if (i <= n && K[i] != "op") continue
         for (j = start; j < i; j++) if (K[j] != "op" && CS[j] && wr(C[j])) return 1
-        g = hlp = skip = dur = anygh = 0; cp = 1; wrap = first = other = ""; noun = verb = ep = m = ""; f = mut = ev = sh = comp = 0
+        g = hlp = skip = dur = anygh = 0; cp = 1; wrap = other = ""; noun = verb = ep = m = ""; f = mut = ev = sh = comp = 0
         for (k = start; k < i; k++) {
           if (K[k] == "op") continue
           if (ev || sh > 1) { if (wr(T[k])) return 1 }
@@ -428,11 +443,12 @@ gh_writes() { # gh writes in $cmd, judged on shell words (quotes and escapes res
               continue }
             if (wrap == "timeout" && !dur) { dur = 1; continue }
             if (lw == "gh" || lw ~ /\/gh$/) { g = 1; continue }
-            if (lw ~ /^(if|then|elif|else|do|while|until|!|\{|time)$/ || w ~ /^[A-Za-z_][A-Za-z0-9_]*=/) continue
-            if (lw ~ /^(sudo|doas|env|xargs|timeout|nice|nohup|exec|command|stdbuf)$/) { wrap = lw; dur = 0; continue }
+            bn = lw; sub(/.*\//, "", bn)
+            if (bn ~ /^(if|then|elif|else|do|while|until|!|\{|time)$/ || w ~ /^[A-Za-z_][A-Za-z0-9_]*=/) continue
+            if (bn ~ /^(sudo|doas|env|xargs|timeout|nice|nohup|exec|command|stdbuf)$/) { wrap = bn; dur = 0; continue }
             cp = 0; other = lw
             # a shell with no script reads stdin (echo gh pr close 1 | sh)
-            if (lw ~ /^(ba|z|da|k)?sh$/) { bare = 1; for (j = k + 1; j < i; j++) if (K[j] != "op" && T[j] !~ /^-[A-Za-bd-z]*$/) bare = 0; if (bare) pipesh = 1 }
+            if (bn ~ /^(ba|z|da|k)?sh$/) { bare = 1; for (j = k + 1; j < i; j++) if (K[j] != "op" && T[j] !~ /^-[A-Za-bd-z]*$/) bare = 0; if (bare) pipesh = 1 }
             continue }
           if (w ~ /^(-R|--repo|--jq|-q|--search|-S|--template|-t)$/ && k + 1 < i) { k++; continue }
           if (w ~ /^(--help|-h)$/ && T[k - 1] !~ /^-/) hlp = 1
@@ -452,6 +468,8 @@ gh_writes() { # gh writes in $cmd, judged on shell words (quotes and escapes res
               if (c ~ /[Hpqt]/) { if (r == "") k++; break } }
           } else if (ep == "") ep = lw
         }
+        # git is a reader except where it runs a command of its own
+        if (!g && other == "git" && anygh) for (j = start; j < i; j++) if (T[j] ~ /^(bisect|--exec|-x|-c|foreach|filter-branch|filter-repo)$/) return 1
         if (!g && other != "" && anygh && other !~ /^(rg|grep|egrep|fgrep|ag|ack|ls|cat|head|tail|less|more|wc|file|stat|echo|printf|go|cd|git|which|type|hash|whereis|man|brew|apt|apt-get|dnf|yum|pacman|port|apk|tree|du|realpath|readlink|basename|dirname|diff|jq|mkdir|touch|rm|cp|mv|ln|test|\[|true|false|command)$/) return 1
         if (g) {
           for (j = start; j < i; j++) if (tolower(T[j]) ~ /(^|[^a-z])mutation([^a-z]|$)/ || T[j] ~ /[@$`]|^--input(=|$)/) mut = 1
