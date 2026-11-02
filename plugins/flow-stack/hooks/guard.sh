@@ -368,7 +368,7 @@ gh_writes() { # gh writes in $cmd, judged on shell words (quotes and escapes res
     hd != "" { t = $0; if (dash) sub(/^\t+/, "", t); if (t == hd) hd = ""; else if (run) print; next }
     { print
       if (match($0, "(^|[^<])<<-?[ \t]*[\"" q "]?[A-Za-z_][A-Za-z0-9_]*")) {
-        run = substr($0, 1, RSTART) ~ /(^|[;&|( \t\/])(bash|sh|zsh|ksh|dash|ssh)([ \t]|$)/
+        run = $0 ~ /(^|[;&|( \t\/])(bash|sh|zsh|ksh|dash|ssh)([ \t]|$)/
         hd = substr($0, RSTART, RLENGTH); dash = hd ~ /<<-/; sub("^[^<]?<<-?[ \t]*[\"" q "]?", "", hd) } }' <<<"$cmd" |
   awk -v q="'" "$split_awk"'
     # unbt(s): an unquoted `…` is a command of its own, so it becomes one (split_cmds splits only `…` inside "…")
@@ -394,8 +394,9 @@ gh_writes() { # gh writes in $cmd, judged on shell words (quotes and escapes res
           w = T[k]; lw = tolower(w)
           if (lw == "eval") ev = 1
           if (w ~ /^(ba|z|da|k)?sh$/ || w ~ /\/(ba|z|da|k)?sh$/) sh = 1; else if (sh && w ~ /^-[A-Za-z]*c[A-Za-z]*$/) sh = 2
-          if (!g) { if (lw == "gh" || lw ~ /\/gh$/) g = 1; continue }
-          if (noun == "") { if (lw ~ /^(api|pr|issue)$/) noun = lw; continue }
+          # gh with a computed first word (gh $N, gh `echo pr`, which unbt leaves as a bare gh) is held
+          if (!g) { if (lw == "gh" || lw ~ /\/gh$/) { g = 1; if (k == i - 1 && T[i] == "\n") return 1 }; continue }
+          if (noun == "") { if (g++ == 1 && w ~ /[$`]/) return 1; if (lw ~ /^(api|pr|issue)$/) noun = lw; continue }
           if (noun != "api") { if (verb == "") { if (w ~ /^(-R|--repo)$/) k++; else if (w !~ /^-/) verb = lw }; continue }
           if (w ~ /^--method=/) m = toupper(substr(w, 10))
           else if (w == "--method") m = toupper(T[++k])
@@ -412,8 +413,9 @@ gh_writes() { # gh writes in $cmd, judged on shell words (quotes and escapes res
         # a GraphQL call is a read only when every value is literal text without "mutation": a file (@q), a variable,
         # a substitution or --input could carry one
         for (j = start; j < i; j++) if (tolower(T[j]) ~ /(^|[^a-z])mutation([^a-z]|$)/ || T[j] ~ /[@$`]|^--input(=|$)/) mut = 1
-        if (noun == "api" && (m ~ /^(POST|PATCH|PUT|DELETE|\$)/ || (f && m != "GET" && (ep != "graphql" || mut)))) return 1
-        if (noun ~ /^(pr|issue)$/ && verb ~ /^(comment|review|edit|close|reopen|lock|delete|transfer)$/) return 1
+        # any method but a literal GET or HEAD is a write, so a computed one ($M, `echo PATCH`) is held
+        if (noun == "api" && ((m != "" && m !~ /^(GET|HEAD)$/) || (f && m == "" && (ep != "graphql" || mut)))) return 1
+        if (noun ~ /^(pr|issue)$/ && (verb ~ /[$`]/ || verb ~ /^(comment|review|edit|close|reopen|lock|unlock|delete|transfer|update-branch|pin|unpin|develop)$/)) return 1
         if (noun == "issue" && verb ~ /^(create|new)$/) return 1
         start = i + 1
       }

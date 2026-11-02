@@ -34,7 +34,10 @@ events="$(tail -n 3000 "$transcript" | jq -nrR --argjson roots "$roots" --arg ch
   def expand: . as $cmd | [match("(?:^|[;&|\n])[[:space:]]*(?<n>[A-Za-z_][A-Za-z0-9_]*)=(?<v>[^[:space:];&|\"'"'"'$]*)"; "g").captures | {n: .[0].string, v: .[1].string}]
     | (group_by(.n) | map(select(length == 1) | .[0])) as $once | reduce $once[] as $a
     ($cmd; gsub("\\$(\\{" + $a.n + "\\}|" + $a.n + "\\b)"; $a.v));
-  def shell_write: unheredoc | expand | gsub("(>>?|\\btee( -a)?)[[:space:]]*(?![^[:space:];|&]*\\.\\.)[^[:space:];|&]*(\\.flow/|/tmp/|\\$\\{?TMPDIR\\b|scratchpad|\\.md|\\.txt)[^[:space:];|&]*"; "")
+  # sed -i, perl -i, cp and mv with a quoted code path: the quote stripping below would hide it
+  def quoted_code: test("(^|[;&|\n][[:space:]]*)(sed -[a-zA-Z]*i|perl -[a-z]*i|cp|mv)\\b[^;&|\n]*[\"'"'"'][^\"'"'"'[:space:]]+\\.(?!(md|txt)[\"'"'"'])[A-Za-z0-9]+[\"'"'"']");
+  def shell_write: unheredoc | expand | if quoted_code then true else (gsub("(>>?|\\btee( -a)?)[[:space:]]*(?![^[:space:];|&]*\\.\\.)[^[:space:];|&]*(\\.flow/|/tmp/|\\$\\{?TMPDIR\\b|scratchpad|\\.md|\\.txt)[^[:space:];|&]*"; "")
+    | gsub("[\"'"'"'](?<p>[^\"'"'"'[:space:]]*\\.(md|txt))[\"'"'"']"; .p)
     | gsub("\"[^\"]*\"|'"'"'[^'"'"']*'"'"'"; "")
     | gsub("[0-9]*>>?[[:space:]]*(/dev/null|&[0-9]-?)"; "")
     | test("\\bsed -[a-zA-Z]*i(?!([[:space:]]+(-[A-Za-z]+|[^;&|\\n[:space:]]+\\.(md|txt)))+[[:space:]]*($|[;&|\\n]))|\\bperl -[a-z]*i(?!([[:space:]]+(-[A-Za-z]+|[^;&|\\n[:space:]]+\\.(md|txt)))+[[:space:]]*($|[;&|\\n]))|\\btee\\b|>>?[[:space:]]*[^[:space:]=>&]"
@@ -43,7 +46,7 @@ events="$(tail -n 3000 "$transcript" | jq -nrR --argjson roots "$roots" --arg ch
       # mv removes its sources, so a code source makes it a code write even when the destination is a doc
       + "|(^|[;&|][[:space:]]*)mv( -[A-Za-z]+)*( [^;&|[:space:]]+)*? (?![^;&|[:space:]]*(\\.(md|txt)|/tmp/|scratchpad|\\.flow/))[^-;&|[:space:]][^;&|[:space:]]*( [^;&|[:space:]]+)+[[:space:]]*($|[;&|])"
       + "|(^|[;&|][[:space:]]*)patch[[:space:]]"
-      + "|git apply[[:space:]]+(?!--(check|stat|numstat|summary))");
+      + "|git apply[[:space:]]+(?!--(check|stat|numstat|summary))")) end;
   # The harness can append its own line (e.g. "Shell cwd was reset to …") after the output of the command.
   def verdict: txt | split("\n") | map(select(test("\\S") and (test("^Shell cwd was reset to ") | not))) | (last // "")
     | test("^flow-evidence: PASS|^ready for review: [0-9a-f]+ stamped");

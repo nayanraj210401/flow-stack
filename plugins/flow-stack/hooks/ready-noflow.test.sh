@@ -87,6 +87,16 @@ is deny plain 'gh api graphql -f query="$Q"'
 is deny plain 'gh api graphql --input body.json'
 is deny plain "$(printf 'cat <<-EOF\n\tx\n\tEOF\ngh pr comment 1 -b x')"
 is deny plain "$(printf 'tr a b <<<"hello"\ngh pr comment 1 -b x')"
+is deny plain 'gh api -X D$M repos/o/r/git/refs/heads/main'
+is deny plain 'gh api --method `echo PATCH` repos/o/r/issues/1'
+is deny plain 'gh api -X `echo DELETE` repos/o/r/git/refs/heads/main'
+is deny plain 'gh `echo pr` comment 1 -b x'
+is deny plain "$(printf 'cat <<EOF | bash\ngh pr comment 1 -b x\nEOF')"
+is deny plain 'gh pr update-branch 1'
+is deny plain 'gh issue unpin 1'
+is allow plain 'gh --version'
+is allow plain 'gh auth status'
+is allow plain 'gh api -X HEAD repos/o/r'
 RUNNER_TEMP="$SB" GITHUB_ACTIONS=true GITHUB_RUN_ID=1 RUNNER_ENVIRONMENT=github-hosted is allow ship 'gh pr review 1 --comment --body ok'
 
 echo "-- --auto ship with a stamped HEAD: the REST twins of gh pr create/ready pass (cloud has no GraphQL)"

@@ -30,6 +30,9 @@ is block 'mv build.sh.new build.sh'
 is block 'mv build.sh notes.md'
 is block 'mv src/app.sh src/lib.sh docs/x.md'
 is allow 'mv a.md b.md'
+is block "sed -i '' 's/a/b/' \"src/app.sh\" notes.md"
+is block 'cp "src/app.sh" b.sh notes.md'
+is allow "sed -i '' 's/a/b/' \"notes.md\""
 is block "sed -i '' 's/a/b/' src/app.sh"
 is block "sed -i '' 's/a/b/' README.md src/app.sh"
 
