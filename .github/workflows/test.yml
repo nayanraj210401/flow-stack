@@ -13,6 +13,9 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        # factory.test.sh compares the hooks with origin/main's
+        with:
+          fetch-depth: 0
       # holds.test.sh builds the herdr band mod (register.tsx) with bun
       - uses: oven-sh/setup-bun@v2
         with:

@@ -116,6 +116,8 @@ status: verified                     # verified | unverified | stale | broken
 verified: 2026-09-27 a1b2c3d         # date + short sha of the last PASS
 ```
 
+`status` and `verified` here are the starting values. Runs, `mark`, and `stale --write` append to `.flow/verified.tsv` (untracked; the last row per id wins), so a committed map stays unchanged.
+
 Body sections, in order: `## Sub-features` (lines `- <id>.<sub> · <behavior>`), `## How to get to it`, `## Driving it`, `## Proof`, `## Gotchas`. Evidence labels for scenario runs are `feat:<id>`. Acceptance checks cite sub-feature IDs.
 
 ## Human gates
