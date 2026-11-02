@@ -81,6 +81,11 @@ for h in '## Edge case' '## Edge-cases' '## Edgecases'; do
 done
 blocks '## Edge cases\n<!-- a --> <!--\n- huge\n-->' "comment opener after a closed comment"
 blocks '## Edge cases\n- → C1' "row with no case text"
+blocks '## Edge cases\n- empty → C1\n  ```\n- huge\n  ```' "fence indented under a row"
+blocks '## Edge cases\n- empty → C1\n```x``` note\n- huge\n```' "backtick line that is not a fence"
+for h in '## 3. Edge cases' '## **Edge cases**' '## `Edge cases`' '## The edge cases'; do
+  blocks "$h\n- huge" "decorated heading '$h'"
+done
 printf "$head"'## Edge cases\n<!--\n```\n-->\n- empty → C1\n' >"$I"
 seals && ok "fence marker inside a comment opens nothing" || bad "comment fence refused: $(cat "$SB/out")"
 printf "$head"'## Edge cases\n- a→b transition → C1\n' >"$I"

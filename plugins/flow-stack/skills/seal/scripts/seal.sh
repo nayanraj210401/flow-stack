@@ -37,9 +37,17 @@ sha() { shasum -a 256 <"$1" | cut -d' ' -f1; }
 unmapped() {
   [ -f "$FLOW_TASK_DIR/INTENT.md" ] || return 0
   awk '
-    # Fail closed: once an INTENT has an Edge cases heading, every non-blank line in that section must be a
-    # list row, and an unclosed fence or comment anywhere is refused, since either could hide rows.
-    { l = $0; sub(/\r$/, "", l); if (tolower(l) ~ /^[ \t]*#+[ \t]*edge[ _-]?cases?/) has = 1 }
+    # Fail closed: once an INTENT has an edge-cases-like heading, the "## Edge cases" section is a whitelist:
+    # list rows, blank lines, and comments that open at column 0 (the template form). Any other fence or
+    # comment marker there is refused, as is an unclosed fence or comment anywhere, since either could hide rows.
+    { l = $0; sub(/\r$/, "", l); if (tolower(l) ~ /^[ \t]*#.*edge[ _-]?cases?/) has = 1 }
+    sec == "edge cases" && l !~ /^##?[ \t]/ {
+      if (ecm) { if (index(l, "-->")) ecm = 0; next }
+      if (l ~ /^<!--/) { if (!index(substr(l, 5), "-->")) ecm = 1; next }
+      if (l ~ /^[ \t]*$/) next
+      if (l ~ /```|~~~|<!--|-->/) bad[++nb] = l; else rows[++n] = l
+      next
+    }
     # Fences and multi-line comments open only at indent 0-3, as in CommonMark; deeper they are text.
     fm != "" { if (index(l, fm) && l ~ /^ ? ? ?(```|~~~)/) fm = ""; next }
     {
@@ -56,10 +64,10 @@ unmapped() {
     l ~ /^##?[ \t]/ { sec = tolower(l); sub(/^#+[ \t]+/, "", sec); sub(/[ \t#:]+$/, "", sec); gsub(/[ \t]+/, " ", sec); if (sec == "edge cases") seen = 1; next }
     l ~ /^[ \t]*$/ { next }
     sec == "acceptance checks" && l ~ /^[ \t]*- \[.\] C[0-9]+/ { match(l, /C[0-9]+/); ids[substr(l, RSTART, RLENGTH)] = 1 }
-    sec == "edge cases" && l !~ /^#+([ \t]|$)/ { rows[++n] = l }
     END {
       if (has && fm != "") print "unclosed " fm " fence: it could hide edge-case rows"
-      if (has && cm) print "unclosed <!-- comment: it could hide edge-case rows"
+      if (has && (cm || ecm)) print "unclosed <!-- comment: it could hide edge-case rows"
+      for (i = 1; i <= nb; i++) print bad[i] "  (a fence or comment marker inside Edge cases; keep rows plain)"
       if (has && !seen) print "an edge-cases heading that is not exactly \"## Edge cases\": rename it so its rows are checked"
       for (i = 1; i <= n; i++) {
         t = rows[i]; ok = 0

@@ -13,7 +13,7 @@ scripts/seal.sh verify         # before presenting; non-zero exit = tampering
 scripts/seal.sh list
 ```
 
-`add` refuses while a row in INTENT.md's `## Edge cases` maps to no check listed under `## Acceptance checks` and no `non-goal: <why>`, and it names the rows. Once an INTENT has an edge-cases-like heading, it also refuses a prose line in that section, a heading that isn't exactly `## Edge cases`, and an unclosed fence or comment anywhere. An INTENT with no such heading seals as before.
+`add` refuses while a row in INTENT.md's `## Edge cases` maps to no check listed under `## Acceptance checks` and no `non-goal: <why>`, and it names the rows. A row is one line: `- <case> → C1, C2` or `- <case> → non-goal: <why>` (`→`, not `->`; no wrapped mappings). Once an INTENT has an edge-cases-like heading, `## Edge cases` (a trailing `:` or `##` is fine) must exist, and the section may hold only rows, blank lines and comments that open at column 0. A fence or comment marker elsewhere in the section, or an unclosed fence or comment anywhere, is refused. An INTENT with no such heading seals as before.
 
 ## What happens after sealing
 
