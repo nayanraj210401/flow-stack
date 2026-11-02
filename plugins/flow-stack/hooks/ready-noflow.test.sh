@@ -47,6 +47,13 @@ is deny plain 'gh api -X GET user $(gh api repos/o/r/issues/1/comments -f body=x
 is deny plain 'gh api -X GET user `gh api repos/o/r/issues/1/comments -f body=x`'
 is deny plain "gh api repos/o/r/issues/1/comments -f 'body=a -X GET b'"
 is allow plain "gh api -X GET search/issues -f 'q=is:open label:bug'"
+is deny plain 'gh api -X "DELETE" repos/o/r/git/refs/heads/main'
+is deny plain "gh api --method 'PATCH' repos/o/r/issues/1"
+is deny plain 'gh api repos/o/r/issues/1/comments -f body=x # -X GET'
+is deny plain 'gh api repos/o/r/issues/1/comments -f "body=\"x -X GET \""'
+is deny plain 'gh pr -R o/r comment 1 --body x'
+is deny plain 'gh issue -R o/r edit 1 --title x'
+is allow plain 'gh pr -R o/r view 1'
 RUNNER_TEMP="$SB" GITHUB_ACTIONS=true GITHUB_RUN_ID=1 RUNNER_ENVIRONMENT=github-hosted is allow ship 'gh pr review 1 --comment --body ok'
 
 echo "-- --auto ship with a stamped HEAD: the REST twins of gh pr create/ready pass (cloud has no GraphQL)"

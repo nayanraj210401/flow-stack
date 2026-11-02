@@ -361,13 +361,14 @@ gh_api='gh'"$gopt"'[[:space:]]+api([[:space:]][^;&|]*)?'
 gh_method_write="$lead$gh_api"'[[:space:]](-X|--method)[[:space:]]*=?[[:space:]]*(POST|PATCH|PUT|DELETE)'
 gh_fields="$lead$gh_api"'[[:space:]](-[fF]|--field|--raw-field|--input)'
 gh_get="$lead$gh_api"'[[:space:]](-X|--method)[[:space:]]*=?[[:space:]]*GET([[:space:];&|]|$)'
-gh_verb="$lead"'gh'"$gopt"'[[:space:]]+((issue|pr)[[:space:]]+(comment|review|edit|close|reopen|lock|delete|transfer)|issue[[:space:]]+create)'
+gh_verb="$lead"'gh'"$gopt"'[[:space:]]+((issue|pr)([[:space:]]+-[A-Za-z-]+([[:space:]=]+[^-[:space:]][^[:space:]]*)?)*[[:space:]]+(comment|review|edit|close|reopen|lock|delete|transfer)|issue[[:space:]]+create)'
 gh_writes() { # each command in a chain or a substitution is judged alone, so a GET in one can't excuse a write in another
   local seg
   while IFS= read -r seg; do
-    grep -Eiq "$gh_method_write|$gh_verb" <<<"$seg" && return 0
-    # a -X GET counts only outside quoted values
-    grep -Eiq "$gh_fields" <<<"$seg" && ! sed -E "s/'[^']*'//g; s/\"[^\"]*\"//g" <<<"$seg" | grep -Eiq "$gh_get" && return 0
+    # a quoted method (-X "DELETE") is still a write
+    grep -Eiq "$gh_verb" <<<"$seg" || tr -d "\"'" <<<"$seg" | grep -Eiq "$gh_method_write" && return 0
+    # a -X GET counts only outside quoted values (escapes dropped first) and outside a # comment
+    grep -Eiq "$gh_fields" <<<"$seg" && ! sed -E "s/\\\\.//g; s/'[^']*'//g; s/\"[^\"]*\"//g; s/(^|[[:space:]])#.*//" <<<"$seg" | grep -Eiq "$gh_get" && return 0
   done < <(sed -E 's/\$\(|`|[<>]\(|\)/\n/g' <<<"$code" | tr ';&|' '\n\n\n')
   return 1
 }

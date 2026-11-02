@@ -26,5 +26,7 @@ send e "--auto"; is_auto e && ok "a bare --auto from the human turns it on" || b
 send f "--auto"; send f "$(printf -- '--no-auto, look at this:\nUpdate on pull request #199 (url):\n- CI failed')"
 is_auto f && bad "--no-auto next to a relay ignored" || ok "--no-auto counts even next to a relay"
 send e "--no-auto I'm back"; is_auto e && bad "--no-auto ignored" || ok "--no-auto turns it off"
+send g "--auto"; send g "$(printf 'Delegated task node:x (#1) [completed]:\nthe anchor said (--auto; --no-auto ends it) earlier')"
+is_auto g && ok "a relay quoting the banner keeps auto on" || bad "a quoted --no-auto mid-line ended auto"
 
 [ "$FAILS" -eq 0 ] && echo "== relay-auto · PASS" || { echo "== relay-auto · FAIL ($FAILS)"; exit 1; }
