@@ -44,7 +44,8 @@ unmapped() {
     sec == "edge cases" && l !~ /^##?[ \t]/ {
       # text after a closing --> is visible, so it must be empty
       if (ecm) { if ((i = index(l, "-->"))) { ecm = 0; if (substr(l, i + 3) ~ /[^ \t]/) bad[++nb] = l }; next }
-      if (l ~ /^<!--/) { if (!(i = index(substr(l, 5), "-->"))) ecm = 1; else if (substr(l, i + 7) ~ /[^ \t]/) bad[++nb] = l; next }
+      # search from the dashes of the opener: <!--> and <!---> close on their line, as in CommonMark
+      if (l ~ /^<!--/) { if (!(i = index(substr(l, 3), "-->"))) ecm = 1; else if (substr(l, i + 5) ~ /[^ \t]/) bad[++nb] = l; next }
       if (l ~ /^[ \t]*$/) next
       if (l ~ /```|~~~|<!--|-->/) bad[++nb] = l; else rows[++n] = l
       next

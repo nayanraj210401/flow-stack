@@ -81,6 +81,12 @@ for h in '## Edge case' '## Edge-cases' '## Edgecases'; do
 done
 blocks '## Edge cases\n<!-- a --> <!--\n- huge\n-->' "comment opener after a closed comment"
 blocks '## Edge cases\n- → C1' "row with no case text"
+blocks '## Edge cases\n<!-->\n- huge →\n-->' "<!--> closes on its own line"
+blocks '## Edge cases\n<!--->\n- huge →\n-->' "<!---> closes on its own line"
+for h in '## Edge cases:' '## Edge cases ##'; do
+  printf "$head$h"'\n- huge → C1\n' >"$I"
+  seals && ok "'$h' is the matrix: a mapped row seals" || bad "'$h' with a mapped row refused: $(cat "$SB/out")"
+done
 blocks '## Edge cases\n- empty → C1\n\n## Edge cases (security)\n- unauthorized →' "decorated second heading next to the exact one"
 blocks '## Edge cases\n- empty → C1\n\n## Goal\n### Edge cases\n- huge' "### Edge cases inside another section"
 blocks '## Edge cases\n<!-- note --> - huge →' "text after a one-line comment"
