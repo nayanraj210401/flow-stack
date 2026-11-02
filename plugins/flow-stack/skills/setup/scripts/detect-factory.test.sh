@@ -44,9 +44,16 @@ out="$("$D")"
 want verify missing 'make-verifier.*feature-map'
 want factory missing
 
+echo "-- a routine file that isn't committed doesn't run"
+touch .github/routines/self-heal.md
+out="$("$D")"
+want implement missing make-routines
+rm .github/routines/self-heal.md
+
 echo "-- committed driver + scenario, all routines"
 touch .claude/skills/verify-toy/SKILL.md
-for r in self-create self-heal review auto-merge; do touch ".github/routines/$r.md"; done
+mkdir -p .github/workflows
+for r in self-create self-heal review auto-merge; do touch ".github/routines/$r.md" ".github/workflows/flow-$r.yml"; done
 git add -A && git commit -qm init
 out="$("$D")"
 want monitor ok self-create

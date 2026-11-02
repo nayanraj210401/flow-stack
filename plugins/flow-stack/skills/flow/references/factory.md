@@ -29,7 +29,5 @@ A repo is factory-ready when it has a **committed** verify driver (`.claude/skil
 | Row missing | Run |
 |---|---|
 | monitor, implement, review | `/flow-stack:make-routines` (`self-create`, `self-heal`, `review`) |
-| verify: no driver | `/flow-stack:make-verifier` |
-| verify: no feature with a scenario | `/flow-stack:feature-map` |
 | verify: `a committed verify driver` / `a committed feature map` | if the driver or map already exists on disk, commit it (a gitignored one is invisible to routines); otherwise run the named skill |
 | ship | `auto-merge` has no `make-routines` template yet (#184); copy this repo's `.github/routines/auto-merge.md` |

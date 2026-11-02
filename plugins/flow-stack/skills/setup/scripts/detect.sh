@@ -40,10 +40,12 @@ if [ -n "$root" ]; then
   ls -d "$root"/.claude/skills/run-* >/dev/null 2>&1 && row run-drv ok "" || row run-drv missing "make-runner"
   ls "$root"/.flow/playbooks/*.md >/dev/null 2>&1 && row playbooks ok "$(ls "$root"/.flow/playbooks/*.md | wc -l | tr -d ' ') repo playbook(s)" || row playbooks none "make-playbook (optional)"
   ls "$root"/.github/routines/*.md >/dev/null 2>&1 && row routines ok "$(ls "$root"/.github/routines/*.md | grep -vc '/profile\.md$' || true) routine(s)" || row routines none "make-routines (optional)"
-  # Factory: one row per loop stage (skills/flow/references/factory.md). verify reads HEAD of this checkout, as the gate
-  # does; the routine rows read the main checkout's disk, so an uncommitted routine file still shows ok.
+  # Factory: one row per loop stage (skills/flow/references/factory.md). every row reads HEAD of this
+  # checkout (a worktree included), since runners see only the clone.
   row FACTORY STATUS "loop stage: what serves it, or the fix"
-  routine() { [ -f "$root/.github/routines/$1.md" ] && row "$2" ok "$1 routine" || row "$2" missing "make-routines: $1${3:+ ($3)}"; }
+  # what runs is the committed workflow make-routines renders, so a stage row reads HEAD like verify does
+  wf() { git -C "$FLOW_ROOT" cat-file -e "HEAD:.github/workflows/flow-$1.yml" 2>/dev/null; }
+  routine() { wf "$1" && row "$2" ok "$1 routine" || row "$2" missing "make-routines: $1${3:+ ($3)}"; }
   routine self-create monitor
   row triage planned "#185 triage, #186 ideate"
   row spec ok "intent + seal (plugin); edge-case matrix planned #187"
@@ -52,6 +54,6 @@ if [ -n "$root" ]; then
   . "$(dirname "$0")/../../../hooks/lib.sh"
   if miss="$(factory_ready "$FLOW_ROOT")"; then row verify ok "committed verify driver + a feature with a scenario"; else row verify missing "$miss"; fi
   routine review review "ready.sh works in a session"
-  [ -f "$root/.github/routines/auto-merge.md" ] && row ship ok "auto-merge routine" || row ship missing "auto-merge routine (no make-routines template yet; #184)"
+  wf auto-merge && row ship ok "auto-merge routine" || row ship missing "auto-merge routine (no make-routines template yet; #184)"
   [ -z "$miss" ] && row factory ok "ready; impacted scenarios must also pass on HEAD (ready.sh)" || row factory missing "not ready: needs verify; --auto ship warns, or runs as plain --auto with factory_ready: enforce"
 fi
