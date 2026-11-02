@@ -4,8 +4,8 @@ title: Parallel leads in linked worktrees
 owns: plugins/flow-stack/hooks/roots.sh plugins/flow-stack/skills/flow/scripts/task.sh plugins/flow-stack/skills/board/scripts/collect.sh .claude/skills/verify-flow-stack/scripts/worktree.leads.sh
 entries: cli task.sh new|switch|close from a linked worktree | hook any, in a worktree with a flow-active pointer | cli skills/board/scripts/collect.sh
 scenario: bash .claude/skills/verify-flow-stack/scripts/worktree.leads.sh
-status: verified
-verified: 2026-10-29 2d69405
+status: unverified
+verified:
 ---
 # Parallel leads in linked worktrees
 

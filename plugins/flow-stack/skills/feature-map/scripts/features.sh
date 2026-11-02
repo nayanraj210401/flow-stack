@@ -30,7 +30,8 @@ here="$(cd "$(dirname "$0")" && pwd)"
 root="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "features.sh: needs a git repo" >&2; exit 2; }
 cd "$root"
 . "$here/../../../hooks/roots.sh"; flow_roots
-dir="$FLOW_DIR/features"
+# a branch reads its own tracked map; a repo that keeps .flow/ untracked has only the shared one
+dir="$FLOW_ROOT/.flow/features"; [ -d "$dir" ] || dir="$FLOW_DIR/features"
 stamps="$FLOW_DIR/verified.tsv"
 evidence="$here/../../verify/scripts/evidence.sh"
 
@@ -137,7 +138,7 @@ case "$cmd" in
       if "$evidence" "feat:$id" "$sc" >/tmp/feat.$$ 2>&1; then res=PASS; else res=FAIL; rc=1; fi
       at="$(date +%F) $(git rev-parse --short HEAD)"
       if [ "$FLOW_ROOT" != "$FLOW_MAIN" ]; then # any linked worktree, lead or lane
-        mkdir -p "$dir/lanes"; printf '%s\t%s\t%s\n' "$id" "$res" "$at" >>"$dir/lanes/${FLOW_LANE:-$(basename "$FLOW_ROOT")}.tsv"
+        mkdir -p "$FLOW_DIR/features/lanes"; printf '%s\t%s\t%s\n' "$id" "$res" "$at" >>"$FLOW_DIR/features/lanes/${FLOW_LANE:-$(basename "$FLOW_ROOT")}.tsv"
       elif [ "$res" = PASS ]; then stamp "$f" verified "$at"
       else stamp "$f" broken
       fi

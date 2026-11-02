@@ -4,8 +4,8 @@ title: Audit trail and circuit breaker
 owns: plugins/flow-stack/hooks/post-tool.sh plugins/flow-stack/skills/trace/** .claude/skills/verify-flow-stack/scripts/trail.circuit.sh
 entries: hook PostToolUse | cli trace-stats.sh | skill /flow-stack:trace | config hooks.trail|circuit
 scenario: bash .claude/skills/verify-flow-stack/scripts/trail.circuit.sh
-status: verified
-verified: 2026-10-29 2d69405
+status: unverified
+verified:
 ---
 # Audit trail and circuit breaker
 

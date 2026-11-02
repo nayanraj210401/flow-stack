@@ -4,8 +4,8 @@ title: Claims check and notifications
 owns: plugins/flow-stack/hooks/stop.sh plugins/flow-stack/hooks/notify.sh .claude/skills/verify-flow-stack/scripts/claims.stop.sh
 entries: hook Stop | hook Notification | cli notify.sh "<msg>" | profile notify: notify_on:
 scenario: bash .claude/skills/verify-flow-stack/scripts/claims.stop.sh
-status: verified
-verified: 2026-10-29 2d69405
+status: unverified
+verified:
 ---
 # Claims check and notifications
 

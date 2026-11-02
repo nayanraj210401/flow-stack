@@ -4,8 +4,8 @@ title: Personal profile
 owns: plugins/flow-stack/skills/profile/** plugins/flow-stack/templates/profile.md plugins/flow-stack/templates/presets/** .claude/skills/verify-flow-stack/scripts/profile.sh
 entries: cli init.sh <preset> [--force] | cli check.sh | skill /flow-stack:profile | skill /flow-stack:setup
 scenario: bash .claude/skills/verify-flow-stack/scripts/profile.sh
-status: verified
-verified: 2026-10-29 2d69405
+status: unverified
+verified:
 ---
 # Personal profile
 
