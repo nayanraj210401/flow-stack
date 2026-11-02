@@ -5,6 +5,10 @@
 . "$(dirname "$0")/lib.sh"; sandbox routines.ci
 R="$S/make-routines/scripts/routines.sh"; TPL="$S/make-routines/templates"
 
+# self-heal needs a repo that can prove its changes (#196): a committed driver and a feature with a scenario
+mkdir -p .claude/skills/verify-toy .flow/features && touch .claude/skills/verify-toy/SKILL.md
+printf -- '---\nid: toy\nscenario: bash x.sh\n---\n' >.flow/features/toy.md
+git add -f .claude/skills/verify-toy .flow/features && git commit -qm "verify driver"
 check "add self-create" "$R" add self-create
 check "add self-heal" "$R" add self-heal
 check "add review" "$R" add review
@@ -19,7 +23,7 @@ has "$step" "flow-stack.git" && ok "adds the flow-stack marketplace" || bad "no 
 has "$step" "--auto ship Run the routine in .github/routines/self-heal.md" && ok "prompt runs flow --auto ship on the routine" || bad "prompt"
 has "$step" 'secrets.CLAUDE_CODE_OAUTH_TOKEN' && ok "oauth secret by default" || bad "auth"
 grep -q 'FLOW_STACK_HOME=$RUNNER_TEMP/flow-stack' "$W" && ok "profile lives outside the checkout" || bad "FLOW_STACK_HOME"
-grep -Eq 'for l in self-heal heal-ok needs-repro( rework needs-human)?;' "$W" && ok "labels created from frontmatter" || bad "labels"
+grep -Eq 'labels="self-heal heal-ok needs-repro( rework needs-human)?"' "$W" && ok "labels created from frontmatter" || bad "labels"
 grep -q '^notify: off' .github/routines/profile.md && ok "CI profile has notifications off" || bad "notify"
 grep -q '^preset: solo-hacker' .github/routines/profile.md && ok "CI profile from a preset" || bad "preset"
 check "check passes on a fresh render" "$R" check
