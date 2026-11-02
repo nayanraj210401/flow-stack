@@ -32,7 +32,7 @@ want factory missing
 if git -C "$here" rev-parse HEAD^2 >/dev/null 2>&1; then base="$(git -C "$here" rev-parse HEAD^1)"; else base="$(git -C "$here" merge-base HEAD origin/main 2>/dev/null || git -C "$here" merge-base HEAD main 2>/dev/null)"; fi
 if [ -n "${base:-}" ] && old="$(git -C "$here" show "$base:./detect.sh" 2>/dev/null)" && [ -n "$old" ]; then
   mkdir -p "$SB/old/skills/setup/scripts" && ln -s "$here/../../../hooks" "$SB/old/hooks" && printf '%s\n' "$old" >"$SB/old/skills/setup/scripts/detect.sh"
-  old_out="$(bash "$SB/old/skills/setup/scripts/detect.sh" 2>&1)"
+  old_out="$(bash "$SB/old/skills/setup/scripts/detect.sh" 2>&1 | sed '/^FACTORY /,$d')"
   new_out="$(sed '/^FACTORY /,$d' <<<"$out")"
   if [ "$old_out" = "$new_out" ]; then ok "existing rows unchanged vs main"
   else bad "existing rows changed vs main"; diff <(printf '%s\n' "$old_out") <(printf '%s\n' "$new_out") | sed 's/^/    /'; fi
@@ -43,6 +43,12 @@ mkdir -p .claude/skills/verify-toy .flow/features .github/routines
 printf -- '---\nid: a\nscenario: bash x.sh\n---\n' >.flow/features/a.md
 out="$("$D")"
 want verify missing 'commit .claude/skills/verify-toy.*commit .flow/features'
+want factory missing
+
+echo "-- staged, not committed: runners can't see it"
+touch .claude/skills/verify-toy/SKILL.md && git add -A
+out="$("$D")"
+want verify missing 'commit .claude/skills/verify-toy'
 want factory missing
 
 echo "-- committed driver + scenario, all routines"

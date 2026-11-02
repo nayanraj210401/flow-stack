@@ -48,7 +48,7 @@ if [ -n "$root" ]; then
   row spec ok "intent + seal (plugin); edge-case matrix planned #187"
   routine self-heal implement "flow --auto works in a session"
   # The checkout itself (FLOW_ROOT, a worktree included), like hooks/lib.sh factory_ready.
-  tracked="$(git -C "$FLOW_ROOT" ls-files .claude/skills verify .flow/features 2>/dev/null)"
+  tracked="$(git -C "$FLOW_ROOT" ls-tree -r --name-only HEAD -- .claude/skills verify .flow/features 2>/dev/null)"
   tdrv="$(grep -oE '^(\.claude/skills/verify(-[^/]*)?|verify)/' <<<"$tracked" | head -n1)"
   nsc="$(git -C "$FLOW_ROOT" grep -lE '^scenario:[[:space:]]*[^[:space:]#]' HEAD -- ':(top).flow/features/*.md' ':(top,exclude).flow/features/README.md' 2>/dev/null | wc -l | tr -d ' ')"
   fix=""

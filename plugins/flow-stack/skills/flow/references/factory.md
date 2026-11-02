@@ -2,7 +2,7 @@
 
 The factory is flow run as one loop, without a human at the keyboard: work is found, specified, built, proven, reviewed, and shipped, and the human sits at three points (spec, code, product). Read this when running with `--auto`, `--auto ship`, or `--gha`, or inside a routine.
 
-`../setup/scripts/detect.sh` prints one `FACTORY` row per stage for the current repo: `ok` with what serves it, `missing` with the skill that fixes it, or `planned` with its issue.
+`../../setup/scripts/detect.sh` prints one `FACTORY` row per stage for the current repo: `ok` with what serves it, `missing` with the skill that fixes it, or `planned` with its issue.
 
 ## The loop
 
