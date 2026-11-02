@@ -88,6 +88,8 @@ seals && bad "<!--> outside the matrix hid an H1 matrix" || ok "<!--> outside th
 printf "$head"'## Goal\n<!-->\n\n## Edge cases\n- huge → C1\n' >"$I"
 seals && ok "<!--> before the matrix leaves a mapped row sealable" || bad "<!--> swallowed the heading: $(cat "$SB/out")"
 blocks '## Edge  cases\n- huge' "double-spaced heading"
+blocks '## Edge cases\n- empty → C1\n\n## Notes\nEdge cases\n----------\n- huge' "setext Edge cases heading"
+blocks '## Edge cases\n- empty → C1\n\n## Notes\n<h2>Edge cases</h2>\n- huge' "html h2 Edge cases heading"
 for h in '## Edge cases:' '## Edge cases ##'; do
   printf "$head$h"'\n- huge → C1\n' >"$I"
   seals && ok "'$h' is the matrix: a mapped row seals" || bad "'$h' with a mapped row refused: $(cat "$SB/out")"

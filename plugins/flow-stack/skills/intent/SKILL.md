@@ -46,7 +46,7 @@ Each check proves one observable behavior:
 - `C1 · 101st request in 60s returns 429 · \`npm test -- rate-limit.spec\``: runnable, preferred.
 - `C3 · error message reads well · human-judged: read the 429 body`: only when no command can decide it.
 
-**Edge cases.** Fill INTENT's `## Edge cases` matrix: one row per case (empty, huge, concurrent, offline, unauthorized, retry, plus the domain's own), each `- <case> → C2` or `- <case> → non-goal: <why>`. A case worth a check gets one. `seal.sh add` refuses while any row maps to neither, or to a check ID the checks don't list.
+**Edge cases.** Fill INTENT's `## Edge cases` matrix: one row per case (empty, huge, concurrent, offline, unauthorized, retry, plus the domain's own), each `- <case> → C2` or `- <case> → non-goal: <why>` on one line (a wrapped row is refused). A case worth a check gets one. `seal.sh add` refuses while any row maps to neither, or to a check ID the checks don't list.
 
 **Bind checks to features.** When `.flow/features/` exists, run `../feature-map/scripts/features.sh impact <paths the change will touch>` and cite sub-feature IDs in the checks (`C1 · auth.login.lockout · 6th failure returns 423 · \`…\``). New behavior gets a new sub-feature ID. A new user-facing capability gets a new feature (`features.sh new`), and that file is written after the intent gate.
 

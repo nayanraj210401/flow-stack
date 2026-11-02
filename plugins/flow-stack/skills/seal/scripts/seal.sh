@@ -40,7 +40,9 @@ unmapped() {
     # Fail closed: once an INTENT has an edge-cases-like heading, the "## Edge cases" section is a whitelist:
     # list rows, blank lines, and comments that open at column 0 (the template form). Any other fence or
     # comment marker there is refused, as is an unclosed fence or comment anywhere, since either could hide rows.
-    { l = $0; sub(/\r$/, "", l); if (tolower(l) ~ /^[ \t]*(#+[ \t]*edge[ \t_-]*cases?|##.*edge[ \t_-]*cases?)/) { has = 1; like++ } }
+    { l = $0; sub(/\r$/, "", l); if (tolower(l) ~ /^[ \t]*(#+[ \t]*edge[ \t_-]*cases?|##.*edge[ \t_-]*cases?)|<h[1-6][^>]*>.*edge[ \t_-]*cases?/ \
+          || (l ~ /^ ? ? ?(-+|=+)[ \t]*$/ && tolower(prev) ~ /edge[ \t_-]*cases?/)) { has = 1; like++ }
+      if (l ~ /[^ \t]/) prev = l }
     sec == "edge cases" && l !~ /^##?[ \t]/ {
       # text after a closing --> is visible, so it must be empty
       if (ecm) { if ((i = index(l, "-->"))) { ecm = 0; if (substr(l, i + 3) ~ /[^ \t]/) bad[++nb] = l }; next }
@@ -101,7 +103,7 @@ case "${1:-}" in
   add)
     shift; [ $# -gt 0 ] || { echo "usage: seal.sh add <path> ..." >&2; exit 2; }
     u="$(unmapped)"
-    [ -z "$u" ] || { printf 'seal.sh: INTENT.md edge-case rows map to no check and no non-goal:\n%s\nmap each to a check ID (→ C2) or "→ non-goal: <why>", then seal\n' "$u" >&2; exit 1; }
+    [ -z "$u" ] || { printf 'seal.sh: INTENT.md edge-case rows map to no check and no non-goal, or the matrix is malformed:\n%s\nmap each to a check ID (→ C2) or "→ non-goal: <why>", one row per line (no wrapping), then seal\n' "$u" >&2; exit 1; }
     touch "$seals"; rc=0
     for p in "$@"; do
       n=0

@@ -23,7 +23,7 @@
 - [ ] C1 ·  · ``
 
 ## Edge cases
-<!-- One row per input or state case: empty, huge, concurrent, offline, unauthorized, retry, plus the domain's own.
+<!-- One row per input or state case, each on one line: empty, huge, concurrent, offline, unauthorized, retry, plus the domain's own.
      Each maps to the checks that cover it or to a non-goal with its reason; seal refuses while a row maps to neither.
      - empty → C2
      - concurrent → C3, C4
