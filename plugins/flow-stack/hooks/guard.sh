@@ -343,7 +343,9 @@ ship_allowed() { # ship_allowed <one-line command>
       # the tag is cut from the stamped branch, never from the default branch's tip
       cur="$(git -C "$FLOW_ROOT" symbolic-ref --short -q HEAD)" && [ "$cur" != main ] && [ "$cur" != master ] || return 1
       [[ "$1" =~ ^gh\ release\ create\ [A-Za-z0-9._-]+\ --target\ ([A-Za-z0-9._/-]+)(\ --(generate-notes|draft|prerelease)|\ --(title|notes-file)\ [A-Za-z0-9._-]+)*$ ]] && [ "${BASH_REMATCH[1]}" = "$cur" ] ;;
-    *) grep -Eq '^(gh pr (create|ready)( [^;&|`$<>()]*)?|gh pr merge( --(squash|merge|rebase|delete-branch))*)$' <<<"$1" ;;
+    *) # FLOW_SHIP_DRAFT=1 (set by the runner for @claude runs, out of the agent's reach): draft PRs only
+      [ "${FLOW_SHIP_DRAFT:-}" != 1 ] || [[ "$1" =~ ^gh\ pr\ create\  && " $1 " == *" --draft "* ]] || return 1
+      grep -Eq '^(gh pr (create|ready)( [^;&|`$<>()]*)?|gh pr merge( --(squash|merge|rebase|delete-branch))*)$' <<<"$1" ;;
   esac
 }
 if grep -Eiq "$lead"'(git'"$gopt"'[[:space:]]+push|gh'"$gopt"'[[:space:]]+(pr[[:space:]]+(create|merge|ready)|release[[:space:]]+create)|npm'"$gopt"'[[:space:]]+publish)'"$cend" <<<"$code" && flow_auto; then
