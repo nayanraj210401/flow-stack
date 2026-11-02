@@ -235,7 +235,7 @@ code="$(awk -v q="'" '
     u = $0
     # unquote a quoted delimiter (<<'EOF') first, so the blanking below keeps it
     while (match(u, "<<-?[ \t]*[\"" q "][A-Za-z_][A-Za-z0-9_]*[\"" q "]")) { m = substr(u, RSTART, RLENGTH); gsub("[\"" q "]", "", m); u = substr(u, 1, RSTART - 1) m substr(u, RSTART + RLENGTH) }
-    gsub(q "[^" q "]*" q, "", u); gsub(/"[^"]*"/, "", u); sub(/(^|[ \t])#.*/, "", u)
+    gsub(/\\./, "", u); gsub(q "[^" q "]*" q, "", u); gsub(/"[^"]*"/, "", u); sub(/(^|[ \t])#.*/, "", u)
     if (match(u, "(^|[^<])<<-?[ \t]*[\"" q "]?[A-Za-z_][A-Za-z0-9_]*")) {
       hd = substr(u, RSTART, RLENGTH); dash = hd ~ /<<-/; sub("^[^<]?<<-?[ \t]*[\"" q "]?", "", hd) } }
   END { printf "%s", body }' <<<"$cmd")"
@@ -377,7 +377,7 @@ gh_writes() { # gh writes in $cmd, judged on shell words (quotes and escapes res
       u = $0
     # unquote a quoted delimiter (<<'EOF') first, so the blanking below keeps it
     while (match(u, "<<-?[ \t]*[\"" q "][A-Za-z_][A-Za-z0-9_]*[\"" q "]")) { m = substr(u, RSTART, RLENGTH); gsub("[\"" q "]", "", m); u = substr(u, 1, RSTART - 1) m substr(u, RSTART + RLENGTH) }
-    gsub(q "[^" q "]*" q, "", u); gsub(/"[^"]*"/, "", u); sub(/(^|[ \t])#.*/, "", u)
+    gsub(/\\./, "", u); gsub(q "[^" q "]*" q, "", u); gsub(/"[^"]*"/, "", u); sub(/(^|[ \t])#.*/, "", u)
       if (match(u, "(^|[^<])<<-?[ \t]*[\"" q "]?[A-Za-z_][A-Za-z0-9_]*")) {
         # the shell must be in the same command as the heredoc (cat <<EOF | bash), not a later one (…; ls /bin/sh)
         a = substr(u, 1, RSTART); sub(/.*[;&]/, "", a); b = substr(u, RSTART + RLENGTH); sub(/[;&].*/, "", b)
@@ -403,35 +403,37 @@ gh_writes() { # gh writes in $cmd, judged on shell words (quotes and escapes res
     # a backtick in the noun or verb (in gh api: the method, a flag position, or the start of the endpoint) is held;
     # after a literal read verb it is only an argument. gh pr create/ready/merge and gh release create belong to
     # rule 4. eval, sh -c and every substitution, flag values included, are checked as scripts of their own.
-    function wr(s,   T, K, C, CS, n, i, k, j, c, r, start, g, look, noun, verb, ep, m, f, mut, ev, sh, w, lw, comp, hlp, cp, skip, wrap, dur, first) {
+    function wr(s,   T, K, C, CS, n, i, k, j, c, r, start, g, look, noun, verb, ep, m, f, mut, ev, sh, w, lw, comp, hlp, cp, skip, wrap, dur, first, other, bare, anygh) {
       n = split_cmds(unbt(s), T, K, C, CS); start = 1
       for (i = 1; i <= n + 1; i++) {
         if (i <= n && K[i] != "op") continue
         for (j = start; j < i; j++) if (K[j] != "op" && CS[j] && wr(C[j])) return 1
-        g = hlp = skip = dur = 0; cp = 1; wrap = first = ""; noun = verb = ep = m = ""; f = mut = ev = sh = comp = 0
+        g = hlp = skip = dur = anygh = 0; cp = 1; wrap = first = other = ""; noun = verb = ep = m = ""; f = mut = ev = sh = comp = 0
         for (k = start; k < i; k++) {
           if (K[k] == "op") continue
           if (ev || sh > 1) { if (wr(T[k])) return 1 }
           w = T[k]; lw = tolower(w)
           if (lw == "eval") ev = 1
           if (w ~ /^(ba|z|da|k)?sh$/ || w ~ /\/(ba|z|da|k)?sh$/) sh = 1; else if (sh && w ~ /^-[A-Za-z]*c[A-Za-z]*$/) sh = 2
+          if (lw == "gh" || lw ~ /\/gh$/ || w ~ /(^|[^A-Za-z0-9_.\/-])gh([ \t]|$)/) anygh = sawgh = 1
           if (!g) {
-            # gh counts only in command position: first, or after keywords, VAR=value and wrappers (with their flags
-            # and flag values), or after nix -c/--command. Elsewhere it is an argument (rg gh src, ls ~/.config/gh).
-            if (!cp) { if (first == "nix" && w ~ /^(-c|--command)$/) cp = 1; continue }
+            # gh in command position (first, or after keywords, VAR=value and wrappers with their flags) is checked
+            # against the read list below. Any other command that names gh is held unless it is a known reader.
+            if (!cp) continue
             if (skip) { skip--; continue }
-            if (wrap == "command" && w ~ /^-[vV]$/) { cp = 0; continue }
+            if (wrap == "command" && w ~ /^-[vV]$/) { cp = 0; other = "command"; continue }
             if (wrap != "" && w ~ /^-/) {
               if ((wrap ~ /^(sudo|doas)$/ && w ~ /^-[ugCDhpr]$/) || (wrap == "env" && w ~ /^-[uC]$/) \
                   || (wrap == "xargs" && w ~ /^-[IinLPdsE]$/) || (wrap ~ /^(timeout|nice|stdbuf)$/ && w ~ /^-[skn]$/)) skip = 1
               continue }
             if (wrap == "timeout" && !dur) { dur = 1; continue }
-            if (first == "") first = lw
             if (lw == "gh" || lw ~ /\/gh$/) { g = 1; continue }
-            if (w ~ /^[$`]/ && k + 1 < i && tolower(T[k + 1]) ~ /^(pr|issue|api|repo|release|label|gist|run|workflow|secret|variable|ruleset|project|codespace|cache|ssh-key|gpg-key)$/) { g = 1; continue }
             if (lw ~ /^(if|then|elif|else|do|while|until|!|\{|time)$/ || w ~ /^[A-Za-z_][A-Za-z0-9_]*=/) continue
             if (lw ~ /^(sudo|doas|env|xargs|timeout|nice|nohup|exec|command|stdbuf)$/) { wrap = lw; dur = 0; continue }
-            cp = 0; continue }
+            cp = 0; other = lw
+            # a shell with no script reads stdin (echo gh pr close 1 | sh)
+            if (lw ~ /^(ba|z|da|k)?sh$/) { bare = 1; for (j = k + 1; j < i; j++) if (K[j] != "op" && T[j] !~ /^-[A-Za-bd-z]*$/) bare = 0; if (bare) pipesh = 1 }
+            continue }
           if (w ~ /^(-R|--repo|--jq|-q|--search|-S|--template|-t)$/ && k + 1 < i) { k++; continue }
           if (w ~ /^(--help|-h)$/ && T[k - 1] !~ /^-/) hlp = 1
           if (noun == "") { if (w ~ /[$`]/) comp = 1; if (w !~ /^-/) noun = lw; else if (w ~ /^(--version|--help|-h)$/) noun = "help"; continue }
@@ -450,6 +452,7 @@ gh_writes() { # gh writes in $cmd, judged on shell words (quotes and escapes res
               if (c ~ /[Hpqt]/) { if (r == "") k++; break } }
           } else if (ep == "") ep = lw
         }
+        if (!g && other != "" && anygh && other !~ /^(rg|grep|egrep|fgrep|ag|ack|ls|cat|head|tail|less|more|wc|file|stat|echo|printf|go|cd|git|which|type|hash|whereis|man|brew|apt|apt-get|dnf|yum|pacman|port|apk|tree|du|realpath|readlink|basename|dirname|diff|jq|mkdir|touch|rm|cp|mv|ln|test|\[|true|false|command)$/) return 1
         if (g) {
           for (j = start; j < i; j++) if (tolower(T[j]) ~ /(^|[^a-z])mutation([^a-z]|$)/ || T[j] ~ /[@$`]|^--input(=|$)/) mut = 1
           if (comp) return 1
@@ -461,7 +464,7 @@ gh_writes() { # gh writes in $cmd, judged on shell words (quotes and escapes res
         }
         start = i + 1
       }
-      return 0
+      return pipesh && sawgh
     }
     { all = all $0 "\n" }
     END { exit !wr(all) }'

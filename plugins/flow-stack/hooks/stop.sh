@@ -36,7 +36,7 @@ events="$(tail -n 3000 "$transcript" | jq -nrR --argjson roots "$roots" --arg ch
     ($cmd; gsub("\\$(\\{" + $a.n + "\\}|" + $a.n + "\\b)"; $a.v));
   # sed -i, perl -i and mv with a quoted code path (Makefile, bin/run, src/app.sh): the quote stripping below would hide
   # it. A quoted doc path is not one, nor a sed script (s/…/…/, y/…/…/) or an empty -i suffix.
-  def quoted_code: test("(^|[;&|\n][[:space:]]*)(sed -[a-zA-Z]*i|perl -[a-z]*i|mv)\\b[^;&|\n]*[\"'"'"'](?![sy]/)(?!(/tmp/|scratchpad/|\\.flow/|[^\"'"'"']*\\.(md|txt)(\\.[A-Za-z0-9]+)?[\"'"'"']))[A-Za-z0-9_.][A-Za-z0-9_./-]*(?<!/)[\"'"'"']");
+  def quoted_code: test("(^|[;&|\n][[:space:]]*)(sed -[a-zA-Z]*i|perl -[a-z]*i|mv)\\b[^;&|\n]*[\"'"'"'](?![sy]/)(?!((\\./)?(/tmp/|scratchpad/|\\.flow/)|[^\"'"'"']*\\.(md|txt)(\\.(new|bak|tmp|orig))?[\"'"'"']))[A-Za-z0-9_.][A-Za-z0-9_./-]*(?<!/)[\"'"'"']");
   def shell_write: unheredoc | expand | if quoted_code then true else (gsub("(>>?|\\btee( -a)?)[[:space:]]*(?![^[:space:];|&]*\\.\\.)[^[:space:];|&]*(\\.flow/|/tmp/|\\$\\{?TMPDIR\\b|scratchpad|\\.md|\\.txt)[^[:space:];|&]*"; "")
     | gsub("[\"'"'"'](?<p>[^\"'"'"'[:space:]]*\\.(md|txt))[\"'"'"']"; .p)
     | gsub("\"[^\"]*\"|'"'"'[^'"'"']*'"'"'"; "")

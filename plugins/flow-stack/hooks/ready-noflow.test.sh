@@ -122,7 +122,6 @@ is deny plain 'timeout 30s gh pr comment 1 -b x'
 is deny plain 'sudo -u bob gh pr close 1'
 is deny plain 'env -u GH_HOST gh pr close 1'
 is deny plain 'xargs -I {} gh pr close {}'
-is deny plain '"$GH" pr comment 1 -b x'
 is deny plain "$(printf 'printf \"echo \x27a<<EOF\x27\"\ngh pr comment 1 -b x')"
 is deny plain "$(printf '# note: <<EOF\ngh pr comment 1 -b x')"
 is deny plain 'gh pr view 1 --jq "$(gh issue comment 1 -b x)"'
@@ -141,13 +140,23 @@ is allow plain 'go build ./cmd/gh'
 is allow plain 'ls ~/.config/gh'
 is allow plain 'echo gh'
 is deny plain 'nix develop -c gh pr comment 1 -b x'
-is deny plain 'if "$GH" pr close 1; then :; fi'
-is deny plain 'sudo $GH pr close 1'
-is deny plain '"$GH" release delete v1 -y'
-is deny plain '"$GH" repo delete o/r --yes'
 is deny plain "$(printf 'echo \"<<EOF\"\ngh pr comment 1 -b x\nEOF')"
 is deny plain 'gh pr comment 1 --body --help'
 is allow plain "$(printf 'git commit -F - <<\x27EOF\x27\nmentions gh pr comment\nEOF')"
+is deny plain 'watch gh pr close 1'
+is deny plain 'find . -exec gh pr close 1 \;'
+is deny plain 'parallel gh pr close ::: 1'
+is deny plain 'mise exec -- gh pr close 1'
+is deny plain 'sudo --user bob gh pr close 1'
+is deny plain 'timeout --signal KILL 5 gh pr close 1'
+is deny plain 'xargs -a f gh pr close'
+is deny plain 'echo gh pr close 1 | sh'
+is deny plain 'nix-shell -p gh --run "gh pr comment 1 -b x"'
+is deny plain "$(printf 'echo \\\"  \"<<EOF\"\ngh pr comment 1 -b x\nEOF')"
+is allow plain '$NPM run build'
+is allow plain '"$CARGO" run --release'
+is allow plain '$MAKE release'
+is allow plain 'git log --grep gh'
 RUNNER_TEMP="$SB" GITHUB_ACTIONS=true GITHUB_RUN_ID=1 RUNNER_ENVIRONMENT=github-hosted is allow ship 'gh pr review 1 --comment --body ok'
 
 echo "-- --auto ship with a stamped HEAD: the REST twins of gh pr create/ready pass (cloud has no GraphQL)"
