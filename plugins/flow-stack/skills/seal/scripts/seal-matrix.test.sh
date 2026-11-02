@@ -81,6 +81,14 @@ for h in '## Edge case' '## Edge-cases' '## Edgecases'; do
 done
 blocks '## Edge cases\n<!-- a --> <!--\n- huge\n-->' "comment opener after a closed comment"
 blocks '## Edge cases\n- → C1' "row with no case text"
+blocks '## Edge cases\n- empty → C1\n\n## Edge cases (security)\n- unauthorized →' "decorated second heading next to the exact one"
+blocks '## Edge cases\n- empty → C1\n\n## Goal\n### Edge cases\n- huge' "### Edge cases inside another section"
+blocks '## Edge cases\n<!-- note --> - huge →' "text after a one-line comment"
+blocks '## Edge cases\n<!-- note\nmore --> - huge →' "text after a closing -->"
+printf "$head"'## Edge cases\n- ≥10k rows → C1\n- “quoted” → C1\n' >"$I"
+seals && ok "case text starting with a multi-byte character maps" || bad "multi-byte case refused: $(cat "$SB/out")"
+printf '# Intent · fix edge case in parser\n\n## Acceptance checks\n- [ ] C1 · works\n' >"$I"
+seals && ok "an H1 title mentioning an edge case seals as before" || bad "legacy title refused: $(cat "$SB/out")"
 blocks '## Edge cases\n- empty → C1\n  ```\n- huge\n  ```' "fence indented under a row"
 blocks '## Edge cases\n- empty → C1\n```x``` note\n- huge\n```' "backtick line that is not a fence"
 for h in '## 3. Edge cases' '## **Edge cases**' '## `Edge cases`' '## The edge cases'; do

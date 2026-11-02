@@ -40,10 +40,11 @@ unmapped() {
     # Fail closed: once an INTENT has an edge-cases-like heading, the "## Edge cases" section is a whitelist:
     # list rows, blank lines, and comments that open at column 0 (the template form). Any other fence or
     # comment marker there is refused, as is an unclosed fence or comment anywhere, since either could hide rows.
-    { l = $0; sub(/\r$/, "", l); if (tolower(l) ~ /^[ \t]*#.*edge[ _-]?cases?/) has = 1 }
+    { l = $0; sub(/\r$/, "", l); if (tolower(l) ~ /^[ \t]*##.*edge[ _-]?cases?/) { has = 1; like++ } }
     sec == "edge cases" && l !~ /^##?[ \t]/ {
-      if (ecm) { if (index(l, "-->")) ecm = 0; next }
-      if (l ~ /^<!--/) { if (!index(substr(l, 5), "-->")) ecm = 1; next }
+      # text after a closing --> is visible, so it must be empty
+      if (ecm) { if ((i = index(l, "-->"))) { ecm = 0; if (substr(l, i + 3) ~ /[^ \t]/) bad[++nb] = l }; next }
+      if (l ~ /^<!--/) { if (!(i = index(substr(l, 5), "-->"))) ecm = 1; else if (substr(l, i + 7) ~ /[^ \t]/) bad[++nb] = l; next }
       if (l ~ /^[ \t]*$/) next
       if (l ~ /```|~~~|<!--|-->/) bad[++nb] = l; else rows[++n] = l
       next
@@ -61,17 +62,18 @@ unmapped() {
       }
     }
     l ~ /^ ? ? ?(```|~~~)/ { match(l, /(```|~~~)/); fm = substr(l, RSTART, 3); next }
-    l ~ /^##?[ \t]/ { sec = tolower(l); sub(/^#+[ \t]+/, "", sec); sub(/[ \t#:]+$/, "", sec); gsub(/[ \t]+/, " ", sec); if (sec == "edge cases") seen = 1; next }
+    l ~ /^##?[ \t]/ { sec = tolower(l); sub(/^#+[ \t]+/, "", sec); sub(/[ \t#:]+$/, "", sec); gsub(/[ \t]+/, " ", sec); if (sec == "edge cases") seen++; next }
     l ~ /^[ \t]*$/ { next }
     sec == "acceptance checks" && l ~ /^[ \t]*- \[.\] C[0-9]+/ { match(l, /C[0-9]+/); ids[substr(l, RSTART, RLENGTH)] = 1 }
     END {
       if (has && fm != "") print "unclosed " fm " fence: it could hide edge-case rows"
       if (has && (cm || ecm)) print "unclosed <!-- comment: it could hide edge-case rows"
       for (i = 1; i <= nb; i++) print bad[i] "  (a fence or comment marker inside Edge cases; keep rows plain)"
-      if (has && !seen) print "an edge-cases heading that is not exactly \"## Edge cases\": rename it so its rows are checked"
+      if (has && like > seen) print "an edge-cases heading that is not exactly \"## Edge cases\": rename it so its rows are checked"
       for (i = 1; i <= n; i++) {
         t = rows[i]; ok = 0
-        if (t ~ /^[ \t]*([-*+]|[0-9]+[.)])[ \t]+[^ \t→]/ && sub(/^.*→[ \t]*/, "", t)) {
+        # [^ \t] then a separate → test: a byte class would refuse case text starting with any multi-byte character
+        if (t ~ /^[ \t]*([-*+]|[0-9]+[.)])[ \t]+[^ \t]/ && t !~ /^[ \t]*([-*+]|[0-9]+[.)])[ \t]+→/ && sub(/^.*→[ \t]*/, "", t)) {
           sub(/[ \t\r]+$/, "", t)
           if (t ~ /^non-goal:[ \t]*[^ \t]/) ok = 1
           else if (t ~ /^C[0-9]+([ ,]+C[0-9]+)*$/) { ok = 1; k = split(t, a, /[ ,]+/); for (j = 1; j <= k; j++) if (!(a[j] in ids)) ok = 0 }
