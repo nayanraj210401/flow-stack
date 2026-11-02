@@ -90,6 +90,10 @@ seals && ok "<!--> before the matrix leaves a mapped row sealable" || bad "<!-->
 blocks '## Edge  cases\n- huge' "double-spaced heading"
 blocks '## Edge cases\n- empty → C1\n\n## Notes\nEdge cases\n----------\n- huge' "setext Edge cases heading"
 blocks '## Edge cases\n- empty → C1\n\n## Notes\n<h2>Edge cases</h2>\n- huge' "html h2 Edge cases heading"
+printf '# Intent · x\n\n## Non-goals\n- other edge cases in the lexer\n\n---\n\n## Acceptance checks\n- [ ] C1 · works\n' >"$I"
+seals && ok "a --- rule after a list item that mentions edge cases is not a heading" || bad "rule refused: $(cat "$SB/out")"
+printf "$head"'## Edge cases\n- huge → C1\n\n## Notes\nsee edge cases\n\n---\n' >"$I"
+seals && ok "a --- rule after a blank line is not a heading" || bad "rule after blank refused: $(cat "$SB/out")"
 for h in '## Edge cases:' '## Edge cases ##'; do
   printf "$head$h"'\n- huge → C1\n' >"$I"
   seals && ok "'$h' is the matrix: a mapped row seals" || bad "'$h' with a mapped row refused: $(cat "$SB/out")"

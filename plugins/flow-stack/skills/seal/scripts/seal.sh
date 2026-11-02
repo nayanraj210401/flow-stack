@@ -40,9 +40,10 @@ unmapped() {
     # Fail closed: once an INTENT has an edge-cases-like heading, the "## Edge cases" section is a whitelist:
     # list rows, blank lines, and comments that open at column 0 (the template form). Any other fence or
     # comment marker there is refused, as is an unclosed fence or comment anywhere, since either could hide rows.
-    { l = $0; sub(/\r$/, "", l); if (tolower(l) ~ /^[ \t]*(#+[ \t]*edge[ \t_-]*cases?|##.*edge[ \t_-]*cases?)|<h[1-6][^>]*>.*edge[ \t_-]*cases?/ \
+    { l = $0; sub(/\r$/, "", l); if (tolower(l) ~ /^[ \t]*(#+[ \t]*edge[ \t_-]*cases?|##.*edge[ \t_-]*cases?)|^[ \t]*<h[1-6][^>]*>.*edge[ \t_-]*cases?/ \
           || (l ~ /^ ? ? ?(-+|=+)[ \t]*$/ && tolower(prev) ~ /edge[ \t_-]*cases?/)) { has = 1; like++ }
-      if (l ~ /[^ \t]/) prev = l }
+      # a setext underline follows paragraph text directly: a blank line or a list item breaks it
+      prev = (l ~ /^[ \t]*$/ || l ~ /^[ \t]*([-*+]|[0-9]+[.)])[ \t]/) ? "" : l }
     sec == "edge cases" && l !~ /^##?[ \t]/ {
       # text after a closing --> is visible, so it must be empty
       if (ecm) { if ((i = index(l, "-->"))) { ecm = 0; if (substr(l, i + 3) ~ /[^ \t]/) bad[++nb] = l }; next }
