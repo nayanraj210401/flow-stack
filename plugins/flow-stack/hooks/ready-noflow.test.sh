@@ -97,6 +97,22 @@ is deny plain 'gh issue unpin 1'
 is allow plain 'gh --version'
 is allow plain 'gh auth status'
 is allow plain 'gh api -X HEAD repos/o/r'
+is deny plain 'gh p`echo r` comment 1 -b x'
+is deny plain 'gh pr comm`echo ent` 1 -b x'
+is deny plain 'gh a`echo pi` -X DELETE repos/o/r/git/refs/heads/main'
+is deny plain 'gh api $X DELETE repos/o/r/git/refs/heads/main'
+is deny plain 'gh api repos/o/r/issues/1/comments $F body=x'
+is deny plain 'echo comment 1 -b x | xargs gh pr'
+is deny plain 'gh pr revert 1'
+is deny plain 'gh issue artifact delete 1'
+is deny plain "$(printf 'cat <<EOF | $SHELL\ngh pr comment 1 -b x\nEOF')"
+is allow plain "$(printf 'which gh\ncommand -v gh\nbrew install gh')"
+is allow plain "$(printf 'git commit -F - <<EOF; ls /bin/sh\nmentions gh pr comment\nEOF')"
+is allow plain 'gh pr view 1 --json title'
+is allow plain 'gh pr checks 1'
+is allow plain 'gh run list -L 2'
+is allow plain 'gh api repos/$REPO/pulls/1 --jq .title'
+is allow plain 'gh pr list --search "review:required"'
 RUNNER_TEMP="$SB" GITHUB_ACTIONS=true GITHUB_RUN_ID=1 RUNNER_ENVIRONMENT=github-hosted is allow ship 'gh pr review 1 --comment --body ok'
 
 echo "-- --auto ship with a stamped HEAD: the REST twins of gh pr create/ready pass (cloud has no GraphQL)"

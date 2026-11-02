@@ -368,55 +368,68 @@ gh_writes() { # gh writes in $cmd, judged on shell words (quotes and escapes res
     hd != "" { t = $0; if (dash) sub(/^\t+/, "", t); if (t == hd) hd = ""; else if (run) print; next }
     { print
       if (match($0, "(^|[^<])<<-?[ \t]*[\"" q "]?[A-Za-z_][A-Za-z0-9_]*")) {
-        run = $0 ~ /(^|[;&|( \t\/])(bash|sh|zsh|ksh|dash|ssh)([ \t]|$)/
+        # the shell must be in the same command as the heredoc (cat <<EOF | bash), not a later one (…; ls /bin/sh)
+        a = substr($0, 1, RSTART); sub(/.*[;&]/, "", a); b = substr($0, RSTART + RLENGTH); sub(/[;&].*/, "", b)
+        run = (a b) ~ /(^|[|( \t\/"])(bash|sh|zsh|ksh|dash|ssh|\$SHELL|\$\{SHELL\})(["]?[ \t]|["]?$)/
         hd = substr($0, RSTART, RLENGTH); dash = hd ~ /<<-/; sub("^[^<]?<<-?[ \t]*[\"" q "]?", "", hd) } }' <<<"$cmd" |
   awk -v q="'" "$split_awk"'
-    # unbt(s): an unquoted `…` is a command of its own, so it becomes one (split_cmds splits only `…` inside "…")
+    # unbt(s): an unquoted `…` is a command of its own, so it becomes one (split_cmds splits only `…` inside "…").
+    # Each backtick also stays in the words around it, so a word cut by one (gh p`echo r` …) still reads as computed.
     function unbt(s,   i, c, o, sq, dq) {
       for (i = 1; i <= length(s); i++) { c = substr(s, i, 1)
         if (c == "\\" && !sq) { o = o c substr(s, ++i, 1); continue }
         if (c == q && !dq) sq = !sq; else if (c == "\"" && !sq) dq = !dq
-        else if (c == "`" && !sq && !dq) c = "\n"
+        else if (c == "`" && !sq && !dq) c = "`\n`"
         o = o c }
       return o
     }
-    # wr(s): 1 when s holds a gh write: gh api with a write method, or with fields unless -X GET (a GraphQL
-    # query without "mutation" is a read); gh pr|issue comment/review/edit/close/reopen/lock/delete/transfer; gh issue
-    # create|new. eval, sh -c and substitutions are checked as scripts of their own.
-    function wr(s,   T, K, C, CS, n, i, k, j, c, r, start, g, noun, verb, ep, m, f, mut, ev, sh, w, lw) {
+    # wr(s): 1 when s holds a gh command that is not a known read. An allowlist, so a spelling nobody listed is held:
+    # a read is a literal list/view/status/diff/checks/checkout/clone/download/watch/search/browse, or gh api with no
+    # method but GET/HEAD and no fields (GraphQL: a literal query without "mutation"). A $ or a backtick in any word
+    # but the api endpoint or a -R/--jq/--search value makes it computed, and held. gh pr create/ready/merge and gh
+    # release create belong to rule 4. eval, sh -c and substitutions are checked as scripts of their own.
+    function wr(s,   T, K, C, CS, n, i, k, j, c, r, start, g, noun, verb, ep, m, f, mut, ev, sh, w, lw, pre, comp, val) {
       n = split_cmds(unbt(s), T, K, C, CS); start = 1
       for (i = 1; i <= n + 1; i++) {
         if (i <= n && K[i] != "op") continue
-        g = 0; noun = verb = ep = m = ""; f = mut = ev = sh = 0
+        g = 0; pre = 1; noun = verb = ep = m = ""; f = mut = ev = sh = comp = 0
         for (k = start; k < i; k++) {
           if (K[k] == "op") continue
           if (ev || sh > 1) { if (wr(T[k])) return 1 } else if (CS[k] && wr(C[k])) return 1
-          w = T[k]; lw = tolower(w)
+          w = T[k]; lw = tolower(w); val = 0
           if (lw == "eval") ev = 1
           if (w ~ /^(ba|z|da|k)?sh$/ || w ~ /\/(ba|z|da|k)?sh$/) sh = 1; else if (sh && w ~ /^-[A-Za-z]*c[A-Za-z]*$/) sh = 2
-          # gh with a computed first word (gh $N, gh `echo pr`, which unbt leaves as a bare gh) is held
-          if (!g) { if (lw == "gh" || lw ~ /\/gh$/) { g = 1; if (k == i - 1 && T[i] == "\n") return 1 }; continue }
-          if (noun == "") { if (g++ == 1 && w ~ /[$`]/) return 1; if (lw ~ /^(api|pr|issue)$/) noun = lw; continue }
-          if (noun != "api") { if (verb == "") { if (w ~ /^(-R|--repo)$/) k++; else if (w !~ /^-/) verb = lw }; continue }
+          if (!g) {
+            # gh runs when it leads the command, or follows only wrappers, their flags and VAR=value (xargs gh pr …)
+            if ((lw == "gh" || lw ~ /\/gh$/) && pre) g = 1
+            else if (w ~ /^-[vV]$/ && tolower(T[k - 1]) == "command") pre = 0
+            else if (lw !~ /^(xargs|env|sudo|command|time|nice|nohup|exec|timeout|-.*|[0-9]+|[a-z_][a-z0-9_]*=.*)$/) pre = 0
+            continue }
+          if (w ~ /^(-R|--repo|--jq|-q|--search|-S|--template|-t)$/ && k + 1 < i) { k++; continue }
+          # an endpoint may hold a variable after a literal prefix (repos/$REPO/…), never be one
+          if (w ~ /[$`]/ && !(noun == "api" && ep == "" && w !~ /^[-$`]/)) comp = 1
+          if (noun == "") { if (w !~ /^-/) noun = lw; else if (lw ~ /^--?(version|help|h)$/) noun = "help"; continue }
+          if (noun != "api") { if (verb == "" && w !~ /^-/) verb = lw; continue }
           if (w ~ /^--method=/) m = toupper(substr(w, 10))
           else if (w == "--method") m = toupper(T[++k])
           else if (w ~ /^--(field|raw-field|input)(=|$)/) { f = 1; if (w !~ /=/) k++ }
-          else if (w ~ /^--(header|preview|jq|template|cache|hostname)$/) k++
+          else if (w ~ /^--(header|preview|cache|hostname)$/) k++
           else if (w ~ /^-[^-]/) {
             # grouped short flags: -iXPOST, -iX DELETE, -if body=x
             for (j = 2; j <= length(w); j++) { c = substr(w, j, 1); r = substr(w, j + 1)
               if (c == "X") { m = r != "" ? r : T[++k]; sub(/^=/, "", m); m = toupper(m); break }
               if (c ~ /[fF]/) { f = 1; if (r == "") k++; break }
               if (c ~ /[Hpqt]/) { if (r == "") k++; break } }
-          } else if (w !~ /^-/ && ep == "") ep = lw
+          } else if (ep == "") ep = lw
         }
-        # a GraphQL call is a read only when every value is literal text without "mutation": a file (@q), a variable,
-        # a substitution or --input could carry one
-        for (j = start; j < i; j++) if (tolower(T[j]) ~ /(^|[^a-z])mutation([^a-z]|$)/ || T[j] ~ /[@$`]|^--input(=|$)/) mut = 1
-        # any method but a literal GET or HEAD is a write, so a computed one ($M, `echo PATCH`) is held
-        if (noun == "api" && ((m != "" && m !~ /^(GET|HEAD)$/) || (f && m == "" && (ep != "graphql" || mut)))) return 1
-        if (noun ~ /^(pr|issue)$/ && (verb ~ /[$`]/ || verb ~ /^(comment|review|edit|close|reopen|lock|unlock|delete|transfer|update-branch|pin|unpin|develop)$/)) return 1
-        if (noun == "issue" && verb ~ /^(create|new)$/) return 1
+        if (g) {
+          for (j = start; j < i; j++) if (tolower(T[j]) ~ /(^|[^a-z])mutation([^a-z]|$)/ || T[j] ~ /[@$`]|^--input(=|$)/) mut = 1
+          if (comp) return 1
+          if (noun == "api") { if ((m != "" && m !~ /^(GET|HEAD)$/) || (f && m == "" && (ep != "graphql" || mut))) return 1 }
+          else if (!(noun ~ /^(help|version)$/ || (noun == "auth" && verb ~ /^(status|token)$/) \
+                     || verb ~ /^(list|view|status|diff|checks|checkout|clone|download|watch|search|browse|help)$/ \
+                     || (noun == "pr" && verb ~ /^(create|ready|merge)$/) || (noun == "release" && verb == "create"))) return 1
+        }
         start = i + 1
       }
       return 0

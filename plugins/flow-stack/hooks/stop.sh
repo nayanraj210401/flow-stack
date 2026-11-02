@@ -34,8 +34,9 @@ events="$(tail -n 3000 "$transcript" | jq -nrR --argjson roots "$roots" --arg ch
   def expand: . as $cmd | [match("(?:^|[;&|\n])[[:space:]]*(?<n>[A-Za-z_][A-Za-z0-9_]*)=(?<v>[^[:space:];&|\"'"'"'$]*)"; "g").captures | {n: .[0].string, v: .[1].string}]
     | (group_by(.n) | map(select(length == 1) | .[0])) as $once | reduce $once[] as $a
     ($cmd; gsub("\\$(\\{" + $a.n + "\\}|" + $a.n + "\\b)"; $a.v));
-  # sed -i, perl -i, cp and mv with a quoted code path: the quote stripping below would hide it
-  def quoted_code: test("(^|[;&|\n][[:space:]]*)(sed -[a-zA-Z]*i|perl -[a-z]*i|cp|mv)\\b[^;&|\n]*[\"'"'"'][^\"'"'"'[:space:]]+\\.(?!(md|txt)[\"'"'"'])[A-Za-z0-9]+[\"'"'"']");
+  # sed -i, perl -i and mv with a quoted code path (Makefile, bin/run, src/app.sh): the quote stripping below would hide
+  # it. A quoted doc path is not one, nor a sed script (s/…/…/, y/…/…/) or an empty -i suffix.
+  def quoted_code: test("(^|[;&|\n][[:space:]]*)(sed -[a-zA-Z]*i|perl -[a-z]*i|mv)\\b[^;&|\n]*[\"'"'"'](?![sy]/)(?![^\"'"'"']*\\.(md|txt)[\"'"'"'])[A-Za-z0-9_.][A-Za-z0-9_./-]*(?<!/)[\"'"'"']");
   def shell_write: unheredoc | expand | if quoted_code then true else (gsub("(>>?|\\btee( -a)?)[[:space:]]*(?![^[:space:];|&]*\\.\\.)[^[:space:];|&]*(\\.flow/|/tmp/|\\$\\{?TMPDIR\\b|scratchpad|\\.md|\\.txt)[^[:space:];|&]*"; "")
     | gsub("[\"'"'"'](?<p>[^\"'"'"'[:space:]]*\\.(md|txt))[\"'"'"']"; .p)
     | gsub("\"[^\"]*\"|'"'"'[^'"'"']*'"'"'"; "")
