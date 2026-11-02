@@ -29,8 +29,6 @@ trim() { local s="${1#"${1%%[![:space:]]*}"}"; printf %s "${s%"${s##*[![:space:]
 while IFS= read -r line; do
   k="$(trim "${line%%:*}")"
   v="${line#*:}"; v="$(trim "${v%%#*}")"
-  # one pair of matching quotes is stripped, as the hooks' profile_fm does
-  [[ "$v" =~ ^\"(.*)\"$ || "$v" =~ ^\'(.*)\'$ ]] && v="${BASH_REMATCH[1]}"
   row="$(grep -m1 "^$k"$'\t' <<<"$table")" || { echo "? unknown profile key: $k (not in the template; typo or newer plugin?)"; continue; }
   allowed="${row#*$'\t'}"
   [ -n "$allowed" ] && [ -n "$v" ] || continue
