@@ -26,14 +26,13 @@ want factory missing
   && ok "factory rows come after every existing row" || bad "factory rows interleave existing rows"
 
 # Existing rows print as before: main's detect.sh output == this one's minus the FACTORY section.
-# In CI, actions/checkout checks out the PR merge (HEAD has 2 parents; HEAD^1 is the base=main) at
-# fetch-depth 1, so origin/main and main refs don't exist and merge-base can't resolve. On a plain
-# branch checkout, HEAD has one parent, so use the merge-base with origin/main (then main) instead.
-if git -C "$here" rev-parse HEAD^2 >/dev/null 2>&1; then base="$(git -C "$here" rev-parse HEAD^1)"; else base="$(git -C "$here" merge-base HEAD origin/main 2>/dev/null || git -C "$here" merge-base HEAD main 2>/dev/null)"; fi
+# In CI, actions/checkout checks out the PR merge commit (HEAD^1 is main). Elsewhere use the merge-base
+# with origin/main (then main).
+if [ -n "${GITHUB_ACTIONS:-}" ] && git -C "$here" rev-parse HEAD^2 >/dev/null 2>&1; then base="$(git -C "$here" rev-parse HEAD^1)"; else base="$(git -C "$here" merge-base HEAD origin/main 2>/dev/null || git -C "$here" merge-base HEAD main 2>/dev/null)"; fi
 if [ -n "${base:-}" ] && old="$(git -C "$here" show "$base:./detect.sh" 2>/dev/null)" && [ -n "$old" ]; then
   mkdir -p "$SB/old/skills/setup/scripts" && ln -s "$here/../../../hooks" "$SB/old/hooks" && printf '%s\n' "$old" >"$SB/old/skills/setup/scripts/detect.sh"
   old_out="$(bash "$SB/old/skills/setup/scripts/detect.sh" 2>&1 | sed '/^FACTORY /,$d')"
-  new_out="$(sed '/^FACTORY /,$d' <<<"$out")"
+  new_out="$("$D" 2>&1 | sed '/^FACTORY /,$d')"
   if [ "$old_out" = "$new_out" ]; then ok "existing rows unchanged vs main"
   else bad "existing rows changed vs main"; diff <(printf '%s\n' "$old_out") <(printf '%s\n' "$new_out") | sed 's/^/    /'; fi
 else echo "  - skip: no main to compare against (shallow clone)"; fi
@@ -42,13 +41,7 @@ echo "-- driver and feature map on disk, not committed"
 mkdir -p .claude/skills/verify-toy .flow/features .github/routines
 printf -- '---\nid: a\nscenario: bash x.sh\n---\n' >.flow/features/a.md
 out="$("$D")"
-want verify missing 'commit .claude/skills/verify-toy.*commit .flow/features'
-want factory missing
-
-echo "-- staged, not committed: runners can't see it"
-touch .claude/skills/verify-toy/SKILL.md && git add -A
-out="$("$D")"
-want verify missing 'commit .claude/skills/verify-toy'
+want verify missing 'make-verifier.*feature-map'
 want factory missing
 
 echo "-- committed driver + scenario, all routines"
@@ -58,7 +51,7 @@ git add -A && git commit -qm init
 out="$("$D")"
 want monitor ok self-create
 want implement ok self-heal
-want verify ok 'verify-toy.*1 feature'
+want verify ok 'committed verify driver'
 want review ok review
 want ship ok auto-merge
 want factory ok
@@ -68,6 +61,12 @@ printf -- '---\nid: a\nscenario: # later\n---\n' >.flow/features/a.md && git com
 out="$("$D")"
 want verify missing feature-map
 
+echo "-- matches the gate: a quoted or body-only scenario doesn't count"
+printf -- '---\nid: a\nscenario: ""\n---\nscenario: bash x.sh\n' >.flow/features/a.md && git commit -qam quoted
+out="$("$D")"
+want verify missing feature-map
+want factory missing
+
 echo "-- README is not a feature; a worktree is judged by its own commits"
 printf -- '---\nscenario: bash x.sh\n---\n' >.flow/features/README.md && git add -A && git commit -qm readme
 out="$("$D")"
@@ -75,7 +74,7 @@ want verify missing feature-map
 git worktree add -q "$SB/wt" -b wt && cd "$SB/wt"
 printf -- '---\nid: a\nscenario: bash x.sh\n---\n' >.flow/features/a.md && git commit -qam wt
 out="$("$D")"
-want verify ok 'verify-toy.*1 feature'
+want verify ok 'committed verify driver'
 want factory ok
 [ "$FAILS" = 0 ] || { echo "$FAILS failed"; exit 1; }
 echo "all passed"

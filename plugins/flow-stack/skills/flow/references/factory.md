@@ -22,7 +22,7 @@ Stages marked **planned** don't exist yet; don't act as if they do.
 
 A repo is factory-ready when it has a **committed** verify driver (`.claude/skills/verify-*/` or `verify/`) and a **committed** feature map with at least one scenario. Committed, because runners and cloud sessions see only the clone. Existence isn't enough: the impacted scenarios must also pass on HEAD, which `ready.sh` already runs.
 
-Today `detect.sh` reports it (row `factory`). **Planned (#181, draft PR #196):** `hooks/lib.sh` `factory_ready` checks the same rule at HEAD; `--auto ship` and `--gha` warn in a repo that isn't factory-ready, or run as plain `--auto` (no push, no PR) with the profile's `factory_ready: enforce`, and `make-routines` refuses `self-heal` and `auto-merge` there. Pair mode is unaffected.
+`hooks/lib.sh` `factory_ready` checks it, and `detect.sh` reports the same result (rows `verify` and `factory`). `--auto ship` and `--gha` warn in a repo that isn't factory-ready, or run as plain `--auto` (no push, no PR) with the profile's `factory_ready: enforce`, and `make-routines` refuses `self-heal` and `auto-merge` there. Pair mode is unaffected.
 
 ## Fixes
 

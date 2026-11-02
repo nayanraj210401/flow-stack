@@ -47,17 +47,10 @@ if [ -n "$root" ]; then
   row triage planned "#185 triage, #186 ideate"
   row spec ok "intent + seal (plugin); edge-case matrix planned #187"
   routine self-heal implement "flow --auto works in a session"
-  # The checkout itself (FLOW_ROOT, a worktree included), like hooks/lib.sh factory_ready.
-  tracked="$(git -C "$FLOW_ROOT" ls-tree -r --name-only HEAD -- .claude/skills verify .flow/features 2>/dev/null)"
-  tdrv="$(grep -oE '^(\.claude/skills/verify(-[^/]*)?|verify)/' <<<"$tracked" | head -n1)"
-  nsc="$(git -C "$FLOW_ROOT" grep -lE '^scenario:[[:space:]]*[^[:space:]#]' HEAD -- ':(top).flow/features/*.md' ':(top,exclude).flow/features/README.md' 2>/dev/null | wc -l | tr -d ' ')"
-  fix=""
-  if [ -z "$tdrv" ]; then [ -n "$drv" ] && fix="commit ${drv#"$root"/}" || fix=make-verifier; fi
-  if [ "$nsc" = 0 ]; then
-    if [ "${nf:-0}" -gt 0 ] && ! grep -q '^\.flow/features/' <<<"$tracked"; then fix="${fix:+$fix, }commit .flow/features"; else fix="${fix:+$fix, }feature-map (commit a feature with a scenario)"; fi
-  fi
-  if [ -z "$fix" ]; then row verify ok "committed ${tdrv%/} + $nsc feature(s) with scenarios"; else row verify missing "$fix"; fi
+  # The same check that gates --auto ship and self-heal, on this checkout (a worktree included)
+  . "$(dirname "$0")/../../../hooks/lib.sh"
+  if miss="$(factory_ready "$FLOW_ROOT")"; then row verify ok "committed verify driver + a feature with a scenario"; else row verify missing "$miss"; fi
   routine review review "ready.sh works in a session"
   [ -f "$root/.github/routines/auto-merge.md" ] && row ship ok "auto-merge routine" || row ship missing "auto-merge routine (no make-routines template yet; #184)"
-  [ -z "$fix" ] && row factory ok "ready; impacted scenarios must also pass on HEAD (ready.sh)" || row factory missing "not ready: needs verify; #181: --auto ship warns, or runs as plain --auto with factory_ready: enforce"
+  [ -z "$miss" ] && row factory ok "ready; impacted scenarios must also pass on HEAD (ready.sh)" || row factory missing "not ready: needs verify; --auto ship warns, or runs as plain --auto with factory_ready: enforce"
 fi
