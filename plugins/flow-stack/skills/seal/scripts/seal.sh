@@ -40,7 +40,7 @@ unmapped() {
     # Fail closed: once an INTENT has an edge-cases-like heading, the "## Edge cases" section is a whitelist:
     # list rows, blank lines, and comments that open at column 0 (the template form). Any other fence or
     # comment marker there is refused, as is an unclosed fence or comment anywhere, since either could hide rows.
-    { l = $0; sub(/\r$/, "", l); if (tolower(l) ~ /^[ \t]*##.*edge[ _-]?cases?/) { has = 1; like++ } }
+    { l = $0; sub(/\r$/, "", l); if (tolower(l) ~ /^[ \t]*(#+[ \t]*edge[ \t_-]*cases?|##.*edge[ \t_-]*cases?)/) { has = 1; like++ } }
     sec == "edge cases" && l !~ /^##?[ \t]/ {
       # text after a closing --> is visible, so it must be empty
       if (ecm) { if ((i = index(l, "-->"))) { ecm = 0; if (substr(l, i + 3) ~ /[^ \t]/) bad[++nb] = l }; next }
@@ -56,7 +56,7 @@ unmapped() {
       if (cm) { i = index(l, "-->"); if (!i) next; l = substr(l, i + 3); cm = 0 }
       closed = 0
       while ((i = index(l, "<!--"))) {
-        r = substr(l, i + 4); j = index(r, "-->")
+        r = substr(l, i + 2); j = index(r, "-->")
         if (j) { l = substr(l, 1, i - 1) substr(r, j + 3); closed = 1 }
         else if (!closed && substr(l, 1, i - 1) ~ /^ ? ? ?$/) { l = ""; cm = 1 }
         else break

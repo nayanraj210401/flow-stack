@@ -83,6 +83,11 @@ blocks '## Edge cases\n<!-- a --> <!--\n- huge\n-->' "comment opener after a clo
 blocks '## Edge cases\n- → C1' "row with no case text"
 blocks '## Edge cases\n<!-->\n- huge →\n-->' "<!--> closes on its own line"
 blocks '## Edge cases\n<!--->\n- huge →\n-->' "<!---> closes on its own line"
+printf '# Intent · x\n\n## Acceptance checks\n- [ ] C1 · works\n\n## Goal\n<!-->\n\n# Edge cases\n- huge →\n<!-- end -->\n' >"$I"
+seals && bad "<!--> outside the matrix hid an H1 matrix" || ok "<!--> outside the matrix closes on its own line"
+printf "$head"'## Goal\n<!-->\n\n## Edge cases\n- huge → C1\n' >"$I"
+seals && ok "<!--> before the matrix leaves a mapped row sealable" || bad "<!--> swallowed the heading: $(cat "$SB/out")"
+blocks '## Edge  cases\n- huge' "double-spaced heading"
 for h in '## Edge cases:' '## Edge cases ##'; do
   printf "$head$h"'\n- huge → C1\n' >"$I"
   seals && ok "'$h' is the matrix: a mapped row seals" || bad "'$h' with a mapped row refused: $(cat "$SB/out")"
