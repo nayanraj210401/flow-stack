@@ -40,7 +40,8 @@ if [ -n "$root" ]; then
   ls -d "$root"/.claude/skills/run-* >/dev/null 2>&1 && row run-drv ok "" || row run-drv missing "make-runner"
   ls "$root"/.flow/playbooks/*.md >/dev/null 2>&1 && row playbooks ok "$(ls "$root"/.flow/playbooks/*.md | wc -l | tr -d ' ') repo playbook(s)" || row playbooks none "make-playbook (optional)"
   ls "$root"/.github/routines/*.md >/dev/null 2>&1 && row routines ok "$(ls "$root"/.github/routines/*.md | grep -vc '/profile\.md$' || true) routine(s)" || row routines none "make-routines (optional)"
-  # Factory: one row per loop stage (skills/flow/references/factory.md). Runners see only the clone, so verify counts committed files.
+  # Factory: one row per loop stage (skills/flow/references/factory.md). verify reads HEAD of this checkout, as the gate
+  # does; the routine rows read the main checkout's disk, so an uncommitted routine file still shows ok.
   row FACTORY STATUS "loop stage: what serves it, or the fix"
   routine() { [ -f "$root/.github/routines/$1.md" ] && row "$2" ok "$1 routine" || row "$2" missing "make-routines: $1${3:+ ($3)}"; }
   routine self-create monitor
