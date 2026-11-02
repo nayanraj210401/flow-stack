@@ -66,8 +66,16 @@ The workflow changes always get their own branch and PR. Never commit them to th
 1. The secret: `claude setup-token`, then `gh secret set CLAUDE_CODE_OAUTH_TOKEN` (or `ANTHROPIC_API_KEY`).
 2. The Claude GitHub App on the repo (`/install-github-app`). PRs opened with the default `GITHUB_TOKEN` don't trigger CI, so self-heal's drafts would arrive with no checks.
 3. Protect the default branch (require a PR and a passing check). The guard stops a stray push, but a script can get around it; branch protection can't be.
-4. Label an issue `heal-ok` to hand it to self-heal. Only people with triage access can label, which is what keeps a stranger's issue text from steering a run that holds write tokens.
-5. Merge the routines PR, then start one run by hand: `gh workflow run flow-<name>.yml` for a scheduled routine, or open a test PR for `review`. Read the log for `## Profile` (the profile loaded) and `[flow auto` (auto mode is on) before trusting it.
+4. A committed verify driver (`.claude/skills/verify-*` or `verify/`) and feature map (`.flow/features/`, at least one scenario). `routines.sh add` refuses `self-heal` and `auto-merge` without them, and says what is missing: a runner sees only the clone, so an uncommitted driver proves nothing there.
+5. Label an issue `heal-ok` to hand it to self-heal. Only people with triage access can label, which is what keeps a stranger's issue text from steering a run that holds write tokens.
+6. Merge the routines PR, then start one run by hand: `gh workflow run flow-<name>.yml` for a scheduled routine, or open a test PR for `review`. Read the log for `## Profile` (the profile loaded) and `[flow auto` (auto mode is on) before trusting it.
+
+## Running them safely
+
+- **Kill switch:** `gh variable set FLOW_FACTORY --body off` pauses every routine (each job is skipped); `gh variable delete FLOW_FACTORY` resumes them.
+- **Taking turns:** scheduled routines that push (`contents` in grants: self-heal, auto-merge) share one `flow-writers` concurrency group, so they never run at once. GitHub keeps one pending run per group, so a third queued run cancels the waiting one. `review` keeps one group per PR.
+- **Usage limits:** a run stopped by a Claude usage limit ends green with "Stopped by a Claude usage limit (resets …)" in the summary. Anything it already pushed or opened stays; re-run it after the reset. Any other agent failure fails the job.
+- **Labels:** a run creates only the labels the repo lacks and never edits an existing one.
 
 `review` skips drafts, fork PRs, and Dependabot PRs: forks get no secrets, Dependabot runs get only Dependabot's, and a PR from inside the repo already comes from someone with write access, who could also change the routine's prompt in that PR.
 
