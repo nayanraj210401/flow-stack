@@ -20,7 +20,7 @@ Stages marked **planned** don't exist yet; don't act as if they do.
 
 ## Factory-ready
 
-A repo is factory-ready when it has a **committed** verify driver (`.claude/skills/verify-*/` or `verify/`) and a **committed** feature map with at least one scenario. Committed, because runners and cloud sessions see only the clone. Existence isn't enough: the impacted scenarios must also pass on HEAD, which `ready.sh` already runs.
+A repo is factory-ready when it has a **committed** verify driver (`.claude/skills/verify-*/`, `.claude/skills/verify/` or a top-level `verify/`) and a **committed** feature map with at least one scenario. Committed, because runners and cloud sessions see only the clone. Existence isn't enough: the impacted scenarios must also pass on HEAD, which `ready.sh` already runs.
 
 `hooks/lib.sh` `factory_ready` checks it, and `detect.sh` reports the same result (rows `verify` and `factory`). `--auto ship` and `--gha` warn in a repo that isn't factory-ready, or run as plain `--auto` (no push, no PR) with the profile's `factory_ready: enforce`, and `make-routines` refuses `self-heal` and `auto-merge` there. Pair mode is unaffected.
 
@@ -28,6 +28,7 @@ A repo is factory-ready when it has a **committed** verify driver (`.claude/skil
 
 | Row missing | Run |
 |---|---|
-| monitor, implement, review | `/flow-stack:make-routines` (`self-create`, `self-heal`, `review`) |
+| monitor, review | `/flow-stack:make-routines` (`self-create`, `review`) |
+| implement | `/flow-stack:make-routines`: `mention` works in any repo; `self-heal` is refused until the repo is factory-ready |
 | verify: `a committed verify driver` / `a committed feature map` | if the driver or map already exists on disk, commit it (a gitignored one is invisible to routines); otherwise run the named skill |
-| ship | `auto-merge` has no `make-routines` template yet (#184); copy this repo's `.github/routines/auto-merge.md`, check that `detect.sh` shows `factory ok` first (`render` doesn't check; only `add` does), render it with `make-routines/scripts/routines.sh render`, and commit `.github/workflows/flow-auto-merge.yml` |
+| ship | `auto-merge` has no `make-routines` template yet (#184); check that `detect.sh` shows `factory ok` first (`render` doesn't check; only `add` does), copy flow-stack's `.github/routines/auto-merge.md` into your repo's `.github/routines/`, make sure `.github/routines/profile.md` exists (any `make-routines add` writes it), run `make-routines/scripts/routines.sh render`, and commit the routine, the profile and `.github/workflows/flow-auto-merge.yml` together |
