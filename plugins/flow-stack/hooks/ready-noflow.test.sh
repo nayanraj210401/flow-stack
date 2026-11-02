@@ -135,6 +135,19 @@ is allow plain 'gh search prs --author @me'
 is allow plain 'gh status'
 is allow plain 'gh pr --help'
 is allow plain 'gh repo clone o/r'
+is allow plain 'rg -n gh src'
+is allow plain 'gh pr view 1 | grep gh'
+is allow plain 'go build ./cmd/gh'
+is allow plain 'ls ~/.config/gh'
+is allow plain 'echo gh'
+is deny plain 'nix develop -c gh pr comment 1 -b x'
+is deny plain 'if "$GH" pr close 1; then :; fi'
+is deny plain 'sudo $GH pr close 1'
+is deny plain '"$GH" release delete v1 -y'
+is deny plain '"$GH" repo delete o/r --yes'
+is deny plain "$(printf 'echo \"<<EOF\"\ngh pr comment 1 -b x\nEOF')"
+is deny plain 'gh pr comment 1 --body --help'
+is allow plain "$(printf 'git commit -F - <<\x27EOF\x27\nmentions gh pr comment\nEOF')"
 RUNNER_TEMP="$SB" GITHUB_ACTIONS=true GITHUB_RUN_ID=1 RUNNER_ENVIRONMENT=github-hosted is allow ship 'gh pr review 1 --comment --body ok'
 
 echo "-- --auto ship with a stamped HEAD: the REST twins of gh pr create/ready pass (cloud has no GraphQL)"

@@ -231,8 +231,13 @@ code="$(awk -v q="'" '
   { print
     # <<<word is a here-string, not a heredoc; <<- lets the terminator be tab-indented. A heredoc that never
     # ends was no heredoc (a <<WORD in quotes, a comment or $((1<<X))), so its lines are code after all.
-    if (match($0, "(^|[^<])<<-?[ \t]*[\"" q "]?[A-Za-z_][A-Za-z0-9_]*")) {
-      hd = substr($0, RSTART, RLENGTH); dash = hd ~ /<<-/; sub("^[^<]?<<-?[ \t]*[\"" q "]?", "", hd) } }
+    # a << inside quotes or a comment starts nothing: match on the line with those blanked
+    u = $0
+    # unquote a quoted delimiter (<<'EOF') first, so the blanking below keeps it
+    while (match(u, "<<-?[ \t]*[\"" q "][A-Za-z_][A-Za-z0-9_]*[\"" q "]")) { m = substr(u, RSTART, RLENGTH); gsub("[\"" q "]", "", m); u = substr(u, 1, RSTART - 1) m substr(u, RSTART + RLENGTH) }
+    gsub(q "[^" q "]*" q, "", u); gsub(/"[^"]*"/, "", u); sub(/(^|[ \t])#.*/, "", u)
+    if (match(u, "(^|[^<])<<-?[ \t]*[\"" q "]?[A-Za-z_][A-Za-z0-9_]*")) {
+      hd = substr(u, RSTART, RLENGTH); dash = hd ~ /<<-/; sub("^[^<]?<<-?[ \t]*[\"" q "]?", "", hd) } }
   END { printf "%s", body }' <<<"$cmd")"
 lead='(^|[;&|({]|(^|[;&|({[:space:]])(eval|command|env|time|timeout|nice|nohup|xargs|sudo|exec|(ba|z|da|k)?sh)([[:space:]][^;&|]*)?[[:space:]])'
 lead="$lead"'[[:space:]]*((if|then|elif|else|do|while|until|!)[[:space:]]+|[A-Za-z_][A-Za-z0-9_]*=([^[:space:]]*|"[^"]*"|'"'"'[^'"'"']*'"'"')[[:space:]]+)*([$]?["'"'"'])?'
@@ -369,11 +374,15 @@ gh_writes() { # gh writes in $cmd, judged on shell words (quotes and escapes res
   awk -v q="'" '
     hd != "" { t = $0; if (dash) sub(/^\t+/, "", t); if (t == hd) { hd = ""; body = "" } else if (run) print; else body = body $0 "\n"; next }
     { print
-      if (match($0, "(^|[^<])<<-?[ \t]*[\"" q "]?[A-Za-z_][A-Za-z0-9_]*")) {
+      u = $0
+    # unquote a quoted delimiter (<<'EOF') first, so the blanking below keeps it
+    while (match(u, "<<-?[ \t]*[\"" q "][A-Za-z_][A-Za-z0-9_]*[\"" q "]")) { m = substr(u, RSTART, RLENGTH); gsub("[\"" q "]", "", m); u = substr(u, 1, RSTART - 1) m substr(u, RSTART + RLENGTH) }
+    gsub(q "[^" q "]*" q, "", u); gsub(/"[^"]*"/, "", u); sub(/(^|[ \t])#.*/, "", u)
+      if (match(u, "(^|[^<])<<-?[ \t]*[\"" q "]?[A-Za-z_][A-Za-z0-9_]*")) {
         # the shell must be in the same command as the heredoc (cat <<EOF | bash), not a later one (…; ls /bin/sh)
-        a = substr($0, 1, RSTART); sub(/.*[;&]/, "", a); b = substr($0, RSTART + RLENGTH); sub(/[;&].*/, "", b)
+        a = substr(u, 1, RSTART); sub(/.*[;&]/, "", a); b = substr(u, RSTART + RLENGTH); sub(/[;&].*/, "", b)
         run = (a b) ~ /(^|[|( \t\/"])(bash|sh|zsh|ksh|dash|ssh|\$SHELL|\$\{SHELL\})(["]?[ \t]|["]?$)/
-        hd = substr($0, RSTART, RLENGTH); dash = hd ~ /<<-/; sub("^[^<]?<<-?[ \t]*[\"" q "]?", "", hd) } }
+        hd = substr(u, RSTART, RLENGTH); dash = hd ~ /<<-/; sub("^[^<]?<<-?[ \t]*[\"" q "]?", "", hd) } }
     END { printf "%s", body }' <<<"$cmd" |
   awk -v q="'" "$split_awk"'
     # unbt(s): an unquoted `…` is a command of its own, so it becomes one (split_cmds splits only `…` inside "…").
@@ -389,17 +398,17 @@ gh_writes() { # gh writes in $cmd, judged on shell words (quotes and escapes res
     # wr(s): 1 when s holds a gh command that is not a known read. An allowlist, so a spelling nobody listed is held:
     # a read is a literal list/view/status/diff/checks/checkout/download/watch/search/browse (clone: repo only), or
     # gh api with no method but GET/HEAD and no fields (GraphQL: a literal query without "mutation"). gh counts
-    # wherever it stands in a command (if ! gh …, xargs -I {} gh …, sudo -u bob gh …), unless a lookup names it
-    # (which gh, brew install gh); a computed first word followed by pr/issue/api ("$GH" pr …) counts too. A $ or
+    # in command position (if ! gh …, xargs -I {} gh …, sudo -u bob gh …), and so does a computed command word
+    # followed by a gh noun ("$GH" pr …, sudo $GH repo delete …). A $ or
     # a backtick in the noun or verb (in gh api: the method, a flag position, or the start of the endpoint) is held;
     # after a literal read verb it is only an argument. gh pr create/ready/merge and gh release create belong to
     # rule 4. eval, sh -c and every substitution, flag values included, are checked as scripts of their own.
-    function wr(s,   T, K, C, CS, n, i, k, j, c, r, start, g, look, noun, verb, ep, m, f, mut, ev, sh, w, lw, comp, hlp) {
+    function wr(s,   T, K, C, CS, n, i, k, j, c, r, start, g, look, noun, verb, ep, m, f, mut, ev, sh, w, lw, comp, hlp, cp, skip, wrap, dur, first) {
       n = split_cmds(unbt(s), T, K, C, CS); start = 1
       for (i = 1; i <= n + 1; i++) {
         if (i <= n && K[i] != "op") continue
         for (j = start; j < i; j++) if (K[j] != "op" && CS[j] && wr(C[j])) return 1
-        g = look = hlp = 0; noun = verb = ep = m = ""; f = mut = ev = sh = comp = 0
+        g = hlp = skip = dur = 0; cp = 1; wrap = first = ""; noun = verb = ep = m = ""; f = mut = ev = sh = comp = 0
         for (k = start; k < i; k++) {
           if (K[k] == "op") continue
           if (ev || sh > 1) { if (wr(T[k])) return 1 }
@@ -407,12 +416,24 @@ gh_writes() { # gh writes in $cmd, judged on shell words (quotes and escapes res
           if (lw == "eval") ev = 1
           if (w ~ /^(ba|z|da|k)?sh$/ || w ~ /\/(ba|z|da|k)?sh$/) sh = 1; else if (sh && w ~ /^-[A-Za-z]*c[A-Za-z]*$/) sh = 2
           if (!g) {
-            if (lw ~ /^(which|type|hash|whereis|man|brew|apt|apt-get|dnf|yum|pacman|port|nix|apk)$/ || (lw ~ /^-[vV]$/ && tolower(T[k - 1]) == "command")) look = 1
-            if ((lw == "gh" || lw ~ /\/gh$/) && !look) g = 1
-            else if (k == start && w ~ /[$`]/ && k + 1 < i && tolower(T[k + 1]) ~ /^(pr|issue|api)$/) { g = 1 }
-            continue }
+            # gh counts only in command position: first, or after keywords, VAR=value and wrappers (with their flags
+            # and flag values), or after nix -c/--command. Elsewhere it is an argument (rg gh src, ls ~/.config/gh).
+            if (!cp) { if (first == "nix" && w ~ /^(-c|--command)$/) cp = 1; continue }
+            if (skip) { skip--; continue }
+            if (wrap == "command" && w ~ /^-[vV]$/) { cp = 0; continue }
+            if (wrap != "" && w ~ /^-/) {
+              if ((wrap ~ /^(sudo|doas)$/ && w ~ /^-[ugCDhpr]$/) || (wrap == "env" && w ~ /^-[uC]$/) \
+                  || (wrap == "xargs" && w ~ /^-[IinLPdsE]$/) || (wrap ~ /^(timeout|nice|stdbuf)$/ && w ~ /^-[skn]$/)) skip = 1
+              continue }
+            if (wrap == "timeout" && !dur) { dur = 1; continue }
+            if (first == "") first = lw
+            if (lw == "gh" || lw ~ /\/gh$/) { g = 1; continue }
+            if (w ~ /^[$`]/ && k + 1 < i && tolower(T[k + 1]) ~ /^(pr|issue|api|repo|release|label|gist|run|workflow|secret|variable|ruleset|project|codespace|cache|ssh-key|gpg-key)$/) { g = 1; continue }
+            if (lw ~ /^(if|then|elif|else|do|while|until|!|\{|time)$/ || w ~ /^[A-Za-z_][A-Za-z0-9_]*=/) continue
+            if (lw ~ /^(sudo|doas|env|xargs|timeout|nice|nohup|exec|command|stdbuf)$/) { wrap = lw; dur = 0; continue }
+            cp = 0; continue }
           if (w ~ /^(-R|--repo|--jq|-q|--search|-S|--template|-t)$/ && k + 1 < i) { k++; continue }
-          if (w ~ /^(--help|-h)$/) hlp = 1
+          if (w ~ /^(--help|-h)$/ && T[k - 1] !~ /^-/) hlp = 1
           if (noun == "") { if (w ~ /[$`]/) comp = 1; if (w !~ /^-/) noun = lw; else if (w ~ /^(--version|--help|-h)$/) noun = "help"; continue }
           if (noun != "api") { if (verb == "" && w !~ /^-/) { verb = lw; if (w ~ /[$`]/) comp = 1 }; continue }
           # gh api: a flag position, the method or the start of the endpoint may not be computed
