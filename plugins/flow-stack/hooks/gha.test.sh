@@ -91,6 +91,13 @@ echo "-- ship on a runner does not unlock releases"
 prompt "${RUNNER[@]}" -- '--auto ship' >/dev/null
 expect deny "${RUNNER[@]}" -- 'gh release create v1.0.0 --target feat/x --generate-notes'
 expect allow "${RUNNER[@]}" -- 'git push origin feat/x'
+echo "-- FLOW_SHIP_DRAFT=1 (@claude runs): ship opens draft PRs only"
+D=("${RUNNER[@]}" FLOW_SHIP_DRAFT=1)
+expect allow "${D[@]}" -- 'gh pr create --draft --title x --body-file b.md'
+expect deny "${D[@]}" -- 'gh pr create --title x --body-file b.md'
+expect deny "${D[@]}" -- 'gh pr merge --squash --delete-branch'
+expect deny "${D[@]}" -- 'gh pr ready'
+expect allow "${D[@]}" -- 'git push origin feat/x'
 prompt "${RUNNER[@]}" -- '--no-auto' >/dev/null; [ ! -f "$FLOW_STACK_HOME/auto/s" ] && ok "--no-auto ends it" || bad "flag remains"
 
 [ "$FAILS" = 0 ] && echo "gha.test.sh: pass" || { echo "gha.test.sh: $FAILS failed"; exit 1; }
