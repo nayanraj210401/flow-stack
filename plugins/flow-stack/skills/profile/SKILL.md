@@ -16,7 +16,7 @@ Paths are relative to this skill's base directory. The format is in `../../templ
 - **edit `<section>`**: make the change the human asked for, show the diff, and write it after a yes.
 - **add rule `<text>`**: Rules are hard constraints, capped at 20. If the text is a preference ("prefer…", "usually…"), suggest Taste instead.
 - **add taste `<area> <text>`**: append `- <today> · <text> · src: <where it came from>` under `## <Area>` (Code, Prose, UI, Naming, or Testing). If it contradicts an existing entry, propose retiring the old one (move it to `# Taste history` with the date and reason).
-- **--check**: `scripts/check.sh`. It lints structure and lists taste entries older than 60 days as retirement candidates.
+- **--check**: `scripts/check.sh`. It lints structure, checks each frontmatter value against the list in the template's comment for that key (`rigor: fast` fails with `lean | standard | strict`; unknown keys warn; missing keys are fine), and lists taste entries older than 60 days as retirement candidates.
 - **init `<preset>`**: `scripts/init.sh <preset>`. Normally `setup` runs this.
 
 ## Rules of the file
