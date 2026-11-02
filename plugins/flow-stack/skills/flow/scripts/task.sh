@@ -89,12 +89,12 @@ route() {
   tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' RETURN
   while IFS= read -r n; do
     p="$(repo_field "$n" path)"; p="${p/#\~/$HOME}"
-    { echo "$n $(repo_field "$n" what)"; sed -nE 's/^(title|owns):[[:space:]]*//p' "$p"/.flow/features/*.md 2>/dev/null || true; } | words >"$tmp/r.$n"
+    { echo "$n $(repo_field "$n" what)"; sed -nE 's/^(title|owns):[[:space:]]*//p' "$p"/.flow/features/*.md 2>/dev/null || true; } | words >"$tmp/r.${n//\//_}"
   done < <(section_names Repos)
-  cat "$tmp"/r.* 2>/dev/null | sort | uniq -u >"$tmp/unique"
+  { cat "$tmp"/r.* 2>/dev/null || true; } | sort | uniq -u >"$tmp/unique"
   printf '%s' "$req" | words >"$tmp/req"
   while IFS= read -r n; do
-    [ -n "$(comm -12 "$tmp/req" "$tmp/r.$n" | comm -12 - "$tmp/unique")" ] && hit+=("$n")
+    [ -n "$(comm -12 "$tmp/req" "$tmp/r.${n//\//_}" | comm -12 - "$tmp/unique")" ] && hit+=("$n")
   done < <(section_names Repos)
   if [ ${#hit[@]} -eq 1 ]; then
     p="$(repo_field "${hit[0]}" path)"; printf 'repo\t%s\t%s\n' "${hit[0]}" "${p/#\~/$HOME}"; return

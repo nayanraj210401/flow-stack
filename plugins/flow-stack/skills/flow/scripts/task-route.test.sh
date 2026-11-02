@@ -53,6 +53,11 @@ case "$out" in ask*api*web*docs*) ok "no match: one question listing every repo"
 out="$(route "change the title of owns")"
 case "$out" in ask*) ok "the feature map's field names are not request words" ;; *) bad "field names routed: $out" ;; esac
 [ "$("$T" route "$(printf 'tidy\nthings up')" | wc -l | tr -d ' ')" = 1 ] && ok "a request with a newline still asks in one line" || bad "newline request spans lines"
+out="$(FLOW_STACK_HOME="$SB/empty" "$T" route "hello thing" 2>&1)"
+case "$out" in ask*"no # Repos"*) ok "no profile: asks instead of failing silently" ;; *) bad "no profile: '$out'" ;; esac
+mkdir -p "$SB/slash/home" && printf '# Repos\n## org/api\n- path: %s\n- what: billing ledger\n' "$SB/api" >"$SB/slash/home/profile.md"
+out="$(FLOW_STACK_HOME="$SB/slash/home" "$T" route "fix the ledger" 2>&1 | head -n1)"
+case "$out" in "repo	org/api	"*) ok "a repo name with a slash still routes" ;; *) bad "slash repo: '$out'" ;; esac
 "$T" route "add rate limits" >/dev/null
 [ ! -e "$SB/api/.flow" ] && ok "routing creates no task" || bad "route touched $SB/api/.flow"
 [ "$FAILS" = 0 ] || { echo "$FAILS failed"; exit 1; }
