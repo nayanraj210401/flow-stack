@@ -39,15 +39,16 @@ unmapped() {
   awk '
     # Fail closed: once an INTENT has an Edge cases heading, every non-blank line in that section must be a
     # list row, and an unclosed fence or comment anywhere is refused, since either could hide rows.
-    { l = $0; sub(/\r$/, "", l); if (tolower(l) ~ /^[ \t]*#+[ \t]*edge cases/) has = 1 }
+    { l = $0; sub(/\r$/, "", l); if (tolower(l) ~ /^[ \t]*#+[ \t]*edge[ _-]?cases?/) has = 1 }
     # Fences and multi-line comments open only at indent 0-3, as in CommonMark; deeper they are text.
     fm != "" { if (index(l, fm) && l ~ /^ ? ? ?(```|~~~)/) fm = ""; next }
     {
       if (cm) { i = index(l, "-->"); if (!i) next; l = substr(l, i + 3); cm = 0 }
+      closed = 0
       while ((i = index(l, "<!--"))) {
         r = substr(l, i + 4); j = index(r, "-->")
-        if (j) l = substr(l, 1, i - 1) substr(r, j + 3)
-        else if (substr(l, 1, i - 1) ~ /^ ? ? ?$/) { l = ""; cm = 1 }
+        if (j) { l = substr(l, 1, i - 1) substr(r, j + 3); closed = 1 }
+        else if (!closed && substr(l, 1, i - 1) ~ /^ ? ? ?$/) { l = ""; cm = 1 }
         else break
       }
     }
@@ -62,7 +63,7 @@ unmapped() {
       if (has && !seen) print "an edge-cases heading that is not exactly \"## Edge cases\": rename it so its rows are checked"
       for (i = 1; i <= n; i++) {
         t = rows[i]; ok = 0
-        if (t ~ /^[ \t]*([-*+]|[0-9]+[.)])[ \t]/ && sub(/^.*→[ \t]*/, "", t)) {
+        if (t ~ /^[ \t]*([-*+]|[0-9]+[.)])[ \t]+[^ \t→]/ && sub(/^.*→[ \t]*/, "", t)) {
           sub(/[ \t\r]+$/, "", t)
           if (t ~ /^non-goal:[ \t]*[^ \t]/) ok = 1
           else if (t ~ /^C[0-9]+([ ,]+C[0-9]+)*$/) { ok = 1; k = split(t, a, /[ ,]+/); for (j = 1; j <= k; j++) if (!(a[j] in ids)) ok = 0 }

@@ -76,6 +76,11 @@ done
 blocks '## Edge cases\n- empty → C1 <!-- note\n- huge\n-->' "mid-line comment opener hiding rows"
 blocks '## Edge cases\n    ```\n- huge' "4-space-indented fence hiding rows"
 blocks '## Edge cases\n- empty → C1\n#huge' "#-prefixed paragraph in the matrix"
+for h in '## Edge case' '## Edge-cases' '## Edgecases'; do
+  blocks "$h\n- huge" "near-miss heading '$h'"
+done
+blocks '## Edge cases\n<!-- a --> <!--\n- huge\n-->' "comment opener after a closed comment"
+blocks '## Edge cases\n- → C1' "row with no case text"
 printf "$head"'## Edge cases\n<!--\n```\n-->\n- empty → C1\n' >"$I"
 seals && ok "fence marker inside a comment opens nothing" || bad "comment fence refused: $(cat "$SB/out")"
 printf "$head"'## Edge cases\n- a→b transition → C1\n' >"$I"
