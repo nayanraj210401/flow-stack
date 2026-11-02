@@ -13,6 +13,8 @@ scripts/seal.sh verify         # before presenting; non-zero exit = tampering
 scripts/seal.sh list
 ```
 
+`add` refuses while a row in INTENT.md's `## Edge cases` maps to no check listed under `## Acceptance checks` and no `non-goal: <why>`, and it names the rows. A row is one line: `- <case> → C1, C2` or `- <case> → non-goal: <why>` (`→`, not `->`; no wrapped mappings). The gate is on when INTENT has a `## Edge cases` heading outside fences and comments (a trailing `:` or `##` is fine). That section may hold only rows, blank lines and comments that open at column 0; a fence or comment marker elsewhere in it, or an unclosed fence or comment anywhere, is refused. Lookalike headings (`## Edge cases (v2)`, `### Edge cases`) are not the matrix, and an INTENT without the heading seals as before: renaming or deleting the section shows in the diff.
+
 ## What happens after sealing
 
 - An Edit or Write to a sealed file prompts the human (edit-guard hook).
