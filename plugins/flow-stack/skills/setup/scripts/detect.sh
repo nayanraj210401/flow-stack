@@ -40,8 +40,8 @@ if [ -n "$root" ]; then
   ls -d "$root"/.claude/skills/run-* >/dev/null 2>&1 && row run-drv ok "" || row run-drv missing "make-runner"
   ls "$root"/.flow/playbooks/*.md >/dev/null 2>&1 && row playbooks ok "$(ls "$root"/.flow/playbooks/*.md | wc -l | tr -d ' ') repo playbook(s)" || row playbooks none "make-playbook (optional)"
   ls "$root"/.github/routines/*.md >/dev/null 2>&1 && row routines ok "$(ls "$root"/.github/routines/*.md | grep -vc '/profile\.md$' || true) routine(s)" || row routines none "make-routines (optional)"
-  # Factory: one row per loop stage (skills/flow/references/factory.md). every row reads HEAD of this
-  # checkout (a worktree included), since runners see only the clone.
+  # Factory: one row per loop stage (skills/flow/references/factory.md). verify and the routine stage rows
+  # read HEAD of this checkout (a worktree included), since runners see only the clone; triage and spec are fixed text.
   row FACTORY STATUS "loop stage: what serves it, or the fix"
   # what runs is the committed workflow make-routines renders, so a stage row reads HEAD like verify does
   wf() { git -C "$FLOW_ROOT" cat-file -e "HEAD:.github/workflows/flow-$1.yml" 2>/dev/null; }
@@ -52,8 +52,8 @@ if [ -n "$root" ]; then
   routine self-heal implement "flow --auto works in a session"
   # The same check that gates --auto ship and self-heal, on this checkout (a worktree included)
   . "$(dirname "$0")/../../../hooks/lib.sh"
-  if miss="$(factory_ready "$FLOW_ROOT")"; then row verify ok "committed verify driver + a feature with a scenario"; else row verify missing "$miss"; fi
+  if miss="$(factory_ready "$FLOW_ROOT")"; then ready=1; row verify ok "committed verify driver + a feature with a scenario"; else ready=""; row verify missing "${miss:-factory_ready failed}"; fi
   routine review review "ready.sh works in a session"
   wf auto-merge && row ship ok "auto-merge routine" || row ship missing "auto-merge routine (no make-routines template yet; #184)"
-  [ -z "$miss" ] && row factory ok "ready; impacted scenarios must also pass on HEAD (ready.sh)" || row factory missing "not ready: needs verify; --auto ship warns, or runs as plain --auto with factory_ready: enforce"
+  [ -n "$ready" ] && row factory ok "ready; impacted scenarios must also pass on HEAD (ready.sh)" || row factory missing "not ready: needs verify; --auto ship warns, or runs as plain --auto with factory_ready: enforce"
 fi

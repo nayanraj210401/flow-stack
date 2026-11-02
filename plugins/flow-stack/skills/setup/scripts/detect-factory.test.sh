@@ -45,10 +45,10 @@ want verify missing 'make-verifier.*feature-map'
 want factory missing
 
 echo "-- a routine file that isn't committed doesn't run"
-touch .github/routines/self-heal.md
+mkdir -p .github/workflows && touch .github/routines/self-heal.md .github/workflows/flow-self-heal.yml
 out="$("$D")"
 want implement missing make-routines
-rm .github/routines/self-heal.md
+rm .github/routines/self-heal.md .github/workflows/flow-self-heal.yml
 
 echo "-- committed driver + scenario, all routines"
 touch .claude/skills/verify-toy/SKILL.md
