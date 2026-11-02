@@ -85,6 +85,12 @@ render_one() { # render_one <name>: the workflow on stdout
       ctx=' The pull request is #${{ github.event.pull_request.number }}.' ;;
     *) die "$f: trigger must be schedule or pull_request" ;;
   esac
+  # one repo variable pauses every routine: FLOW_FACTORY=off
+  if [ -n "$iff" ]; then iff+=" && vars.FLOW_FACTORY != 'off'"; else iff="    if: vars.FLOW_FACTORY != 'off'"; fi
+  group="flow-$1$group"
+  # routines that push (contents) take turns, so self-heal's rework and auto-merge never act on a PR at once.
+  # GitHub keeps one pending run per group: a third queued run (a manual dispatch, say) cancels the pending one.
+  [ "$trigger" = schedule ] && [[ " $grants " == *" contents "* ]] && group=flow-writers
   [[ "$timeout" =~ ^[0-9]+$ ]] || die "$f: timeout must be whole minutes, got '$timeout'"
   [[ "$labels" =~ ^([a-z0-9:._-]+( [a-z0-9:._-]+)*)?$ ]] || die "$f: labels are space-separated, no quotes, got '$labels'"
   for g in $grants; do case "$g" in issues|pull-requests|contents) ;; *) die "$f: grants takes issues pull-requests contents, got '$g'" ;; esac; done
@@ -158,7 +164,10 @@ add() {
   [ -z "$tz" ] || [ -n "$cron" ] || die "--tz needs --cron"
   [ -z "$cron" ] || valid_cron "$cron" || die "--cron must be five fields (minute hour day month weekday), got '$cron'"
   [ -z "$tz" ] || valid_tz "$tz" || die "--tz must be $tz_hint, got '$tz'"
-  local f="$dir/$name.md"
+  local f="$dir/$name.md" miss
+  case "$name" in self-heal|auto-merge)
+    miss="$(. "$here/../../../hooks/lib.sh"; factory_ready .)" || die "$name ships unattended, and this repo can't prove its changes yet. Missing: $miss. Commit them, then add $name." ;;
+  esac
   [ ! -f "$f" ] || [ -n "$force" ] || die "$f exists (--force replaces it)"
   if [ -n "$cron" ] && [ -f "$tpl/$name.md" ] && [ "$(field "$tpl/$name.md" trigger schedule)" != schedule ]; then
     die "$name runs on $(field "$tpl/$name.md" trigger schedule), which takes no --cron"
