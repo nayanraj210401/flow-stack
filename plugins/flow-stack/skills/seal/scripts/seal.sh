@@ -40,22 +40,26 @@ unmapped() {
     # Fail closed: once an INTENT has an Edge cases heading, every non-blank line in that section must be a
     # list row, and an unclosed fence or comment anywhere is refused, since either could hide rows.
     { l = $0; sub(/\r$/, "", l); if (tolower(l) ~ /^[ \t]*#+[ \t]*edge cases/) has = 1 }
-    fm != "" { if (index(l, fm) && l ~ /^[ \t]*(```|~~~)/) fm = ""; next }
+    # Fences and multi-line comments open only at indent 0-3, as in CommonMark; deeper they are text.
+    fm != "" { if (index(l, fm) && l ~ /^ ? ? ?(```|~~~)/) fm = ""; next }
     {
       if (cm) { i = index(l, "-->"); if (!i) next; l = substr(l, i + 3); cm = 0 }
       while ((i = index(l, "<!--"))) {
         r = substr(l, i + 4); j = index(r, "-->")
-        if (j) l = substr(l, 1, i - 1) substr(r, j + 3); else { l = substr(l, 1, i - 1); cm = 1 }
+        if (j) l = substr(l, 1, i - 1) substr(r, j + 3)
+        else if (substr(l, 1, i - 1) ~ /^ ? ? ?$/) { l = ""; cm = 1 }
+        else break
       }
     }
-    l ~ /^[ \t]*(```|~~~)/ { match(l, /(```|~~~)/); fm = substr(l, RSTART, 3); next }
-    l ~ /^##?[ \t]/ { sec = tolower(l); sub(/^#+[ \t]+/, "", sec); sub(/[ \t#:]+$/, "", sec); gsub(/[ \t]+/, " ", sec); next }
+    l ~ /^ ? ? ?(```|~~~)/ { match(l, /(```|~~~)/); fm = substr(l, RSTART, 3); next }
+    l ~ /^##?[ \t]/ { sec = tolower(l); sub(/^#+[ \t]+/, "", sec); sub(/[ \t#:]+$/, "", sec); gsub(/[ \t]+/, " ", sec); if (sec == "edge cases") seen = 1; next }
     l ~ /^[ \t]*$/ { next }
     sec == "acceptance checks" && l ~ /^[ \t]*- \[.\] C[0-9]+/ { match(l, /C[0-9]+/); ids[substr(l, RSTART, RLENGTH)] = 1 }
-    sec == "edge cases" && l !~ /^#/ { rows[++n] = l }
+    sec == "edge cases" && l !~ /^#+([ \t]|$)/ { rows[++n] = l }
     END {
       if (has && fm != "") print "unclosed " fm " fence: it could hide edge-case rows"
       if (has && cm) print "unclosed <!-- comment: it could hide edge-case rows"
+      if (has && !seen) print "an edge-cases heading that is not exactly \"## Edge cases\": rename it so its rows are checked"
       for (i = 1; i <= n; i++) {
         t = rows[i]; ok = 0
         if (t ~ /^[ \t]*([-*+]|[0-9]+[.)])[ \t]/ && sub(/^.*→[ \t]*/, "", t)) {

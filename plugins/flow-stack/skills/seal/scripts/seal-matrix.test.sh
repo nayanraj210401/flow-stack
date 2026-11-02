@@ -70,6 +70,12 @@ blocks '## Edge cases <!-- #187 -->\n- huge' "heading with a trailing comment"
 blocks "## Edge cases\n- empty → C1\n\t- huge" "tab-indented nested row"
 blocks '## Edge cases\n- empty → C1\n        - huge' "8-space nested row"
 blocks '## Edge cases\nsome prose, not a row' "prose line in the matrix"
+for h in '### Edge cases' ' ## Edge cases' '## Edge cases (v2)' '## Edge cases and limits'; do
+  blocks "$h\n- huge" "heading variant '$h'"
+done
+blocks '## Edge cases\n- empty → C1 <!-- note\n- huge\n-->' "mid-line comment opener hiding rows"
+blocks '## Edge cases\n    ```\n- huge' "4-space-indented fence hiding rows"
+blocks '## Edge cases\n- empty → C1\n#huge' "#-prefixed paragraph in the matrix"
 printf "$head"'## Edge cases\n<!--\n```\n-->\n- empty → C1\n' >"$I"
 seals && ok "fence marker inside a comment opens nothing" || bad "comment fence refused: $(cat "$SB/out")"
 printf "$head"'## Edge cases\n- a→b transition → C1\n' >"$I"
