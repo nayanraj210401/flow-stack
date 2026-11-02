@@ -98,7 +98,9 @@ render_one() { # render_one <name>: the workflow on stdout
       guard+=$'\n''          case "$perm" in admin|maintain|write) ;; *) echo "refused: $COMMENTER has $perm access, not write" | tee -a "$GITHUB_STEP_SUMMARY"; exit 1 ;; esac'
       # the run holds write tokens, so a fork PR's code must never be checked out: refuse it here, not in the prompt
       guard+=$'\n''          PR='"'"'${{ github.event.pull_request.number || (github.event.issue.pull_request && github.event.issue.number) || '"''"' }}'"'"
-      guard+=$'\n''          [ -z "$PR" ] || [ "$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" --jq .head.repo.full_name)" = "$GITHUB_REPOSITORY" ] || { echo "refused: #$PR is from a fork or unreadable; a maintainer takes it over" | tee -a "$GITHUB_STEP_SUMMARY"; exit 1; }' ;;
+      guard+=$'\n''          [ -z "$PR" ] || [ "$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" --jq .head.repo.full_name)" = "$GITHUB_REPOSITORY" ] || { echo "refused: #$PR is from a fork or unreadable; a maintainer takes it over" | tee -a "$GITHUB_STEP_SUMMARY"; exit 1; }'
+      # the thread's text is untrusted, so the hooks (not the prompt) hold this run to draft PRs: no merge, no ready
+      guard+=$'\n''          echo "FLOW_SHIP_DRAFT=1" >>"$GITHUB_ENV"' ;;
     *) die "$f: trigger must be schedule, pull_request, or mention" ;;
   esac
   [[ "$timeout" =~ ^[0-9]+$ ]] || die "$f: timeout must be whole minutes, got '$timeout'"
