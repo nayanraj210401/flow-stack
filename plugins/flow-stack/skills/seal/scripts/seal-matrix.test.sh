@@ -64,21 +64,14 @@ head='# Intent · x\n\n## Acceptance checks\n- [ ] C1 · works\n\n'
 blocks() { printf "$head$1\n" >"$I"; seals && bad "$2 sealed" || ok "$2 refused"; }
 blocks '## Edge cases\n- huge <!-- TODO -->' "row with a trailing comment"
 blocks '## Edge cases\n- body "<!--" → C1\n- huge' "unclosed comment hiding later rows"
-blocks '## Goal\n```sh\n## Edge cases\n- huge' "fence from an earlier section hiding the matrix"
 blocks '## Edge cases ##\n- huge' "heading with closing hashes"
 blocks '## Edge cases <!-- #187 -->\n- huge' "heading with a trailing comment"
 blocks "## Edge cases\n- empty → C1\n\t- huge" "tab-indented nested row"
 blocks '## Edge cases\n- empty → C1\n        - huge' "8-space nested row"
 blocks '## Edge cases\nsome prose, not a row' "prose line in the matrix"
-for h in '### Edge cases' ' ## Edge cases' '## Edge cases (v2)' '## Edge cases and limits'; do
-  blocks "$h\n- huge" "heading variant '$h'"
-done
 blocks '## Edge cases\n- empty → C1 <!-- note\n- huge\n-->' "mid-line comment opener hiding rows"
 blocks '## Edge cases\n    ```\n- huge' "4-space-indented fence hiding rows"
 blocks '## Edge cases\n- empty → C1\n#huge' "#-prefixed paragraph in the matrix"
-for h in '## Edge case' '## Edge-cases' '## Edgecases'; do
-  blocks "$h\n- huge" "near-miss heading '$h'"
-done
 blocks '## Edge cases\n<!-- a --> <!--\n- huge\n-->' "comment opener after a closed comment"
 blocks '## Edge cases\n- → C1' "row with no case text"
 blocks '## Edge cases\n<!-->\n- huge →\n-->' "<!--> closes on its own line"
@@ -88,8 +81,11 @@ seals && bad "<!--> outside the matrix hid an H1 matrix" || ok "<!--> outside th
 printf "$head"'## Goal\n<!-->\n\n## Edge cases\n- huge → C1\n' >"$I"
 seals && ok "<!--> before the matrix leaves a mapped row sealable" || bad "<!--> swallowed the heading: $(cat "$SB/out")"
 blocks '## Edge  cases\n- huge' "double-spaced heading"
-blocks '## Edge cases\n- empty → C1\n\n## Notes\nEdge cases\n----------\n- huge' "setext Edge cases heading"
-blocks '## Edge cases\n- empty → C1\n\n## Notes\n<h2>Edge cases</h2>\n- huge' "html h2 Edge cases heading"
+# lookalikes are not the matrix: an INTENT without "## Edge cases" seals as before
+for body in '### Hedge cases first' '<!--\n## Edge cases\n-->' '```md\n## Edge cases\n```' '```yaml\nname: edge cases\n---\n```' '## Edge cases (v2)\n- huge'; do
+  printf "$head$body"'\n' >"$I"
+  seals && ok "no matrix: $(printf "$body" | head -n1) seals" || bad "lookalike refused: $body: $(cat "$SB/out")"
+done
 printf '# Intent · x\n\n## Non-goals\n- other edge cases in the lexer\n\n---\n\n## Acceptance checks\n- [ ] C1 · works\n' >"$I"
 seals && ok "a --- rule after a list item that mentions edge cases is not a heading" || bad "rule refused: $(cat "$SB/out")"
 printf "$head"'## Edge cases\n- huge → C1\n\n## Notes\nsee edge cases\n\n---\n' >"$I"
@@ -98,8 +94,6 @@ for h in '## Edge cases:' '## Edge cases ##'; do
   printf "$head$h"'\n- huge → C1\n' >"$I"
   seals && ok "'$h' is the matrix: a mapped row seals" || bad "'$h' with a mapped row refused: $(cat "$SB/out")"
 done
-blocks '## Edge cases\n- empty → C1\n\n## Edge cases (security)\n- unauthorized →' "decorated second heading next to the exact one"
-blocks '## Edge cases\n- empty → C1\n\n## Goal\n### Edge cases\n- huge' "### Edge cases inside another section"
 blocks '## Edge cases\n<!-- note --> - huge →' "text after a one-line comment"
 blocks '## Edge cases\n<!-- note\nmore --> - huge →' "text after a closing -->"
 printf "$head"'## Edge cases\n- ≥10k rows → C1\n- “quoted” → C1\n' >"$I"
@@ -108,9 +102,6 @@ printf '# Intent · fix edge case in parser\n\n## Acceptance checks\n- [ ] C1 ·
 seals && ok "an H1 title mentioning an edge case seals as before" || bad "legacy title refused: $(cat "$SB/out")"
 blocks '## Edge cases\n- empty → C1\n  ```\n- huge\n  ```' "fence indented under a row"
 blocks '## Edge cases\n- empty → C1\n```x``` note\n- huge\n```' "backtick line that is not a fence"
-for h in '## 3. Edge cases' '## **Edge cases**' '## `Edge cases`' '## The edge cases'; do
-  blocks "$h\n- huge" "decorated heading '$h'"
-done
 printf "$head"'## Edge cases\n<!--\n```\n-->\n- empty → C1\n' >"$I"
 seals && ok "fence marker inside a comment opens nothing" || bad "comment fence refused: $(cat "$SB/out")"
 printf "$head"'## Edge cases\n- a→b transition → C1\n' >"$I"

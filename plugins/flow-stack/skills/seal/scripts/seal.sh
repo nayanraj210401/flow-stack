@@ -37,13 +37,12 @@ sha() { shasum -a 256 <"$1" | cut -d' ' -f1; }
 unmapped() {
   [ -f "$FLOW_TASK_DIR/INTENT.md" ] || return 0
   awk '
-    # Fail closed: once an INTENT has an edge-cases-like heading, the "## Edge cases" section is a whitelist:
-    # list rows, blank lines, and comments that open at column 0 (the template form). Any other fence or
-    # comment marker there is refused, as is an unclosed fence or comment anywhere, since either could hide rows.
-    { l = $0; sub(/\r$/, "", l); if (tolower(l) ~ /^[ \t]*(#+[ \t]*edge[ \t_-]*cases?|##.*edge[ \t_-]*cases?)|^[ \t]*<h[1-6][^>]*>.*edge[ \t_-]*cases?/ \
-          || (l ~ /^ ? ? ?(-+|=+)[ \t]*$/ && tolower(prev) ~ /edge[ \t_-]*cases?/)) { has = 1; like++ }
-      # a setext underline follows paragraph text directly: a blank line or a list item breaks it
-      prev = (l ~ /^[ \t]*$/ || l ~ /^[ \t]*([-*+]|[0-9]+[.)])[ \t]/) ? "" : l }
+    # The gate is on when INTENT has a "## Edge cases" heading outside fences and comments (a trailing ":" or "##"
+    # is fine). That section is a whitelist: list rows, blank lines, and comments that open at column 0 (the
+    # template form). Any other fence or comment marker there is refused, as is an unclosed fence or comment
+    # anywhere, since either could hide rows. Lookalike headings are not guessed at: renaming or deleting the
+    # section turns the gate off either way, and the reviewer sees that in the diff.
+    { l = $0; sub(/\r$/, "", l) }
     sec == "edge cases" && l !~ /^##?[ \t]/ {
       # text after a closing --> is visible, so it must be empty
       if (ecm) { if ((i = index(l, "-->"))) { ecm = 0; if (substr(l, i + 3) ~ /[^ \t]/) bad[++nb] = l }; next }
@@ -66,14 +65,13 @@ unmapped() {
       }
     }
     l ~ /^ ? ? ?(```|~~~)/ { match(l, /(```|~~~)/); fm = substr(l, RSTART, 3); next }
-    l ~ /^##?[ \t]/ { sec = tolower(l); sub(/^#+[ \t]+/, "", sec); sub(/[ \t#:]+$/, "", sec); gsub(/[ \t]+/, " ", sec); if (sec == "edge cases") seen++; next }
+    l ~ /^##?[ \t]/ { sec = tolower(l); sub(/^#+[ \t]+/, "", sec); sub(/[ \t#:]+$/, "", sec); gsub(/[ \t]+/, " ", sec); if (sec == "edge cases") has = 1; next }
     l ~ /^[ \t]*$/ { next }
     sec == "acceptance checks" && l ~ /^[ \t]*- \[.\] C[0-9]+/ { match(l, /C[0-9]+/); ids[substr(l, RSTART, RLENGTH)] = 1 }
     END {
       if (has && fm != "") print "unclosed " fm " fence: it could hide edge-case rows"
       if (has && (cm || ecm)) print "unclosed <!-- comment: it could hide edge-case rows"
       for (i = 1; i <= nb; i++) print bad[i] "  (a fence or comment marker inside Edge cases; keep rows plain)"
-      if (has && like > seen) print "an edge-cases heading that is not exactly \"## Edge cases\": rename it so its rows are checked"
       for (i = 1; i <= n; i++) {
         t = rows[i]; ok = 0
         # [^ \t] then a separate → test: a byte class would refuse case text starting with any multi-byte character
