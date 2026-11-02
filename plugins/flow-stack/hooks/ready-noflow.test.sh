@@ -81,6 +81,12 @@ is allow plain 'git commit -m "tidy {gh pr edit} docs"'
 is deny plain 'gh issue new -t x -b y'
 is allow plain "gh api graphql -f query='query { viewer { login } }'"
 is deny plain "gh api graphql -f query='mutation { addComment(input: {}) { clientMutationId } }'"
+is deny plain 'gh api -X=DELETE repos/o/r/git/refs/heads/main'
+is deny plain 'gh api graphql -F query=@q.graphql'
+is deny plain 'gh api graphql -f query="$Q"'
+is deny plain 'gh api graphql --input body.json'
+is deny plain "$(printf 'cat <<-EOF\n\tx\n\tEOF\ngh pr comment 1 -b x')"
+is deny plain "$(printf 'tr a b <<<"hello"\ngh pr comment 1 -b x')"
 RUNNER_TEMP="$SB" GITHUB_ACTIONS=true GITHUB_RUN_ID=1 RUNNER_ENVIRONMENT=github-hosted is allow ship 'gh pr review 1 --comment --body ok'
 
 echo "-- --auto ship with a stamped HEAD: the REST twins of gh pr create/ready pass (cloud has no GraphQL)"

@@ -227,10 +227,11 @@ fi
 #     time, timeout, nice, nohup, xargs, sudo, exec) with any flags of its own. Case-insensitive: case-insensitive
 #     filesystems run GH as gh. A commit message that mentions it mid-sentence passes.
 code="$(awk -v q="'" '
-  hd != "" { if ($0 == hd) hd = ""; next }
+  hd != "" { t = $0; if (dash) sub(/^\t+/, "", t); if (t == hd) hd = ""; next }
   { print
-    if (match($0, "<<-?[ \t]*[\"" q "]?[A-Za-z_][A-Za-z0-9_]*")) {
-      hd = substr($0, RSTART, RLENGTH); sub("<<-?[ \t]*[\"" q "]?", "", hd) } }' <<<"$cmd")"
+    # <<<word is a here-string, not a heredoc; <<- lets the terminator be tab-indented
+    if (match($0, "(^|[^<])<<-?[ \t]*[\"" q "]?[A-Za-z_][A-Za-z0-9_]*")) {
+      hd = substr($0, RSTART, RLENGTH); dash = hd ~ /<<-/; sub("^[^<]?<<-?[ \t]*[\"" q "]?", "", hd) } }' <<<"$cmd")"
 lead='(^|[;&|({]|(^|[;&|({[:space:]])(eval|command|env|time|timeout|nice|nohup|xargs|sudo|exec|(ba|z|da|k)?sh)([[:space:]][^;&|]*)?[[:space:]])'
 lead="$lead"'[[:space:]]*((if|then|elif|else|do|while|until|!)[[:space:]]+|[A-Za-z_][A-Za-z0-9_]*=([^[:space:]]*|"[^"]*"|'"'"'[^'"'"']*'"'"')[[:space:]]+)*([$]?["'"'"'])?'
 cend='([[:space:];&|)]|$)'
@@ -364,11 +365,11 @@ fi
 gh_writes() { # gh writes in $cmd, judged on shell words (quotes and escapes resolved), one command at a time
   # a heredoc body is data unless a shell runs it (bash <<EOF, ssh host <<EOF), as in stop.sh
   awk -v q="'" '
-    hd != "" { if ($0 == hd) hd = ""; else if (run) print; next }
+    hd != "" { t = $0; if (dash) sub(/^\t+/, "", t); if (t == hd) hd = ""; else if (run) print; next }
     { print
-      if (match($0, "<<-?[ \t]*[\"" q "]?[A-Za-z_][A-Za-z0-9_]*")) {
-        run = substr($0, 1, RSTART - 1) ~ /(^|[;&|( \t\/])(bash|sh|zsh|ksh|dash|ssh)([ \t]|$)/
-        hd = substr($0, RSTART, RLENGTH); sub("<<-?[ \t]*[\"" q "]?", "", hd) } }' <<<"$cmd" |
+      if (match($0, "(^|[^<])<<-?[ \t]*[\"" q "]?[A-Za-z_][A-Za-z0-9_]*")) {
+        run = substr($0, 1, RSTART) ~ /(^|[;&|( \t\/])(bash|sh|zsh|ksh|dash|ssh)([ \t]|$)/
+        hd = substr($0, RSTART, RLENGTH); dash = hd ~ /<<-/; sub("^[^<]?<<-?[ \t]*[\"" q "]?", "", hd) } }' <<<"$cmd" |
   awk -v q="'" "$split_awk"'
     # unbt(s): an unquoted `…` is a command of its own, so it becomes one (split_cmds splits only `…` inside "…")
     function unbt(s,   i, c, o, sq, dq) {
@@ -403,12 +404,14 @@ gh_writes() { # gh writes in $cmd, judged on shell words (quotes and escapes res
           else if (w ~ /^-[^-]/) {
             # grouped short flags: -iXPOST, -iX DELETE, -if body=x
             for (j = 2; j <= length(w); j++) { c = substr(w, j, 1); r = substr(w, j + 1)
-              if (c == "X") { m = toupper(r != "" ? r : T[++k]); break }
+              if (c == "X") { m = r != "" ? r : T[++k]; sub(/^=/, "", m); m = toupper(m); break }
               if (c ~ /[fF]/) { f = 1; if (r == "") k++; break }
               if (c ~ /[Hpqt]/) { if (r == "") k++; break } }
           } else if (w !~ /^-/ && ep == "") ep = lw
         }
-        for (j = start; j < i; j++) if (tolower(T[j]) ~ /(^|[^a-z])mutation([^a-z]|$)/) mut = 1
+        # a GraphQL call is a read only when every value is literal text without "mutation": a file (@q), a variable,
+        # a substitution or --input could carry one
+        for (j = start; j < i; j++) if (tolower(T[j]) ~ /(^|[^a-z])mutation([^a-z]|$)/ || T[j] ~ /[@$`]|^--input(=|$)/) mut = 1
         if (noun == "api" && (m ~ /^(POST|PATCH|PUT|DELETE|\$)/ || (f && m != "GET" && (ep != "graphql" || mut)))) return 1
         if (noun ~ /^(pr|issue)$/ && verb ~ /^(comment|review|edit|close|reopen|lock|delete|transfer)$/) return 1
         if (noun == "issue" && verb ~ /^(create|new)$/) return 1
