@@ -242,8 +242,7 @@ pr_cmd="$(grep -Ei "$lead"'gh'"$gopt"'[[:space:]]+pr[[:space:]]+(create|ready)'"
 # a comment. Fails closed: when the line starts gh pr create|ready (in a command position, as above, or after a
 # backtick) more often than the split found commands ("$(…)", another interpreter), it is not a draft. Only code
 # is counted: quoted titles, bodies and messages that name the command are text.
-pr_drafts() {
-  awk -v q="'" -v said="(\`|$lead)gh$gopt[[:space:]]+pr[[:space:]]+(create|ready)" '
+split_awk='
     # split_cmds(s): tokens T with kinds K (w | bad | op), the part of each word the shell runs as code C (unquoted
     # text, and $(…) or `…` inside "…"; nothing from single-quoted text), and CS set when C holds such a substitution
     function split_cmds(s, T, K, C, CS,   i, j, c, ch, e, n, w, wc, has, bad, L, sub_, bt, nq, sq, code, cs) {
@@ -260,7 +259,7 @@ pr_drafts() {
             if (!code && ch == e) break
             # inside $(…) or `…`, quotes nest; that code is kept as written and checked as a script of its own
             if (sq) { if (ch == q) sq = 0; wc = wc ch; w = w ch; continue }
-            # "…" drops a backslash only before $ ` " \ newline; $'…' always does
+            # "…" drops a backslash only before $ ` " \ newline; ANSI-C quoting ($ then a single quote) always does
             if (ch == "\\" && (e == q || index("$`\"\\\n", substr(s, i + 1, 1)))) { ch = substr(s, ++i, 1); if (code) wc = wc ch }
             else if (code && ch == q) { sq = 1; wc = wc ch }
             else if (code && ch == "\"") { nq = !nq; wc = wc ch }
@@ -279,6 +278,9 @@ pr_drafts() {
       if (has) { T[++n] = w; K[n] = bad ? "bad" : "w"; C[n] = wc; CS[n] = cs }
       return n
     }
+'
+pr_drafts() {
+  awk -v q="'" -v said="(\`|$lead)gh$gopt[[:space:]]+pr[[:space:]]+(create|ready)" "$split_awk"'
     # check(s): adds to found / nondraft for each gh pr create|ready command in s, recursing into every word after
     # eval, after a -c option of sh, and into the substitutions in "…". Returns the code in s for the fail-closed count: each word keeps only its code
     # part, and a recursed word is replaced by its own check.
@@ -375,7 +377,40 @@ gh_writes() { # each command in a chain or a substitution is judged alone, so a 
   # separators and substitutions inside quotes don't split a command; inside single quotes nothing substitutes
   done < <(perl -pe 's{(\x27[^\x27]*\x27)}{($1 =~ tr/;&|`()/       /r)}ge; s{("(?:[^"\\]|\\.)*")}{($1 =~ tr/;&|/   /r)}ge' <<<"$code" |
     sed -E 's/\$\(|`|[<>]\(|\)/\n/g' | tr ';&|' '\n\n\n')
-  return 1
+  # the same command split into shell words (quotes and escapes resolved, eval / sh -c / "$(…)" recursed), as
+  # pr_drafts does: a quoting trick that hides a write from the regexes above can't hide it from this
+  awk -v q="'" "$split_awk"'
+    function wr(s,   T, K, C, CS, n, i, k, start, g, noun, verb, m, f, ev, sh, w, lw) {
+      n = split_cmds(s, T, K, C, CS); start = 1
+      for (i = 1; i <= n + 1; i++) {
+        if (i <= n && K[i] != "op") continue
+        g = 0; noun = verb = m = ""; f = ev = sh = 0
+        for (k = start; k < i; k++) {
+          if (K[k] == "op") continue
+          if (ev || sh > 1) { if (wr(T[k])) return 1 } else if (CS[k] && wr(C[k])) return 1
+          w = T[k]; lw = tolower(w)
+          if (lw == "eval") ev = 1
+          if (w ~ /^(ba|z|da|k)?sh$/ || w ~ /\/(ba|z|da|k)?sh$/) sh = 1; else if (sh && w ~ /^-[A-Za-z]*c[A-Za-z]*$/) sh = 2
+          if (!g) { if (w == "gh" || w ~ /\/gh$/) g = 1; continue }
+          if (noun == "") { if (lw ~ /^(api|pr|issue)$/) noun = lw; continue }
+          if (noun == "api") {
+            if (w ~ /^(-X|--method)$/ && k + 1 < i) m = toupper(T[++k])
+            else if (w ~ /^-X./) m = toupper(substr(w, 3))
+            else if (w ~ /^--method=/) m = toupper(substr(w, 10))
+            else if (w ~ /^(-[fF]|--field|--raw-field|--input)/) f = 1
+          } else if (verb == "") {
+            if (w ~ /^(-R|--repo)$/) k++; else if (w !~ /^-/) verb = lw
+          }
+        }
+        if (noun == "api" && (m ~ /^(POST|PATCH|PUT|DELETE|\$)/ || (f && m != "GET"))) return 1
+        if (noun ~ /^(pr|issue)$/ && verb ~ /^(comment|review|edit|close|reopen|lock|delete|transfer)$/) return 1
+        if (noun == "issue" && verb == "create") return 1
+        start = i + 1
+      }
+      return 0
+    }
+    { all = all $0 "\n" }
+    END { exit !wr(all) }' <<<"$code"
 }
 if flow_auto && ! flow_on_runner && gh_writes; then
   rest_pr='^gh api( (-X|--method) POST)? repos/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+/pulls(/[0-9]+/ccr/ready_for_review)?( -[fF] [A-Za-z0-9_]+=[A-Za-z0-9._/-]*)*$'
