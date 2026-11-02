@@ -34,7 +34,7 @@ jobs:
             have="$(gh label list --limit 1000 --json name --jq '.[].name')"
             for l in $labels; do grep -qixF "$l" <<<"$have" || gh label create "$l" >/dev/null || echo "label $l not created"; done
           fi
-@CLONE@
+@SETUP@
       # A fresh runner installs the plugin on every run: the marketplace's default branch, or the clone pinned above
       - uses: anthropics/claude-code-action@v1
         id: claude
