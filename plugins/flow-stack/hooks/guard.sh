@@ -358,18 +358,21 @@ fi
 # verbs (labels, secrets, workflows, releases, repo settings) aren't covered here. A runner's token is already
 # bounded by the workflow's grants, and the routines rely on these writes there.
 gh_api='gh'"$gopt"'[[:space:]]+api([[:space:]][^;&|]*)?'
-gh_method_write="$lead$gh_api"'[[:space:]](-X|--method)[[:space:]]*=?[[:space:]]*(POST|PATCH|PUT|DELETE)'
+gh_method_write="$lead$gh_api"'[[:space:]](-X|--method)[[:space:]]*=?[[:space:]]*(POST|PATCH|PUT|DELETE|\$)'
 gh_fields="$lead$gh_api"'[[:space:]](-[fF]|--field|--raw-field|--input)'
 gh_get="$lead$gh_api"'[[:space:]](-X|--method)[[:space:]]*=?[[:space:]]*GET([[:space:];&|]|$)'
-gh_verb="$lead"'gh'"$gopt"'[[:space:]]+((issue|pr)([[:space:]]+-[A-Za-z-]+([[:space:]=]+[^-[:space:]][^[:space:]]*)?)*[[:space:]]+(comment|review|edit|close|reopen|lock|delete|transfer)|issue[[:space:]]+create)'
+gh_flags='([[:space:]]+-[A-Za-z-]+([[:space:]=]+[^-[:space:]][^[:space:]]*)?)*' # e.g. -R o/r between the noun and the verb
+gh_verb="$lead"'gh'"$gopt"'[[:space:]]+((issue|pr)'"$gh_flags"'[[:space:]]+(comment|review|edit|close|reopen|lock|delete|transfer)|issue'"$gh_flags"'[[:space:]]+create)'
 gh_writes() { # each command in a chain or a substitution is judged alone, so a GET in one can't excuse a write in another
   local seg
   while IFS= read -r seg; do
     # a quoted method (-X "DELETE") is still a write
     grep -Eiq "$gh_verb" <<<"$seg" || tr -d "\"'" <<<"$seg" | grep -Eiq "$gh_method_write" && return 0
     # a -X GET counts only outside quoted values (escapes dropped first) and outside a # comment
-    grep -Eiq "$gh_fields" <<<"$seg" && ! sed -E "s/\\\\.//g; s/'[^']*'//g; s/\"[^\"]*\"//g; s/(^|[[:space:]])#.*//" <<<"$seg" | grep -Eiq "$gh_get" && return 0
-  done < <(sed -E 's/\$\(|`|[<>]\(|\)/\n/g' <<<"$code" | tr ';&|' '\n\n\n')
+    grep -Eiq "$gh_fields" <<<"$seg" && ! sed -E "s/'[^']*'//g; s/\\\\.//g; s/\"[^\"]*\"//g; s/(^|[[:space:]])#.*//" <<<"$seg" | grep -Eiq "$gh_get" && return 0
+  # separators and substitutions inside quotes don't split a command; inside single quotes nothing substitutes
+  done < <(perl -pe 's{(\x27[^\x27]*\x27)}{($1 =~ tr/;&|`()/       /r)}ge; s{("(?:[^"\\]|\\.)*")}{($1 =~ tr/;&|/   /r)}ge' <<<"$code" |
+    sed -E 's/\$\(|`|[<>]\(|\)/\n/g' | tr ';&|' '\n\n\n')
   return 1
 }
 if flow_auto && ! flow_on_runner && gh_writes; then
