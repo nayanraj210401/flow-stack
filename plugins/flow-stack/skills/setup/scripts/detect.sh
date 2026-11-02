@@ -49,7 +49,9 @@ if [ -n "$root" ]; then
   routine self-create monitor
   row triage planned "#185 triage, #186 ideate"
   row spec ok "intent + seal (plugin); edge-case matrix planned #187"
-  routine self-heal implement "flow --auto works in a session"
+  # self-heal (issues) or mention (@claude) runs the build unattended
+  s=""; wf self-heal && s=self-heal; wf mention && s="${s:+$s + }mention"
+  [ -n "$s" ] && row implement ok "$s routine" || row implement missing "make-routines: self-heal or mention (flow --auto works in a session)"
   # The same check that gates --auto ship and self-heal, on this checkout (a worktree included)
   . "$(dirname "$0")/../../../hooks/lib.sh"
   if miss="$(factory_ready "$FLOW_ROOT")"; then ready=1; row verify ok "committed verify driver + a feature with a scenario"; else ready=""; row verify missing "${miss:-factory_ready failed}"; fi

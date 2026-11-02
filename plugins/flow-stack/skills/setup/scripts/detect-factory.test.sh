@@ -50,6 +50,12 @@ out="$("$D")"
 want implement missing make-routines
 rm .github/routines/self-heal.md .github/workflows/flow-self-heal.yml
 
+echo "-- a committed mention routine serves implement"
+mkdir -p .github/workflows && touch .github/workflows/flow-mention.yml && git add .github/workflows/flow-mention.yml && git commit -qm mention
+out="$("$D")"
+want implement ok mention
+git rm -q .github/workflows/flow-mention.yml && git commit -qm unmention
+
 echo "-- committed driver + scenario, all routines"
 touch .claude/skills/verify-toy/SKILL.md
 mkdir -p .github/workflows
