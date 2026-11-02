@@ -35,6 +35,8 @@ is allow 'cp "src/app.sh" notes.md'
 is block "sed -i '' 's/a/b/' \"Makefile\" notes.md"
 is block "sed -i '' 's/a/b/' 'bin/run' notes.md"
 is block 'mv "build.sh" notes.md'
+is allow 'mv ".flow/ready.tsv.new" ".flow/ready.tsv"'
+is allow 'mv "notes.md.new" "notes.md"'
 is allow "sed -i '' 's/a/b/' \"notes.md\""
 is block "sed -i '' 's/a/b/' src/app.sh"
 is block "sed -i '' 's/a/b/' README.md src/app.sh"

@@ -227,11 +227,13 @@ fi
 #     time, timeout, nice, nohup, xargs, sudo, exec) with any flags of its own. Case-insensitive: case-insensitive
 #     filesystems run GH as gh. A commit message that mentions it mid-sentence passes.
 code="$(awk -v q="'" '
-  hd != "" { t = $0; if (dash) sub(/^\t+/, "", t); if (t == hd) hd = ""; next }
+  hd != "" { t = $0; if (dash) sub(/^\t+/, "", t); if (t == hd) { hd = ""; body = "" } else body = body $0 "\n"; next }
   { print
-    # <<<word is a here-string, not a heredoc; <<- lets the terminator be tab-indented
+    # <<<word is a here-string, not a heredoc; <<- lets the terminator be tab-indented. A heredoc that never
+    # ends was no heredoc (a <<WORD in quotes, a comment or $((1<<X))), so its lines are code after all.
     if (match($0, "(^|[^<])<<-?[ \t]*[\"" q "]?[A-Za-z_][A-Za-z0-9_]*")) {
-      hd = substr($0, RSTART, RLENGTH); dash = hd ~ /<<-/; sub("^[^<]?<<-?[ \t]*[\"" q "]?", "", hd) } }' <<<"$cmd")"
+      hd = substr($0, RSTART, RLENGTH); dash = hd ~ /<<-/; sub("^[^<]?<<-?[ \t]*[\"" q "]?", "", hd) } }
+  END { printf "%s", body }' <<<"$cmd")"
 lead='(^|[;&|({]|(^|[;&|({[:space:]])(eval|command|env|time|timeout|nice|nohup|xargs|sudo|exec|(ba|z|da|k)?sh)([[:space:]][^;&|]*)?[[:space:]])'
 lead="$lead"'[[:space:]]*((if|then|elif|else|do|while|until|!)[[:space:]]+|[A-Za-z_][A-Za-z0-9_]*=([^[:space:]]*|"[^"]*"|'"'"'[^'"'"']*'"'"')[[:space:]]+)*([$]?["'"'"'])?'
 cend='([[:space:];&|)]|$)'
@@ -365,13 +367,14 @@ fi
 gh_writes() { # gh writes in $cmd, judged on shell words (quotes and escapes resolved), one command at a time
   # a heredoc body is data unless a shell runs it (bash <<EOF, ssh host <<EOF), as in stop.sh
   awk -v q="'" '
-    hd != "" { t = $0; if (dash) sub(/^\t+/, "", t); if (t == hd) hd = ""; else if (run) print; next }
+    hd != "" { t = $0; if (dash) sub(/^\t+/, "", t); if (t == hd) { hd = ""; body = "" } else if (run) print; else body = body $0 "\n"; next }
     { print
       if (match($0, "(^|[^<])<<-?[ \t]*[\"" q "]?[A-Za-z_][A-Za-z0-9_]*")) {
         # the shell must be in the same command as the heredoc (cat <<EOF | bash), not a later one (…; ls /bin/sh)
         a = substr($0, 1, RSTART); sub(/.*[;&]/, "", a); b = substr($0, RSTART + RLENGTH); sub(/[;&].*/, "", b)
         run = (a b) ~ /(^|[|( \t\/"])(bash|sh|zsh|ksh|dash|ssh|\$SHELL|\$\{SHELL\})(["]?[ \t]|["]?$)/
-        hd = substr($0, RSTART, RLENGTH); dash = hd ~ /<<-/; sub("^[^<]?<<-?[ \t]*[\"" q "]?", "", hd) } }' <<<"$cmd" |
+        hd = substr($0, RSTART, RLENGTH); dash = hd ~ /<<-/; sub("^[^<]?<<-?[ \t]*[\"" q "]?", "", hd) } }
+    END { printf "%s", body }' <<<"$cmd" |
   awk -v q="'" "$split_awk"'
     # unbt(s): an unquoted `…` is a command of its own, so it becomes one (split_cmds splits only `…` inside "…").
     # Each backtick also stays in the words around it, so a word cut by one (gh p`echo r` …) still reads as computed.
@@ -384,40 +387,44 @@ gh_writes() { # gh writes in $cmd, judged on shell words (quotes and escapes res
       return o
     }
     # wr(s): 1 when s holds a gh command that is not a known read. An allowlist, so a spelling nobody listed is held:
-    # a read is a literal list/view/status/diff/checks/checkout/clone/download/watch/search/browse, or gh api with no
-    # method but GET/HEAD and no fields (GraphQL: a literal query without "mutation"). A $ or a backtick in any word
-    # but the api endpoint or a -R/--jq/--search value makes it computed, and held. gh pr create/ready/merge and gh
-    # release create belong to rule 4. eval, sh -c and substitutions are checked as scripts of their own.
-    function wr(s,   T, K, C, CS, n, i, k, j, c, r, start, g, noun, verb, ep, m, f, mut, ev, sh, w, lw, pre, comp, val) {
+    # a read is a literal list/view/status/diff/checks/checkout/download/watch/search/browse (clone: repo only), or
+    # gh api with no method but GET/HEAD and no fields (GraphQL: a literal query without "mutation"). gh counts
+    # wherever it stands in a command (if ! gh …, xargs -I {} gh …, sudo -u bob gh …), unless a lookup names it
+    # (which gh, brew install gh); a computed first word followed by pr/issue/api ("$GH" pr …) counts too. A $ or
+    # a backtick in the noun or verb (in gh api: the method, a flag position, or the start of the endpoint) is held;
+    # after a literal read verb it is only an argument. gh pr create/ready/merge and gh release create belong to
+    # rule 4. eval, sh -c and every substitution, flag values included, are checked as scripts of their own.
+    function wr(s,   T, K, C, CS, n, i, k, j, c, r, start, g, look, noun, verb, ep, m, f, mut, ev, sh, w, lw, comp, hlp) {
       n = split_cmds(unbt(s), T, K, C, CS); start = 1
       for (i = 1; i <= n + 1; i++) {
         if (i <= n && K[i] != "op") continue
-        g = 0; pre = 1; noun = verb = ep = m = ""; f = mut = ev = sh = comp = 0
+        for (j = start; j < i; j++) if (K[j] != "op" && CS[j] && wr(C[j])) return 1
+        g = look = hlp = 0; noun = verb = ep = m = ""; f = mut = ev = sh = comp = 0
         for (k = start; k < i; k++) {
           if (K[k] == "op") continue
-          if (ev || sh > 1) { if (wr(T[k])) return 1 } else if (CS[k] && wr(C[k])) return 1
-          w = T[k]; lw = tolower(w); val = 0
+          if (ev || sh > 1) { if (wr(T[k])) return 1 }
+          w = T[k]; lw = tolower(w)
           if (lw == "eval") ev = 1
           if (w ~ /^(ba|z|da|k)?sh$/ || w ~ /\/(ba|z|da|k)?sh$/) sh = 1; else if (sh && w ~ /^-[A-Za-z]*c[A-Za-z]*$/) sh = 2
           if (!g) {
-            # gh runs when it leads the command, or follows only wrappers, their flags and VAR=value (xargs gh pr …)
-            if ((lw == "gh" || lw ~ /\/gh$/) && pre) g = 1
-            else if (w ~ /^-[vV]$/ && tolower(T[k - 1]) == "command") pre = 0
-            else if (lw !~ /^(xargs|env|sudo|command|time|nice|nohup|exec|timeout|-.*|[0-9]+|[a-z_][a-z0-9_]*=.*)$/) pre = 0
+            if (lw ~ /^(which|type|hash|whereis|man|brew|apt|apt-get|dnf|yum|pacman|port|nix|apk)$/ || (lw ~ /^-[vV]$/ && tolower(T[k - 1]) == "command")) look = 1
+            if ((lw == "gh" || lw ~ /\/gh$/) && !look) g = 1
+            else if (k == start && w ~ /[$`]/ && k + 1 < i && tolower(T[k + 1]) ~ /^(pr|issue|api)$/) { g = 1 }
             continue }
           if (w ~ /^(-R|--repo|--jq|-q|--search|-S|--template|-t)$/ && k + 1 < i) { k++; continue }
-          # an endpoint may hold a variable after a literal prefix (repos/$REPO/…), never be one
-          if (w ~ /[$`]/ && !(noun == "api" && ep == "" && w !~ /^[-$`]/)) comp = 1
-          if (noun == "") { if (w !~ /^-/) noun = lw; else if (lw ~ /^--?(version|help|h)$/) noun = "help"; continue }
-          if (noun != "api") { if (verb == "" && w !~ /^-/) verb = lw; continue }
+          if (w ~ /^(--help|-h)$/) hlp = 1
+          if (noun == "") { if (w ~ /[$`]/) comp = 1; if (w !~ /^-/) noun = lw; else if (w ~ /^(--version|--help|-h)$/) noun = "help"; continue }
+          if (noun != "api") { if (verb == "" && w !~ /^-/) { verb = lw; if (w ~ /[$`]/) comp = 1 }; continue }
+          # gh api: a flag position, the method or the start of the endpoint may not be computed
+          if (w ~ /^[$`]/ || (w ~ /^-/ && w ~ /[$`]/)) comp = 1
           if (w ~ /^--method=/) m = toupper(substr(w, 10))
-          else if (w == "--method") m = toupper(T[++k])
+          else if (w == "--method") { m = toupper(T[++k]); if (m ~ /[$`]/) comp = 1 }
           else if (w ~ /^--(field|raw-field|input)(=|$)/) { f = 1; if (w !~ /=/) k++ }
           else if (w ~ /^--(header|preview|cache|hostname)$/) k++
           else if (w ~ /^-[^-]/) {
             # grouped short flags: -iXPOST, -iX DELETE, -if body=x
             for (j = 2; j <= length(w); j++) { c = substr(w, j, 1); r = substr(w, j + 1)
-              if (c == "X") { m = r != "" ? r : T[++k]; sub(/^=/, "", m); m = toupper(m); break }
+              if (c == "X") { m = r != "" ? r : T[++k]; sub(/^=/, "", m); if (m ~ /[$`]/) comp = 1; m = toupper(m); break }
               if (c ~ /[fF]/) { f = 1; if (r == "") k++; break }
               if (c ~ /[Hpqt]/) { if (r == "") k++; break } }
           } else if (ep == "") ep = lw
@@ -425,9 +432,10 @@ gh_writes() { # gh writes in $cmd, judged on shell words (quotes and escapes res
         if (g) {
           for (j = start; j < i; j++) if (tolower(T[j]) ~ /(^|[^a-z])mutation([^a-z]|$)/ || T[j] ~ /[@$`]|^--input(=|$)/) mut = 1
           if (comp) return 1
+          if (hlp) { start = i + 1; continue }
           if (noun == "api") { if ((m != "" && m !~ /^(GET|HEAD)$/) || (f && m == "" && (ep != "graphql" || mut))) return 1 }
-          else if (!(noun ~ /^(help|version)$/ || (noun == "auth" && verb ~ /^(status|token)$/) \
-                     || verb ~ /^(list|view|status|diff|checks|checkout|clone|download|watch|search|browse|help)$/ \
+          else if (!(noun ~ /^(help|version|status|browse|search)$/ || (noun == "auth" && verb ~ /^(status|token)$/) \
+                     || verb ~ /^(list|view|status|diff|checks|checkout|download|watch|search|browse|help)$/ || (noun == "repo" && verb == "clone") \
                      || (noun == "pr" && verb ~ /^(create|ready|merge)$/) || (noun == "release" && verb == "create"))) return 1
         }
         start = i + 1
