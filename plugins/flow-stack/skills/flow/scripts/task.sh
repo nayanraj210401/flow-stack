@@ -85,11 +85,11 @@ words() {
 # name, its what:, and its feature map's title: and owns: lines; only words unique to one repo count.
 # Prints one line: repo<TAB>name<TAB>path · workspace<TAB>name · ask<TAB>question
 route() {
-  local req="$1" tmp n p hit=() ws best="" bn=0 k cands=""
+  local req="${1//[$'\n\r\t']/ }" tmp n p hit=() ws best="" bn=0 k cands=""
   tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' RETURN
   while IFS= read -r n; do
     p="$(repo_field "$n" path)"; p="${p/#\~/$HOME}"
-    { echo "$n $(repo_field "$n" what)"; grep -hE '^(title|owns):' "$p"/.flow/features/*.md 2>/dev/null || true; } | words >"$tmp/r.$n"
+    { echo "$n $(repo_field "$n" what)"; sed -nE 's/^(title|owns):[[:space:]]*//p' "$p"/.flow/features/*.md 2>/dev/null || true; } | words >"$tmp/r.$n"
   done < <(section_names Repos)
   cat "$tmp"/r.* 2>/dev/null | sort | uniq -u >"$tmp/unique"
   printf '%s' "$req" | words >"$tmp/req"
