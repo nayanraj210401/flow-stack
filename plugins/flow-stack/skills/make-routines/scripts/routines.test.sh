@@ -1,78 +1,59 @@
 #!/usr/bin/env bash
-# routines.test.sh: the ready stamp travels as a flow/ready check run. A routine that pushes posts it on the self-heal
-# PR head it stamped and marks that draft ready; a pull_request routine skips a head that has one. The steps are run
-# from the rendered workflow against a fake gh.
+# routines.test.sh: the mention routine renders a workflow that installs the plugin before the agent step, runs
+# flow --auto ship, and refuses a commenter without write access; the catalog lists it; this repo's routines
+# still render byte-identical.
 set -uo pipefail
-H="$(cd "$(dirname "$0")" && pwd)"
+D="$(cd "$(dirname "$0")" && pwd)"
+S="$D/routines.sh"
 FAILS=0
 ok()  { echo "  ✓ $*"; }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
+
 SB="$(mktemp -d "${TMPDIR:-/tmp}/routines.XXXXXX")"; trap 'rm -rf "$SB"' EXIT
-mkdir -p "$SB/repo/.github/routines" "$SB/bin" && cd "$SB/repo" && git init -q
-cp "$H/../templates/self-heal.md" "$H/../templates/review.md" "$H/../templates/self-create.md" .github/routines/
-# auto-merge pushes (contents) but isn't self-heal: it must not post flow/ready. It is this repo's routine, not a template.
-am="$(git -C "$H" rev-parse --show-toplevel)/.github/routines/auto-merge.md"
-cp "$am" .github/routines/ || bad "no $am"
-echo '# profile' >.github/routines/profile.md
-"$H/routines.sh" render >/dev/null || bad "render failed"
-W=.github/workflows
+(cd "$D/../../../../.." && bash "$S" check >/dev/null) && ok "this repo's routines render byte-identical" || bad "routines.sh check fails at the repo root"
 
-step() { # step <workflow>: the run script of its flow/ready step
-  awk '/^      - name: flow\/ready$/ { on = 1; next } on && !/^        / { exit } on && r { print substr($0, 11) } on && /^        run: \|$/ { r = 1 }' "$1"
-}
-cat >"$SB/bin/gh" <<'EOF'
-#!/usr/bin/env bash
-echo "gh $*" >>"$SB/calls"
-case "$1 $2" in
-  "pr list") while [ "$1" != --jq ]; do shift; done; jq -r "$2" "$SB/prs.json" ;;
-  "pr ready") ;;
-  "api "*check-runs*) [ "$1 $2" = "api repos/o/r/check-runs" ] && { cat >>"$SB/posted"; exit; }
-    run() { jq -nc --arg a "$1" --arg t "$2" '{check_runs: [{app: {slug: $a}, conclusion: "success", output: {title: $t}}]}'; }
-    case "$2" in */stamped/*) j="$(run github-actions "ready.sh stamped this commit")" ;; */named/*) j="$(run github-actions "a job")" ;;
-      */other-app/*) j="$(run evil "ready.sh stamped this commit")" ;; */broken/*) exit 1 ;; *) j='{"check_runs":[]}' ;; esac
-    jq -r "$4" <<<"$j" ;;
+cd "$SB" && git init -q
+grep -q '^mention  *mention ' <<<"$(bash "$S" list)" && ok "list shows mention" || bad "list: $(bash "$S" list)"
+bash "$S" add mention >/dev/null || bad "add mention failed"
+W=.github/workflows/flow-mention.yml
+[ -f "$W" ] && ok "add mention renders $W" || bad "no $W"
+bash "$S" check >/dev/null && ok "check passes" || bad "check fails"
+! bash "$S" schedule mention "0 3 * * *" 2>/dev/null && ok "schedule refused" || bad "schedule accepted a cron"
+
+line() { grep -n -m1 -F -- "$1" "$W" | cut -d: -f1; }
+g="$(line 'collaborators/$COMMENTER/permission')" a="$(line 'anthropics/claude-code-action@v1')"
+home="$(line 'FLOW_STACK_HOME=')" plug="$(line 'plugins: flow-stack@flow-stack')"
+[ -n "$g" ] && [ -n "$a" ] && [ "$g" -lt "$a" ] && ok "permission check runs before the agent step" || bad "guard line $g, action line $a"
+[ -n "$home" ] && [ -n "$plug" ] && [ "$home" -lt "$a" ] && [ "$plug" -gt "$a" ] && ok "FLOW_STACK_HOME set and the plugin installed by the agent step" || bad "home $home, plugin $plug"
+grep -q 'echo "FLOW_SHIP_DRAFT=1" >>"\$GITHUB_ENV"' "$W" && ok "hooks hold the run to draft PRs" || bad "no FLOW_SHIP_DRAFT in the guard step"
+grep -q 'group: flow-mention-.*-\${{ github.event.comment.id }}' "$W" && ok "concurrency group is per comment" || bad "group can cancel a queued request"
+grep -q '^            /flow-stack:flow --auto ship Run the routine in .github/routines/mention.md' "$W" && ok "prompt starts with /flow-stack:flow --auto ship" || bad "prompt"
+grep -q "^    if: contains(github.event.comment.body, '@claude') && contains(fromJSON(" "$W" && ok "job runs only on @claude from an associated user" || bad "job if:"
+grep -q '^  issue_comment:' "$W" && grep -q '^  pull_request_review_comment:' "$W" && ok "triggers on comments" || bad "on:"
+
+# Run the rendered guard against a stub gh: the commenter's permission and the PR's head repo
+mkdir bin; cat >bin/gh <<'GH'
+#!/bin/sh
+case "$2" in
+  repos/o/r/collaborators/*/permission) [ "$PERM" = fail ] && exit 1; echo "$PERM" ;;
+  repos/o/r/pulls/7) [ "$HEAD" = fail ] && exit 1; echo "$HEAD" ;;
+  *) echo "unexpected gh $*" >&2; exit 1 ;;
 esac
-EOF
-chmod +x "$SB/bin/gh"
-export SB PATH="$SB/bin:$PATH" GITHUB_REPOSITORY=o/r GITHUB_STEP_SUMMARY="$SB/summary" GITHUB_OUTPUT="$SB/out"
-
-echo "-- rendered workflows"
-grep -q '^  checks: write$' $W/flow-self-heal.yml && [ -n "$(step $W/flow-self-heal.yml)" ] && ok "self-heal posts flow/ready (checks: write)" || bad "self-heal has no flow/ready step"
-grep -q "if: steps.stamp.outputs.skip != 'true'" $W/flow-review.yml && ok "review runs only without a passing flow/ready" || bad "review has no skip"
-grep -q '^  checks: read$' $W/flow-self-create.yml && ! grep -q 'flow/ready' $W/flow-self-create.yml && ok "self-create: no flow/ready step, checks read" || bad "self-create grew a flow/ready step"
-grep -q '^  checks: read$' $W/flow-auto-merge.yml && ! grep -q 'flow/ready' $W/flow-auto-merge.yml && ok "auto-merge (contents, not self-heal): no flow/ready step, checks read" || bad "auto-merge posts flow/ready"
-! grep -q '^$' $W/flow-self-create.yml && ok "an empty placeholder leaves no blank line" || bad "blank line in self-create"
-
-echo "-- self-heal: post on the stamped self-heal head only, then mark it ready"
-A=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa C=cccccccccccccccccccccccccccccccccccccccc
-cat >"$SB/prs.json" <<EOF
-[{"number":5,"headRefOid":"$A","headRefName":"self-heal/5-x","isCrossRepository":false,"isDraft":true},
- {"number":6,"headRefOid":"bbbb","headRefName":"self-heal/6-y","isCrossRepository":false,"isDraft":true},
- {"number":7,"headRefOid":"$C","headRefName":"feature/z","isCrossRepository":false,"isDraft":true},
- {"number":8,"headRefOid":"$C","headRefName":"self-heal/8-z","isCrossRepository":true,"isDraft":true}]
-EOF
-mkdir -p .flow; printf 't1\t%s\treview\tship\tsecret note\nt2\t%s\tready\tpass\t\nt3\tbbbb\treview\tfix-first\t\nt4\t%s\tready\tpass\t\n' "$A" "$A" "$C" >.flow/ready.tsv
-bash -eo pipefail -c "$(step $W/flow-self-heal.yml)" || bad "step failed"
-[ "$(jq -s length "$SB/posted")" = 1 ] && [ "$(jq -r .head_sha "$SB/posted")" = "$A" ] && ok "one flow/ready, on #5's head" || bad "posted: $(cat "$SB/posted")"
-jq -e '.name == "flow/ready" and .conclusion == "success" and (.output.summary | test("review ship") and (test("secret") | not))' "$SB/posted" >/dev/null && ok "summary holds the ready rows, not their notes" || bad "summary: $(jq -r .output.summary "$SB/posted")"
-[ "$(grep -c '^gh pr ready' "$SB/calls")" = 1 ] && grep -q '^gh pr ready 5$' "$SB/calls" && ok "#5 marked ready, nothing else" || bad "calls: $(grep 'pr ready' "$SB/calls")"
-rm .flow/ready.tsv "$SB/posted"; bash -eo pipefail -c "$(step $W/flow-self-heal.yml)" && [ ! -f "$SB/posted" ] && ok "no ledger: nothing posted" || bad "posted without a ledger"
-
-echo "-- review: skip a stamped self-heal head, review a new or unknown one"
-for c in stamped:true fresh: broken: named: other-app:; do
-  : >"$SB/out"; SHA="${c%%:*}" REF=self-heal/5-x bash -eo pipefail -c "$(step $W/flow-review.yml)" || bad "$c: step failed"
-  [ "$(sed -n 's/^skip=//p' "$SB/out")" = "${c#*:}" ] && ok "${c%%:*} head: skip='${c#*:}'" || bad "${c%%:*}: out '$(cat "$SB/out")'"
-done
-
-: >"$SB/out"; SHA=stamped REF=feature/x bash -eo pipefail -c "$(step $W/flow-review.yml)"
-[ ! -s "$SB/out" ] && ok "a stamped head off a self-heal branch is still reviewed" || bad "skipped a non-self-heal PR"
-
-echo "-- routine contracts"
-grep -q 'More than 2 means two rework rounds' "$H/../templates/self-heal.md" && grep -q 'add `needs-human`' "$H/../templates/self-heal.md" && ok "rework capped at 2 rounds, then needs-human" || bad "self-heal has no rework cap"
-grep -q 'never push to any other PR' "$H/../templates/self-heal.md" && ok "rework only on PRs self-heal opened" || bad "no own-PR rule"
-grep -q 'their stamped heads skip it. Rework comes from people' "$H/../templates/self-heal.md" && ! grep -q 'rework' "$H/../templates/review.md" && ok "review starts no rework; people and auto-merge do" || bad "review claims to start rework"
-grep -q 'A `self-heal` PR goes back to its routine instead of being blocked' "$am" && ok "auto-merge sends a non-ship self-heal PR to rework" || bad "auto-merge has no rework path"
-! grep -q 'heal-ok' "$am" && grep -q 'last `labeled` event for `auto-merge`' "$am" && ok "auto-merge: still a human auto-merge label, no agent-linked heal-ok shortcut" || bad "auto-merge trusts an agent-chosen issue link"
-grep -q 'also for a PR with a `flow/ready` check' "$am" && ok "auto-merge still reviews a stamped PR itself" || bad "auto-merge trusts the self-written stamp"
-
-[ "$FAILS" = 0 ] && echo "routines.test.sh: pass" || { echo "routines.test.sh: $FAILS failed"; exit 1; }
+GH
+chmod +x bin/gh
+sed -n '/^          COMMENTER=/,/^          \[ -z "\$PR" \]/p' "$W" | sed 's/^          //; s/\${{ github.event.comment.user.login }}/@LOGIN@/' >guard.sh
+[ "$(wc -l <guard.sh)" -eq 6 ] || bad "guard extract: $(cat guard.sh)"
+guard() { # guard <perm> <pr number or ""> <head repo>
+  sed "s/\${{ github.event.pull_request.number .* }}/$2/; s/@LOGIN@/${LOGIN:-someone}/" guard.sh >g.sh
+  PERM="$1" HEAD="${3:-}" PATH="$SB/bin:$PATH" GITHUB_REPOSITORY=o/r GITHUB_STEP_SUMMARY="$SB/summary" bash g.sh >/dev/null 2>&1
+}
+for p in admin maintain write; do guard "$p" "" && ok "$p passes on an issue" || bad "$p refused"; done
+for p in read triage none fail; do ! guard "$p" "" && ok "$p refused" || bad "$p passed"; done
+LOGIN='app[bot]' guard write "" && bad "an app with write access passed" || ok "an app (login ending [bot]) is refused even with write"
+grep -q 'refused: app\[bot\] is an app' summary && ok "app refusal in the run summary" || bad "app summary: $(cat summary)"
+grep -q "user.type != 'Bot'" "$W" && ok "job if: skips Bot accounts" || bad "job if: lets bots in"
+grep -q 'refused: someone has read access' summary && ok "refusal written to the run summary" || bad "summary: $(cat summary)"
+guard write 7 o/r && ok "same-repo PR passes" || bad "same-repo PR refused"
+! guard write 7 evil/r && ok "fork PR refused" || bad "fork PR passed"
+! guard write 7 fail && ok "PR lookup failure refused" || bad "PR lookup failure passed"
+[ "$FAILS" = 0 ]

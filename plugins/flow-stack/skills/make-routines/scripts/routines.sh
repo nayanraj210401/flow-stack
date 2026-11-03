@@ -8,7 +8,8 @@
 #                                                     change a scheduled routine's cron (in its timezone) and re-render it
 #   routines.sh render                                .github/routines/*.md → .github/workflows/flow-<name>.yml
 #   routines.sh check                                 every routine's workflow matches a fresh render; no orphans
-# Frontmatter: trigger (schedule | pull_request), cron and timezone (schedule only; an IANA zone, default UTC), timeout (minutes), labels, auth
+# Frontmatter: trigger (schedule | pull_request | mention: an @claude comment from a user with write access), cron and timezone (schedule only; an IANA zone, default UTC), timeout (minutes), labels (must exist;
+# create_labels: true makes missing ones; .github/routines/labels.tsv renames catalog labels to yours on add), auth
 # (oauth | api-key), grants (token scopes it may write: issues pull-requests contents; the rest are read),
 # flow_ref (pin the plugin to a tag or branch; empty = the default branch, fresh each run). The body is the prompt.
 set -euo pipefail
@@ -108,7 +109,7 @@ EOF
 }
 
 render_one() { # render_one <name>: the workflow on stdout
-  local f="$dir/$1.md" auth trigger cron tz timeout labels grants ref g s on="" iff="" group="" cancel=false ctx="" mode="--auto"
+  local f="$dir/$1.md" auth trigger cron tz timeout labels grants ref g s on="" iff="" group="" cancel=false ctx="" guard="" mode="--auto"
   local skip="" run_if="" stamp=""
   case "$(field "$f" auth oauth)" in
     oauth) auth='claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}' ;;
@@ -132,10 +133,35 @@ render_one() { # render_one <name>: the workflow on stdout
       iff="    if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'"
       group='-${{ github.event.pull_request.number }}' cancel=true
       ctx=' The pull request is #${{ github.event.pull_request.number }}.' ;;
-    *) die "$f: trigger must be schedule or pull_request" ;;
+    mention)
+      on=$'  issue_comment:\n    types: [created]\n  pull_request_review_comment:\n    types: [created]'
+      # author_association drops most strangers for free, and bots and apps never trigger a run (a factory can't
+      # call itself in a loop); the step below asks GitHub for the commenter's real permission
+      iff="    if: contains(github.event.comment.body, '@claude') && contains(fromJSON('[\"OWNER\",\"MEMBER\",\"COLLABORATOR\"]'), github.event.comment.author_association) && github.event.comment.user.type != 'Bot'"
+      # every comment starts a run, even ones the job skips; a group per comment keeps a later comment from cancelling a queued request
+      group='-${{ github.event.issue.number || github.event.pull_request.number }}-${{ github.event.comment.id }}'
+      ctx=' The request is comment ${{ github.event.comment.id }} (${{ github.event_name }}) on #${{ github.event.issue.number || github.event.pull_request.number }}.'
+      # a GitHub login is letters, digits and dashes (apps add [bot]), so it can't break out of the quotes
+      guard='          COMMENTER='"'"'${{ github.event.comment.user.login }}'"'"
+      guard+=$'\n''          case "$COMMENTER" in *"[bot]") echo "refused: $COMMENTER is an app, not a person" | tee -a "$GITHUB_STEP_SUMMARY"; exit 1 ;; esac'
+      guard+=$'\n''          perm="$(gh api "repos/$GITHUB_REPOSITORY/collaborators/$COMMENTER/permission" --jq .permission)" || perm=none'
+      guard+=$'\n''          case "$perm" in admin|maintain|write) ;; *) echo "refused: $COMMENTER has $perm access, not write" | tee -a "$GITHUB_STEP_SUMMARY"; exit 1 ;; esac'
+      # the run holds write tokens, so a fork PR's code must never be checked out: refuse it here, not in the prompt
+      guard+=$'\n''          PR='"'"'${{ github.event.pull_request.number || (github.event.issue.pull_request && github.event.issue.number) || '"''"' }}'"'"
+      guard+=$'\n''          [ -z "$PR" ] || [ "$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" --jq .head.repo.full_name)" = "$GITHUB_REPOSITORY" ] || { echo "refused: #$PR is from a fork or unreadable; a maintainer takes it over" | tee -a "$GITHUB_STEP_SUMMARY"; exit 1; }'
+      # the thread's text is untrusted, so the hooks (not the prompt) hold this run to draft PRs: no merge, no ready
+      guard+=$'\n''          echo "FLOW_SHIP_DRAFT=1" >>"$GITHUB_ENV"' ;;
+    *) die "$f: trigger must be schedule, pull_request, or mention" ;;
   esac
+  # one repo variable pauses every routine: FLOW_FACTORY=off
+  if [ -n "$iff" ]; then iff+=" && vars.FLOW_FACTORY != 'off'"; else iff="    if: vars.FLOW_FACTORY != 'off'"; fi
+  group="flow-$1$group"
+  # routines that push (contents) take turns, so self-heal's rework and auto-merge never act on a PR at once.
+  # GitHub keeps one pending run per group: a third queued run (a manual dispatch, say) cancels the pending one.
+  [ "$trigger" = schedule ] && [[ " $grants " == *" contents "* ]] && group=flow-writers
   [[ "$timeout" =~ ^[0-9]+$ ]] || die "$f: timeout must be whole minutes, got '$timeout'"
-  [[ "$labels" =~ ^([a-z0-9:._-]+( [a-z0-9:._-]+)*)?$ ]] || die "$f: labels are space-separated, no quotes, got '$labels'"
+  [[ "$labels" =~ ^([A-Za-z0-9:._-]+( [A-Za-z0-9:._-]+)*)?$ ]] || die "$f: labels are space-separated, no quotes, got '$labels'"
+  case "$(field "$f" create_labels false)" in true|false) ;; *) die "$f: create_labels must be true or false" ;; esac
   for g in $grants; do case "$g" in issues|pull-requests|contents) ;; *) die "$f: grants takes issues pull-requests contents, got '$g'" ;; esac; done
   [[ "$ref" =~ ^[A-Za-z0-9._/-]*$ ]] || die "$f: flow_ref must be a tag or branch, got '$ref'"
   [[ ! "$ref" =~ ^[0-9a-f]{7,40}$ ]] || die "$f: flow_ref looks like a commit SHA; the clone takes a tag or branch (one that isn't 7-40 hex characters)"
@@ -162,8 +188,8 @@ render_one() { # render_one <name>: the workflow on stdout
     mkt='${{ runner.temp }}/flow-stack-plugin'
   fi
   # a placeholder alone on its line that renders empty (a step this routine has no use for) leaves no blank line
-  R_NAME="$1" R_ON="$on" R_IF="$iff" R_GROUP="$group" R_CANCEL="$cancel" R_TIMEOUT="$timeout" R_LABELS="$labels" \
-  R_AUTH="$auth" R_TOKEN="$token" R_MARKET="$mkt" R_CLONE="$clone" R_MODE="$mode" R_CTX="$ctx" \
+  R_NAME="$1" R_ON="$on" R_IF="$iff" R_GROUP="$group" R_CANCEL="$cancel" R_TIMEOUT="$timeout" R_LABELS="$labels" R_CREATE="$(field "$f" create_labels false)" \
+  R_AUTH="$auth" R_TOKEN="$token" R_MARKET="$mkt" R_SETUP="${guard:+$guard${clone:+$'\n'}}$clone" R_MODE="$mode" R_CTX="$ctx" \
   R_SKIP="$skip" R_RUN_IF="$run_if" R_STAMP="$stamp" \
     perl -pe '$w = /^\@[A-Za-z_]+\@$/; s/\@([A-Za-z_]+)\@/exists $ENV{"R_$1"} ? $ENV{"R_$1"} : die "unknown placeholder $1\n"/ge; $_ = "" if $w && $_ eq "\n"' "$tpl/workflow.yml"
 }
@@ -204,6 +230,20 @@ profile() { # profile <preset>: a headless profile for CI runs, notifications of
   echo "wrote $dir/profile.md (preset $1; edit it: it is how the routines work, and it is committed)"
 }
 
+relabel() { # stdin → stdout: a catalog template with its labels renamed to the repo's own, from $dir/labels.tsv
+  # (lines "<catalog label> <yours>"). Only label spots change: the labels: line, `name`, and --label/--add-label name.
+  local m="$dir/labels.tsv"
+  [ -f "$m" ] || { cat; return; }
+  awk 'NF && $1 !~ /^#/ && (NF != 2 || $0 ~ /[^A-Za-z0-9:._ \t-]/) { bad = 1 } END { exit bad }' "$m" \
+    || die "$m: each line is '<catalog label> <yours>', no spaces inside a name"
+  perl -e 'open M, $ARGV[0] or die; while (<M>) { next if /^\s*(#|$)/; my ($a, $b) = split; $m{$a} = $b }
+    $r = join "|", map quotemeta, sort { length $b <=> length $a } keys %m;
+    while (<STDIN>) { $fm++ if /^---$/;
+      if ($r ne "" && $fm == 1 && /^labels:/) { s/(?<=[ :])($r)(?=\s|$)/$m{$1}/g }
+      elsif ($r ne "") { s/`($r)`/`$m{$1}`/g; s/(--(?:add-|remove-)?label[ =])($r)(?=[\s`"\x27]|$)/$1$m{$2}/g }
+      print }' "$m"
+}
+
 add() {
   local name="${1:-}" preset=solo-hacker force="" cron="" tz=""; shift || true
   [[ "$name" =~ $name_re ]] || die "add <name>: lowercase letters, digits, dashes"
@@ -213,17 +253,21 @@ add() {
   [ -z "$tz" ] || [ -n "$cron" ] || die "--tz needs --cron"
   [ -z "$cron" ] || valid_cron "$cron" || die "--cron must be five fields (minute hour day month weekday), got '$cron'"
   [ -z "$tz" ] || valid_tz "$tz" || die "--tz must be $tz_hint, got '$tz'"
-  local f="$dir/$name.md"
+  local f="$dir/$name.md" miss
+  case "$name" in self-heal|auto-merge)
+    miss="$(. "$here/../../../hooks/lib.sh"; factory_ready .)" || die "$name ships unattended, and this repo can't prove its changes yet. Missing: $miss. Commit them, then add $name." ;;
+  esac
   [ ! -f "$f" ] || [ -n "$force" ] || die "$f exists (--force replaces it)"
   if [ -n "$cron" ] && [ -f "$tpl/$name.md" ] && [ "$(field "$tpl/$name.md" trigger schedule)" != schedule ]; then
     die "$name runs on $(field "$tpl/$name.md" trigger schedule), which takes no --cron"
   fi
   profile "$preset"
-  if [ -f "$tpl/$name.md" ]; then cp "$tpl/$name.md" "$f"
+  if [ -f "$tpl/$name.md" ]; then local body; body="$(relabel <"$tpl/$name.md")" || exit 2; printf '%s\n' "$body" >"$f"
   else printf -- '---\nabout: TODO one line: what it does and when to use it\ntrigger: schedule\ncron: "0 3 * * *"\ntimeout: 60\ngrants: issues\n---\n# %s\n\nTODO: what this routine does, its caps, and what it must never do.\n' "$name" >"$f"
   fi
   [ -z "$cron" ] || set_schedule "$name" "$cron" "$tz"
   echo "wrote $f"
+  [ -z "$(field "$f" labels "")" ] || echo "it needs the labels $(field "$f" labels ""): a missing one stops the run (map yours in $dir/labels.tsv)"
   write_one "$name"
 }
 

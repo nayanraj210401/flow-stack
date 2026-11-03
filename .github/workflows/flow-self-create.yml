@@ -17,6 +17,7 @@ permissions:
   id-token: write
 jobs:
   run:
+    if: vars.FLOW_FACTORY != 'off'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -30,10 +31,22 @@ jobs:
           mkdir -p "$RUNNER_TEMP/flow-stack"
           cp .github/routines/profile.md "$RUNNER_TEMP/flow-stack/profile.md"
           echo "FLOW_STACK_HOME=$RUNNER_TEMP/flow-stack" >>"$GITHUB_ENV"
-          for l in self-create reproducible; do gh label create "$l" --force >/dev/null; done
+          # the routine's labels must exist (names match case-insensitively, as on GitHub); an existing one is never
+          # edited. A missing one stops the run, unless the routine sets create_labels: true.
+          labels="self-create reproducible" miss=""
+          if [ -n "$labels" ]; then
+            have="$(gh label list --limit 1000 --json name --jq '.[].name')"
+            for l in $labels; do
+              grep -qixF "$l" <<<"$have" && continue
+              if [ false = true ]; then gh label create "$l" >/dev/null || echo "label $l not created"
+              else echo "label $l missing: create it, map yours in .github/routines/labels.tsv, or set create_labels: true" | tee -a "$GITHUB_STEP_SUMMARY"; miss=1; fi
+            done
+          fi
+          [ -z "$miss" ]
       # A fresh runner installs the plugin on every run: the marketplace's default branch, or the clone pinned above
       - uses: anthropics/claude-code-action@v1
         id: claude
+        continue-on-error: true
         # The action's SDK session ends when the agent ends its turn, so a subagent left running in the background
         # (the reviewer, a worker) is dropped and its result never used. Foreground subagents return in the same turn.
         env:
@@ -77,3 +90,20 @@ jobs:
             .flow/GATES.md
             .flow/tasks/*/GATES.md
           if-no-files-found: ignore
+      # A usage limit is not a verdict: the summary says the run was stopped by it and the job ends green, so a re-run
+      # after the reset picks it up. Any other failure of the agent still fails the job.
+      - name: Outcome
+        if: always() && steps.claude.outcome == 'failure'
+        env:
+          RUN_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          # only the first line of the run's last assistant words counts, and only Claude's own limit message:
+          # "You've hit your 5-hour limit · resets 11:20am (UTC)" or "Claude AI usage limit reached|<epoch>"
+          said="$(jq -rs '[if length == 1 and (.[0] | type) == "array" then .[0][] else .[] end | select(.type == "assistant")
+            | .message.content[]? | select(.type == "text") | .text] | last // ""' "$RUN_FILE" 2>/dev/null | head -n 1)"
+          if grep -qiE "^You.{1,3}ve hit your [^·]{0,40}limit · resets |^Claude AI usage limit reached\|[0-9]+$" <<<"$said"; then
+            resets="$(grep -oiE 'resets .*' <<<"$said")"
+            echo "### Stopped by a Claude usage limit${resets:+ ($resets)}. Anything it pushed stays; re-run after the reset." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          exit 1

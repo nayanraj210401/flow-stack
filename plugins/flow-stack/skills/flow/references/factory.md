@@ -1,0 +1,34 @@
+# The factory
+
+The factory is flow run as one loop, without a human at the keyboard: work is found, specified, built, proven, reviewed, and shipped, and the human sits at three points (spec, code, product). Read this when running with `--auto`, `--auto ship`, or `--gha`, or inside a routine.
+
+`../../setup/scripts/detect.sh` prints one `FACTORY` row per stage for the current repo: `ok` with what serves it, `missing` with the skill that fixes it, or `planned` with its issue.
+
+## The loop
+
+Stages marked **planned** don't exist yet; don't act as if they do.
+
+| Stage | Served today by | Planned | Human touchpoint |
+|---|---|---|---|
+| Monitor | `self-create` routine (finds bugs by running code); CI on main | prod signals; the shift's watchers for a person: assigned work, feedback on my PRs, review requests (#188, #189) | none |
+| Triage | nothing: a human files or picks the issue | `triage` routine: type, readiness, size, risk at intake (#185); `ideate` routine: evidence-cited proposals (#186) | planned (#184, #185): bot-originated work needs one human label before it is built. Today `self-heal` takes `heal-ok` and `self-create` issues |
+| Spec | `intent` (goal, non-goals, runnable checks, blind checks) + `seal` | edge-case matrix that seal enforces (#187) | **review the spec**: the intent gate in a session; under `--auto` the agent approves it. Planned: high-risk issues (#185) and `proposal` → `accept` (#186) |
+| Implement | `self-heal` routine; `mention` routine (`@claude` runs through flow with the plugin, draft PRs only); `flow --auto` in any session | cloud sessions (#194); multi-repo routing (#190) | none |
+| Verify | the repo's committed verify driver + impacted feature scenarios (`features.sh run --impacted`) + `probe` | | none |
+| Review | `ready.sh` stamp (review, deslop, tour, live checks); `review` routine | stamp carried as a `flow/ready` check run, rework loop capped at 2 rounds (#184) | **review the code**: every PR today (routines open drafts; `auto-merge` takes only maintainer-labelled PRs). Planned: med/high risk (#185), rework past 2 rounds (#184) |
+| Ship | `auto-merge` routine (maintainer-labelled PRs, security review); `--auto ship` / `--gha` unlock a stamped push, PR, merge | human-approved auto-merge of factory PRs, draft → ready (#184); GitHub Project board (#191) | **review the product**: what you merge or release |
+
+## Factory-ready
+
+A repo is factory-ready when it has a **committed** verify driver (`.claude/skills/verify-*/`, `.claude/skills/verify/` or a top-level `verify/`) and a **committed** feature map with at least one scenario. Committed, because runners and cloud sessions see only the clone. Existence isn't enough: the impacted scenarios must also pass on HEAD, which `ready.sh` already runs.
+
+`hooks/lib.sh` `factory_ready` checks it, and `detect.sh` reports the same result (rows `verify` and `factory`). `--auto ship` and `--gha` warn in a repo that isn't factory-ready, or run as plain `--auto` (no push, no PR) with the profile's `factory_ready: enforce`, and `make-routines` refuses `self-heal` and `auto-merge` there. Pair mode is unaffected.
+
+## Fixes
+
+| Row missing | Run |
+|---|---|
+| monitor, review | `/flow-stack:make-routines` (`self-create`, `review`) |
+| implement | `/flow-stack:make-routines`: `mention` works in any repo; `self-heal` is refused until the repo is factory-ready |
+| verify: `a committed verify driver` / `a committed feature map` | if the driver or map already exists on disk, commit it (a gitignored one is invisible to routines); otherwise run the named skill |
+| ship | `auto-merge` has no `make-routines` template yet (#184); check that `detect.sh` shows `factory ok` first (`render` doesn't check; only `add` does), copy flow-stack's `.github/routines/auto-merge.md` into your repo's `.github/routines/`, make sure `.github/routines/profile.md` exists (any `make-routines add` writes it), run `make-routines/scripts/routines.sh render`, and commit the routine, the profile and `.github/workflows/flow-auto-merge.yml` together |

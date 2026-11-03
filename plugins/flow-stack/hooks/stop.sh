@@ -34,14 +34,20 @@ events="$(tail -n 3000 "$transcript" | jq -nrR --argjson roots "$roots" --arg ch
   def expand: . as $cmd | [match("(?:^|[;&|\n])[[:space:]]*(?<n>[A-Za-z_][A-Za-z0-9_]*)=(?<v>[^[:space:];&|\"'"'"'$]*)"; "g").captures | {n: .[0].string, v: .[1].string}]
     | (group_by(.n) | map(select(length == 1) | .[0])) as $once | reduce $once[] as $a
     ($cmd; gsub("\\$(\\{" + $a.n + "\\}|" + $a.n + "\\b)"; $a.v));
-  def shell_write: unheredoc | expand | gsub("(>>?|\\btee( -a)?)[[:space:]]*(?![^[:space:];|&]*\\.\\.)[^[:space:];|&]*(\\.flow/|/tmp/|\\$\\{?TMPDIR\\b|scratchpad|\\.md|\\.txt)[^[:space:];|&]*"; "")
+  # sed -i, perl -i and mv with a quoted code path (Makefile, bin/run, src/app.sh): the quote stripping below would hide
+  # it. A quoted doc path is not one, nor a sed script (s/…/…/, y/…/…/) or an empty -i suffix.
+  def quoted_code: test("(^|[;&|\n][[:space:]]*)(sed -[a-zA-Z]*i|perl -[a-z]*i|mv)\\b[^;&|\n]*[\"'"'"'](?![sy]/)(?!((\\./)?(/tmp/|scratchpad/|\\.flow/)|[^\"'"'"']*\\.(md|txt)(\\.(new|bak|tmp|orig))?[\"'"'"']))[A-Za-z0-9_.][A-Za-z0-9_./-]*(?<!/)[\"'"'"']");
+  def shell_write: unheredoc | expand | if quoted_code then true else (gsub("(>>?|\\btee( -a)?)[[:space:]]*(?![^[:space:];|&]*\\.\\.)[^[:space:];|&]*(\\.flow/|/tmp/|\\$\\{?TMPDIR\\b|scratchpad|\\.md|\\.txt)[^[:space:];|&]*"; "")
+    | gsub("[\"'"'"'](?<p>[^\"'"'"'[:space:]]*\\.(md|txt))[\"'"'"']"; .p)
     | gsub("\"[^\"]*\"|'"'"'[^'"'"']*'"'"'"; "")
     | gsub("[0-9]*>>?[[:space:]]*(/dev/null|&[0-9]-?)"; "")
-    | test("\\bsed -[a-zA-Z]*i|\\bperl -[a-z]*i|\\btee\\b|>>?[[:space:]]*[^[:space:]=>&]"
+    | test("\\bsed -[a-zA-Z]*i(?!([[:space:]]+(-[A-Za-z]+|[^;&|\\n[:space:]]+\\.(md|txt)))+[[:space:]]*($|[;&|\\n]))|\\bperl -[a-z]*i(?!([[:space:]]+(-[A-Za-z]+|[^;&|\\n[:space:]]+\\.(md|txt)))+[[:space:]]*($|[;&|\\n]))|\\btee\\b|>>?[[:space:]]*[^[:space:]=>&]"
       + "|(^|[;&|][[:space:]]*)(cp|mv)( -[A-Za-z]+)*( [^-;&|[:space:]][^;&|[:space:]]*)+"
-      + " (?![^;&|[:space:]]*(/tmp/|scratchpad|\\.flow/)(?![^;&|[:space:]]*\\.\\.))[^-;&|[:space:]][^;&|[:space:]]*[[:space:]]*($|[;&|])"
+      + " (?![^;&|[:space:]]*\\.(md|txt)[[:space:]]*($|[;&|]))(?![^;&|[:space:]]*(/tmp/|scratchpad|\\.flow/)(?![^;&|[:space:]]*\\.\\.))[^-;&|[:space:]][^;&|[:space:]]*[[:space:]]*($|[;&|])"
+      # mv removes its sources, so a code source makes it a code write even when the destination is a doc
+      + "|(^|[;&|][[:space:]]*)mv( -[A-Za-z]+)*( [^;&|[:space:]]+)*? (?![^;&|[:space:]]*(\\.(md|txt)|/tmp/|scratchpad|\\.flow/))[^-;&|[:space:]][^;&|[:space:]]*( [^;&|[:space:]]+)+[[:space:]]*($|[;&|])"
       + "|(^|[;&|][[:space:]]*)patch[[:space:]]"
-      + "|git apply[[:space:]]+(?!--(check|stat|numstat|summary))");
+      + "|git apply[[:space:]]+(?!--(check|stat|numstat|summary))")) end;
   # The harness can append its own line (e.g. "Shell cwd was reset to …") after the output of the command.
   def verdict: txt | split("\n") | map(select(test("\\S") and (test("^Shell cwd was reset to ") | not))) | (last // "")
     | test("^flow-evidence: PASS|^ready for review: [0-9a-f]+ stamped");
