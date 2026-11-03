@@ -172,6 +172,7 @@ flowchart LR
 - **One writer at a time:** scheduled routines that push (self-heal, auto-merge) share one concurrency group. `mention` runs per comment.
 - **Usage limits:** a run that hits a Claude usage limit ends green with "Stopped by a Claude usage limit" rather than a failed verdict.
 - **Your labels:** routines never create or edit labels unless the routine says `create_labels: true`. Map the catalog's names to yours in `.github/routines/labels.tsv` before `add`.
+- **A live board:** name a GitHub Project in your profile (`factory:` then `  project: <owner>/<n>`) and `/flow-stack:board` adds a Factory panel; `board/scripts/factory.sh apply` moves each card to the column its issue or PR state implies. It reads label names through `labels.tsv`, and never moves a card into Ready (that one is yours).
 - **Several repos:** list them in your profile's `# Repos` with a `what:` line, and `task.sh route "<request>"` picks the repo, the workspace, or asks one question.
 
 ### Cloud sessions (Claude Code on the web, Slack)

@@ -16,7 +16,7 @@ Stages marked **planned** don't exist yet; don't act as if they do.
 | Implement | `self-heal` routine; `mention` routine (`@claude` runs through flow with the plugin, draft PRs only); `flow --auto` in any session; `task.sh route` picks the repo for a request with none named | cloud sessions (#194); shipping linked PR sets across repos (#190) | none |
 | Verify | the repo's committed verify driver + impacted feature scenarios (`features.sh run --impacted`) + `probe` | | none |
 | Review | `ready.sh` stamp (review, deslop, tour, live checks), carried to self-heal PRs as a `flow/ready` check run; `review` routine; rework loop capped at 2 rounds, then `needs-human` | | **review the code**: every PR today (routines open drafts; `auto-merge` takes only maintainer-labelled PRs). |
-| Ship | `auto-merge` routine (maintainer-labelled PRs, security review); `--auto ship` / `--gha` unlock a stamped push, PR, merge | GitHub Project board (#191) | **review the product**: what you merge or release |
+| Ship | `auto-merge` routine (maintainer-labelled PRs, security review); `--auto ship` / `--gha` unlock a stamped push, PR, merge; `board`'s Factory panel and `board/scripts/factory.sh apply` keep a GitHub Project in step with issue and PR state (profile `factory:` `project: <owner>/<n>`) | | **review the product**: what you merge or release |
 
 ## Factory-ready
 

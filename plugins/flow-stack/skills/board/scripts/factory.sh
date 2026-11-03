@@ -30,9 +30,12 @@ q='query($owner: String!, $number: Int!, $endCursor: String) { repositoryOwner(l
         commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 50) { nodes { ... on CheckRun { name conclusion } } } } } } } } } } } } } } }'
 raw="$(gh api graphql --paginate -f query="$q" -f owner="${proj%/*}" -F number="${proj#*/}" 2>&1)" || { echo "factory.sh: gh api graphql failed: ${raw:0:300}" >&2; exit 1; }
 
+# a repo that renamed the catalog's labels (.github/routines/labels.tsv, "<catalog> <yours>") is read in catalog names
+map='{}' lt="$(git rev-parse --show-toplevel 2>/dev/null)/.github/routines/labels.tsv"
+[ ! -f "$lt" ] || map="$(awk 'NF == 2 && $1 !~ /^#/ { print $2 "\t" $1 }' "$lt" | jq -Rsc 'split("\n") | map(select(length > 0) | split("\t") | {(.[0]): .[1]}) | add // {}')"
 # one card per item: where it is (status) and where its state says it belongs (col)
-board="$(jq -sc '
-  def names: [.nodes[]?.name];
+board="$(jq -sc --argjson map "$map" '
+  def names: [.nodes[]?.name | $map[.] // .];
   def col: if .type == "pr" and .state == "MERGED" then "Merged"
     elif .type == "issue" and .state == "CLOSED" and .reason == "COMPLETED" then "Merged"
     elif .state != "OPEN" then "Merged"
@@ -48,7 +51,7 @@ board="$(jq -sc '
        | {id, status: .fieldValueByName.name, type: (if $c.__typename == "Issue" then "issue" else "pr" end),
           ref: "\($c.repository.nameWithOwner)#\($c.number)", repo: $c.repository.nameWithOwner, number: $c.number, title: $c.title, url: $c.url,
           state: $c.state, reason: $c.stateReason, draft: ($c.isDraft // false), created: $c.createdAt, merged: $c.mergedAt,
-          labels: ($c.labels | names), relabels: [$c.timelineItems.nodes[]? | .label.name],
+          labels: ($c.labels | names), relabels: [$c.timelineItems.nodes[]? | .label.name | $map[.] // .],
           ready: any($c.commits.nodes[]?.commit.statusCheckRollup.contexts.nodes[]?; .name == "flow/ready" and .conclusion == "SUCCESS"),
           issues: [$c.closingIssuesReferences.nodes[]? | {number, created: .createdAt, labels: (.labels | names)}],
           refs: ([($c.body // "") | scan("#([0-9]+)") | .[0] | tonumber] | unique)}

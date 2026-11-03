@@ -93,6 +93,16 @@ ck "two pages: cards from both, one set of columns" '"$H/factory.sh" json | jq -
 rm -f "$FIX.page2"
 ck "a gh failure is an error, not an empty board" 'GH_FAIL=1 "$H/factory.sh" json >/dev/null 2>&1; [ $? != 0 ]'
 
+# a repo whose labels.tsv renames rework and needs-human: the board reads its names as the catalog's
+mkdir -p "$SB/org/.github/routines" && git -C "$SB/org" init -q && printf 'rework redo\nneeds-human escalate\n' >"$SB/org/.github/routines/labels.tsv"
+cp "$FIX" "$SB/fix.bak"; [ ! -f "$FIX.log" ] || cp "$FIX.log" "$SB/log.bak"
+printf '{"data":{"repositoryOwner":{"projectV2":{"id":"PVT_1","url":"u","title":"Factory","field":{"id":"F_status","options":[%s]},"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[%s,%s]}}}}}' \
+  "$opts" "$(card P30 Building "$(pr 30 OPEN true null redo,self-heal redo - -)")" "$(card I31 Triage "$(iss 31 OPEN null "" escalate "")")" >"$FIX"
+out="$(cd "$SB/org" && "$H/factory.sh" dry-run 2>&1)"
+ck "labels.tsv: the repo's redo and escalate move cards to Rework and Blocked" 'grep -q "o/r#30: Building → Rework" <<<"$out" && grep -q "o/r#31: Triage → Blocked" <<<"$out"'
+ck "labels.tsv: a rework counted under the repo's own name" '[ "$(cd "$SB/org" && "$H/factory.sh" json | jq .rework.reworked)" = 1 ]'
+mv "$SB/fix.bak" "$FIX"; if [ -f "$SB/log.bak" ]; then mv "$SB/log.bak" "$FIX.log"; else rm -f "$FIX.log"; fi
+
 # collect.sh: factory key only when configured; render: the panel and Blocked in Needs you
 git init -q "$SB/repo" && git -C "$SB/repo" commit -q --allow-empty -m init
 (cd "$SB/repo" && "$H/collect.sh" --no-cost --no-attention "$SB/repo") >"$SB/on.json" 2>/dev/null
