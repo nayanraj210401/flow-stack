@@ -8,6 +8,7 @@ It is built from skills, bash + jq hooks, and existing tools. There is no new ru
 - [Architecture](#architecture)
 - [How you use it day to day](#how-you-use-it-day-to-day)
 - [When to use what](#when-to-use-what)
+- [Software factory mode](#software-factory-mode)
 - [Skill catalog](#skill-catalog)
 - [What it costs, and how it keeps cost down](#what-it-costs-and-how-it-keeps-cost-down)
 - [Guardrails (hooks)](#guardrails-hooks)
@@ -130,6 +131,64 @@ Type a skill yourself when you want a specific thing: `/flow-stack:challenge`, `
 | After a frustrating session | `/flow-stack:reflect` | proposed taste and lesson updates you approve |
 | New repo | `/flow-stack:setup` → `/flow-stack:feature-map` → `/flow-stack:make-verifier` | a driver that proves this app works the way a user uses it |
 | Installed a new plugin or hook | `/flow-stack:setup adapt` | flow-stack re-fits itself around your toolchain |
+| Run flow-stack with nobody at the keyboard | `/flow-stack:make-routines` | GitHub Actions routines: see [Software factory mode](#software-factory-mode) |
+
+## Software factory mode
+
+The same flow can run without you: requests come in, flow turns each one into a verified PR, and you review the spec, the code, and the product. The hooks still hold. An unattended run gets the guard, the fences, and the ready gate, because each GitHub Actions job installs the plugin.
+
+Use it when the repo can prove its own changes. **Factory-ready** means a *committed* verify driver (`.claude/skills/verify-*/` or `verify/`) and a *committed* feature map with at least one scenario. A runner sees only the clone, so files on your disk don't count. `/flow-stack:setup` reports it as the `factory` row. Without it, `make-routines` refuses `self-heal` (and `auto-merge`, once copied in).
+
+```mermaid
+flowchart LR
+  subgraph In[Requests in]
+    I1[issue labelled heal-ok]
+    I2["@claude comment"]
+    I3[self-create: bugs it reproduced]
+  end
+  In --> F["flow --auto<br/>intent → slices → verify → review"]
+  F --> G{{"ready.sh stamp<br/>(review, deslop, tour, impacted scenarios)"}}
+  G --> PR[draft PR]
+  PR --> H1([you review the code])
+  H1 --> M["merge (you, or auto-merge<br/>on a PR you labelled)"]
+  M --> H2([you review the product])
+```
+
+| Routine | Trigger | What it does |
+|---|---|---|
+| `review` | every non-draft PR | posts a fresh-context review; never approves or blocks |
+| `self-create` | nightly | files issues only for bugs it reproduced by running the code |
+| `self-heal` | nightly | turns maintainer-labelled issues into proven draft PRs, at most 3 a run |
+| `mention` | `@claude` comment from someone with write access | runs the request through flow; draft PRs or a comment saying why it stopped |
+| `auto-merge` | schedule | merges PRs a maintainer labelled, after tests and a security review; never touches the safety machinery (repo-local today, see [factory.md](plugins/flow-stack/skills/flow/references/factory.md)) |
+
+**How much runs without you** is set per routine, not guessed. A routine without `contents` in `grants` runs as `--auto` and the hooks deny every push and PR. With `contents` it runs as `--auto ship`, which can push its own branch and open a PR only after `ready.sh` stamps HEAD. In a session, pair mode is unchanged.
+
+**Operating it:**
+
+- **Pause everything:** `gh variable set FLOW_FACTORY --body off`. `gh variable delete FLOW_FACTORY` resumes.
+- **One writer at a time:** scheduled routines that push (self-heal, auto-merge) share one concurrency group. `mention` runs per comment.
+- **Usage limits:** a run that hits a Claude usage limit ends green with "Stopped by a Claude usage limit" rather than a failed verdict.
+- **Your labels:** routines never create or edit labels unless the routine says `create_labels: true`. Map the catalog's names to yours in `.github/routines/labels.tsv` before `add`.
+- **Several repos:** list them in your profile's `# Repos` with a `what:` line, and `task.sh route "<request>"` picks the repo, the workspace, or asks one question.
+
+### Cloud sessions (Claude Code on the web, Slack)
+
+Cloud sessions don't install plugins on their own, even ones your repo's `.claude/settings.json` enables. Install flow-stack in the environment's setup script:
+
+1. On claude.ai/code, open the environment's settings and give it **Trusted** network access (the install clones from GitHub).
+2. Set its **setup script** to:
+   ```bash
+   claude plugin marketplace add https://github.com/nayanraj210401/flow-stack.git
+   claude plugin install flow-stack@flow-stack
+   ```
+3. Commit a feature map (`.flow/features/`). `.flow/` is otherwise gitignored, and flow's ready gate stays off in a clone without it.
+4. Optional: set `FLOW_STACK_HOME` in the repo's `.claude/settings.json` `env` key to point the hooks at a committed profile.
+5. Start a session and check that the plugin loaded: the first reply carries the `## Profile` block, and `/flow-stack:` completes.
+
+What's been tested (#194): the install command works in a cloud shell, and `env` from `.claude/settings.json` reaches the hooks. Still unconfirmed: whether a plugin installed by the setup script loads at launch. If step 5 fails, comment on #194. One known limit: cloud sessions have no GitHub GraphQL, so `gh pr create` and `gh pr ready` fail there (`HTTP 403`). A cloud session can build and stamp a branch, but use a routine or your laptop to open the PR.
+
+Setup steps (secret, GitHub App, branch protection) are in [make-routines](plugins/flow-stack/skills/make-routines/SKILL.md). The stage-by-stage map, with what is planned and its issue, is [factory.md](plugins/flow-stack/skills/flow/references/factory.md).
 
 ## Skill catalog
 
