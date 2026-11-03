@@ -161,7 +161,7 @@ flowchart LR
 | `self-heal` | nightly | turns maintainer-labelled issues into proven draft PRs, at most 3 a run |
 | `mention` | `@claude` comment from someone with write access | runs the request through flow; draft PRs or a comment saying why it stopped |
 | `triage` | every 4 hours | labels new issues by type, readiness, size and risk; a change to the safety machinery is risk:high and is never built unattended |
-| `ideate` | weekly | files at most one `proposal`, with 2 independent cited sources; self-heal builds it only after you label it `accept` (and, with triage on, `heal-ok`) |
+| `ideate` | weekly | files at most one `proposal`, with 2 independent cited sources; self-heal builds it only after you label it both `accept` and `heal-ok` |
 | `auto-merge` | schedule | merges PRs a maintainer labelled, after tests and a security review; never touches the safety machinery (repo-local today, see [factory.md](plugins/flow-stack/skills/flow/references/factory.md)) |
 
 **How much runs without you** is set per routine, not guessed. A routine without `contents` in `grants` runs as `--auto` and the hooks deny every push and PR. With `contents` it runs as `--auto ship`, which can push its own branch and open a PR only after `ready.sh` stamps HEAD. In a session, pair mode is unchanged.

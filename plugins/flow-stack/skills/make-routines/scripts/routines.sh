@@ -10,7 +10,7 @@
 #   routines.sh check                                 every routine's workflow matches a fresh render; no orphans
 #   routines.sh safety [-z] [--ref <ref>] [path ...]  the paths (args, else stdin lines, or NUL-separated with -z) on
 #                                                     .github/routines/safety-paths.txt (at <ref> with --ref; the
-#                                                     plugin's default without one): exit 1 on any, 2 on an error
+#                                                     repo's own list without one, the plugin default only if it has none): exit 1 on any, 2 on an error
 # Frontmatter: trigger (schedule | pull_request | mention: an @claude comment from a user with write access), cron and timezone (schedule only; an IANA zone, default UTC), timeout (minutes), labels (must exist;
 # create_labels: true makes missing ones; .github/routines/labels.tsv renames catalog labels to yours on add), auth
 # (oauth | api-key), grants (token scopes it may write: issues pull-requests contents; the rest are read),

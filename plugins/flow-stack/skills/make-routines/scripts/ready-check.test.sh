@@ -81,7 +81,7 @@ echo "-- triage: renders without push or PR power; a safety path scores risk:hig
 tw=$W/flow-triage.yml
 grep -q '^  issues: write$' $tw && grep -q '^  contents: read$' $tw && grep -q '^  pull-requests: read$' $tw && grep -q 'github_token: ${{ github.token }}' $tw &&
   grep -q -- ' --auto Run the routine' $tw && ok "triage writes only issues, with github.token, in plain --auto" || bad "triage can push or open PRs"
-grep -q 'size:S size:M size:L risk:low' $tw && ok "triage creates its labels" || bad "triage labels missing"
+grep -q 'size:S size:M size:L risk:low' $tw && ok "triage lists the labels it needs" || bad "triage labels missing"
 cmp -s .github/routines/safety-paths.txt "$H/../templates/safety-paths.txt" && ok "add writes the default safety list" || bad "no safety list written"
 "$H/routines.sh" safety src/app.sh docs/a.md >/dev/null && ok "ordinary paths pass" || bad "ordinary path flagged"
 for p in .github/workflows/x.yml a/b/CLAUDE.md sub/.claude/agents/x.md settings.local.json '"odd\303"'; do
@@ -98,7 +98,7 @@ printf 'src/a\n.github/x.yml' | "$H/routines.sh" safety --ref "$base" >/dev/null
 printf 'src/a\0.github/x.yml' | "$H/routines.sh" safety -z --ref "$base" >/dev/null; [ $? = 1 ] && ok "a last -z path with no NUL is still checked" || bad "unterminated last -z path skipped"
 printf '\0' | "$H/routines.sh" safety -z >/dev/null 2>&1; [ $? = 2 ] && ok "an empty -z path is an error" || bad "an empty -z path passed"
 "$H/routines.sh" safety --ref nope x >/dev/null 2>&1; [ $? = 2 ] && ok "a bad --ref is an error, not a pass" || bad "bad --ref passed"
-nolist="$(git -c user.email=t@t -c user.name=t commit-tree"$(git mktree </dev/null)" -m empty)"
+nolist="$(git -c user.email=t@t -c user.name=t commit-tree "$(git mktree </dev/null)" -m empty)"; [ -n "$nolist" ] || bad "could not make a commit without the list"
 "$H/routines.sh" safety --ref "$nolist" plugins/flow-stack/hooks/guard.sh >/dev/null 2>&1; [ $? = 2 ] && ok "a base with no safety list is an error, not the generic default" || bad "no list at the base fell back"
 "$H/routines.sh" safety --ref '' .github/x.yml >/dev/null 2>&1; [ $? = 2 ] && ok "an empty --ref is an error" || bad "empty --ref read the working tree"
 printf '' | "$H/routines.sh" safety -z >/dev/null 2>&1; [ $? = 2 ] && printf '\n' | "$H/routines.sh" safety >/dev/null 2>&1; [ $? = 2 ] &&
