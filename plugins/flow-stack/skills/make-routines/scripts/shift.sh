@@ -129,6 +129,7 @@ checkout() { # checkout <repo> <dir>: a fresh clone the agent can commit in but 
   local why
   rm -rf "$2"; mkdir -p "${2%/*}"
   gh repo clone "$1" "$2" -- -q >/dev/null 2>&1 || { echo "could not clone $1"; return 1; }
+  git -C "$2" remote get-url origin >"$2.origin"   # recorded before the agent runs: release pushes here, not to a URL it set
   why="$(factory_ready "$2")" || { echo "factory not ready: $why"; return 1; }
   git -C "$2" remote set-url --push origin release-with-shift.sh   # pushing waits for shift.sh push|open
   mkdir -p "$2/.flow/shift"; echo /.flow/shift/ >>"$2/.git/info/exclude"   # others' text there is never committable
@@ -181,7 +182,8 @@ the reply under it.")" || ok=""
   jq -r '.total_cost_usd // 0' <<<"$out" 2>/dev/null >&3 || echo 0 >&3
   [ -n "$ok" ] || { result ✗ "the agent failed" "" 1; return; }
   # what it did, checked here rather than taken from its word: new commits, each item named, every Check: passing on HEAD
-  local log; log="$(git -C "$w" log --cherry-pick --right-only --no-merges --format='%B' "$headsha...HEAD" 2>/dev/null)"
+  # only the agent's commits: a rebase brings base's commits in, and their Check: lines and words aren't its answers
+  local log; log="$(git -C "$w" log --no-merges --format='%B' HEAD --not "$headsha" "origin/$base" 2>/dev/null)"
   [ -n "$log" ] || { result ✗ "the agent made no commit"; return; }
   left_items="$(jq -r '.todo[]' "$w/.flow/shift/feedback.json" | while IFS= read -r t; do tr -s '[:space:]' '\n' <<<"$log" | grep -qxF -- "$t" || echo "$t"; done)"
   local checks failed=""; checks="$(sed -n 's/^Check:[[:space:]]*//p' <<<"$log")"
@@ -193,7 +195,7 @@ the reply under it.")" || ok=""
   jq -r '.result // ""' <<<"$out" >"$f.replies.md"
   jq -n --arg dir "$w" --arg url "$url" --arg branch "$headref" --arg lease "$headsha" --arg replies "$f.replies.md" \
     '{job: "respond", dir: $dir, url: $url, branch: $branch, lease: $lease, replies: $replies}' >"$f.release.json"
-  note="$(grep -c . <<<"$checks" | tr -d ' ') check(s) on $(git -C "$w" rev-list --count "$headsha..HEAD") commit(s)"
+  note="$(grep -c . <<<"$checks" | tr -d ' ') check(s) on $(git -C "$w" rev-list --count --no-merges HEAD --not "$headsha" "origin/$base") commit(s)"
   mark=✓
   [ -z "$left_items" ] || { mark="~"; note="$note; unanswered: $(tr '\n' ' ' <<<"$left_items")"; }
   [ -z "$failed" ] || { mark="~"; note="$note; failing:${failed#;}"; }
@@ -247,21 +249,31 @@ release() { # release push|open <id>: the human's outward step, from a normal sh
   f="$home/shift/out/${id//[^A-Za-z0-9._-]/-}.release.json"
   [ -f "$f" ] || die "nothing prepared for $id ($f); run the shift first"
   case "$verb:$(jq -r .job "$f")" in push:respond|open:start) ;; *) die "$id was prepared by $(jq -r .job "$f"); use shift.sh $([ "$verb" = push ] && echo open || echo push) $id" ;; esac
-  d="$(jq -r .dir "$f")"; url="$(git -C "$d" remote get-url origin)"   # the fetch URL: checkout's push URL goes nowhere on purpose
-  # the clone is the agent's: a review_gate: yolo it set (or the repo's) would pass with nothing checked, so release needs
-  # the gate on, a fresh ready.sh run, and the stamp that run writes for this HEAD
-  [ "$(cd "$d" && "$plugin/skills/review/scripts/ready.sh" mode)" = on ] || die "review gate is yolo in $d: the shift releases only a stamped HEAD"
-  (cd "$d" && "$plugin/skills/review/scripts/ready.sh" && "$plugin/skills/review/scripts/ready.sh" stamped) \
-    || die "not ready: fix what ready.sh lists in $d, then run this again"
+  d="$(jq -r .dir "$f")"
+  url="$(cat "$d.origin" 2>/dev/null)" || die "no recorded origin for $d; run the shift again"
+  # The clone is the agent's: its config, hooks and ready commands run here only in a cleared env (no ssh agent, gh
+  # login, cloud credentials or your HOME). A review_gate: yolo would pass with nothing checked, so the gate must be on,
+  # and a fresh ready.sh run must stamp this HEAD.
+  cleared() { (cd "$d" && env -i PATH="$PATH" HOME="$home/shift/home" TMPDIR="${TMPDIR:-/tmp}" LANG="${LANG:-C.UTF-8}" \
+    FLOW_STACK_HOME="$home" GH_CONFIG_DIR="$home/shift/gh-none" GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
+    GIT_SSH_COMMAND=false GIT_TERMINAL_PROMPT=0 "$@" </dev/null); }
+  mkdir -p "$home/shift/home"
+  local rs="$plugin/skills/review/scripts/ready.sh"
+  [ "$(cleared "$rs" mode)" = on ] || die "review gate is yolo in $d: the shift releases only a stamped HEAD"
+  cleared "$rs" && cleared "$rs" stamped || die "not ready: fix what ready.sh lists in $d, then run this again"
+  # The push leaves from an empty repo holding only that commit, so none of the clone's git config or hooks runs as you
+  local sha t; sha="$(cleared git rev-parse HEAD)" t="$(mktemp -d)"
+  git init -q --bare "$t" && git -C "$t" fetch -q "$d" "$sha" || { rm -rf "$t"; die "could not take $sha from $d"; }
   if [ "$verb" = push ]; then
-    git -C "$d" push --force-with-lease="refs/heads/$(jq -r .branch "$f"):$(jq -r .lease "$f")" "$url" "HEAD:refs/heads/$(jq -r .branch "$f")"
+    git -C "$t" push --force-with-lease="refs/heads/$(jq -r .branch "$f"):$(jq -r .lease "$f")" "$url" "$sha:refs/heads/$(jq -r .branch "$f")" || { rm -rf "$t"; die "push failed"; }
     echo "pushed $(jq -r .branch "$f") to $(jq -r .url "$f"); replies to post: $(jq -r .replies "$f")"
   else
-    git -C "$d" push "$url" "HEAD:refs/heads/$(jq -r .branch "$f")"
+    git -C "$t" push "$url" "$sha:refs/heads/$(jq -r .branch "$f")" || { rm -rf "$t"; die "push failed"; }
     printf 'Closes %s\n\n%s\n' "$(jq -r .url "$f")" "$(sed -n '/^## Goal/,/^## /{/^## /d;/^<!--/d;p;}' "$(jq -r .spec "$f")")" >"$d/.flow/shift/pr-body.md"
-    (cd "$d" && gh pr create --draft --repo "$(jq -r .repo "$f")" --base "$(jq -r .base "$f")" --head "$(jq -r .branch "$f")" \
+    (cd "$t" && gh pr create --draft --repo "$(jq -r .repo "$f")" --base "$(jq -r .base "$f")" --head "$(jq -r .branch "$f")" \
       --title "$(jq -r .title "$f")" --body-file "$d/.flow/shift/pr-body.md")
   fi
+  rm -rf "$t"
 }
 
 run() {
