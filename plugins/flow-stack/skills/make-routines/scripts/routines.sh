@@ -313,8 +313,11 @@ safety() { # prints "<path><TAB><glob>" for each path on the list
     git rev-parse -q --verify "$ref^{commit}" >/dev/null || die "--ref $ref is not a commit"
     # a base without the list fails closed: the generic default lacks this repo's own machinery
     list="$(git show "$ref:$dir/safety-paths.txt" 2>/dev/null)" || die "$ref has no $dir/safety-paths.txt"
-  elif [ -f "$dir/safety-paths.txt" ]; then list="$(cat "$dir/safety-paths.txt")"
-  else list="$(cat "$tpl/safety-paths.txt")"; fi
+  else
+    # the repo's own list, wherever in the checkout this runs; the plugin default only outside a repo with one
+    local own; own="$(git rev-parse --show-toplevel 2>/dev/null || echo .)/$dir/safety-paths.txt"
+    if [ -f "$own" ]; then list="$(cat "$own")"; else list="$(cat "$tpl/safety-paths.txt")"; fi
+  fi
   while read -r g _; do case "$g" in ''|'#'*) ;; *) pats+=("$g") ;; esac; done < <(tr -d '\r' <<<"$list")
   [ ${#pats[@]} -gt 0 ] || die "the safety list has no globs"
   on_list() {
@@ -324,8 +327,9 @@ safety() { # prints "<path><TAB><glob>" for each path on the list
     return 1
   }
   if [ $# -gt 0 ]; then for p; do n=$((n + 1)); on_list "$p" && hit=1; done
-  elif [ -n "$z" ]; then while IFS= read -r -d '' p; do n=$((n + 1)); on_list "$p" && hit=1; done
-  else while IFS= read -r p; do [ -z "$p" ] && continue; n=$((n + 1)); on_list "$p" && hit=1; done; fi
+  # `|| [ -n "$p" ]` keeps a last path that has no trailing separator; an empty -z entry means a broken feed
+  elif [ -n "$z" ]; then while IFS= read -r -d '' p || [ -n "$p" ]; do [ -n "$p" ] || die "an empty path in -z input"; n=$((n + 1)); on_list "$p" && hit=1; done
+  else while IFS= read -r p || [ -n "$p" ]; do [ -z "$p" ] && continue; n=$((n + 1)); on_list "$p" && hit=1; done; fi
   # a change always has a path, so none means the command feeding this failed: that must not read as clean
   [ "$n" -gt 0 ] || die "no paths to check"
   return "$hit"

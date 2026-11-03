@@ -90,8 +90,13 @@ done
 zo="$(printf 'src/a\0x/.flow/run.sh\0' | "$H/routines.sh" safety -z)"; [ $? = 1 ] && [ "$zo" = "$(printf 'x/.flow/run.sh\t*/.flow/*')" ] && ok "-z reads NUL-separated paths" || bad "-z missed a hit"
 git add -A && git -c user.email=t@t -c user.name=t commit -qm base && base="$(git rev-parse HEAD)" && git switch -qc pr
 echo '/nothing/*' >.github/routines/safety-paths.txt
-"$H/routines.sh" safety .github/x.yml >/dev/null && "$H/routines.sh" safety --ref "$base" .github/x.yml >/dev/null; [ $? = 1 ] &&
-  ok "--ref reads the base branch's list, not the PR's" || bad "a PR shortened its own safety list"
+"$H/routines.sh" safety .github/x.yml >/dev/null; wt=$?
+"$H/routines.sh" safety --ref "$base" .github/x.yml >/dev/null; rf=$?
+[ "$wt" = 0 ] && [ "$rf" = 1 ] && ok "--ref reads the base branch's list, not the PR's" || bad "a PR shortened its own safety list (tree=$wt ref=$rf)"
+mkdir -p deep/dir && (cd deep/dir && "$H/routines.sh" safety .github/x.yml >/dev/null); [ $? = 0 ] && ok "below the repo root it still reads the repo's own list" || bad "a subdirectory fell back to the plugin default"
+printf 'src/a\n.github/x.yml' | "$H/routines.sh" safety --ref "$base" >/dev/null; [ $? = 1 ] && ok "a last line with no newline is still checked" || bad "unterminated last path skipped"
+printf 'src/a\0.github/x.yml' | "$H/routines.sh" safety -z --ref "$base" >/dev/null; [ $? = 1 ] && ok "a last -z path with no NUL is still checked" || bad "unterminated last -z path skipped"
+printf '\0' | "$H/routines.sh" safety -z >/dev/null 2>&1; [ $? = 2 ] && ok "an empty -z path is an error" || bad "an empty -z path passed"
 "$H/routines.sh" safety --ref nope x >/dev/null 2>&1; [ $? = 2 ] && ok "a bad --ref is an error, not a pass" || bad "bad --ref passed"
 nolist="$(git commit-tree "$(git mktree </dev/null)" -m empty)"
 "$H/routines.sh" safety --ref "$nolist" plugins/flow-stack/hooks/guard.sh >/dev/null 2>&1; [ $? = 2 ] && ok "a base with no safety list is an error, not the generic default" || bad "no list at the base fell back"
