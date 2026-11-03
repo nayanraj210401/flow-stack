@@ -45,7 +45,7 @@ labels() { # run self-heal's label step as rendered; its summary goes to $SB/lsu
   step "flow-stack home and labels" | sed '/RUNNER_TEMP/d; /GITHUB_ENV/d; /profile.md/d' >labels.sh
   GH_LOG="$SB/repo/gh.log" GITHUB_STEP_SUMMARY="$SB/lsum" PATH="$SB/repo/bin:$PATH" bash labels.sh >/dev/null
 }
-labels && bad "a missing label didn't stop the run" || ok "a missing label stops the run by default"
+if labels; then bad "a missing label didn't stop the run"; else ok "a missing label stops the run by default"; fi
 grep -q 'label heal-ok missing' "$SB/lsum" && ok "summary names the missing label" || bad "summary: $(cat "$SB/lsum")"
 grep -q 'label create' gh.log && bad "created a label without create_labels: $(cat gh.log)" || ok "no label created by default"
 perl -pi -e "s/^labels:/create_labels: true\nlabels:/" .github/routines/self-heal.md && bash "$H/routines.sh" render >/dev/null
@@ -58,12 +58,14 @@ echo "-- labels.tsv renames catalog labels on add"
 mkdir -p "$SB/new/.github/routines" "$SB/new/verify" "$SB/new/.flow/features" && cd "$SB/new" && git init -q
 echo x >verify/run.sh; printf -- '---\nid: a\nscenario: run it\n---\n' >.flow/features/a.md
 git add -A && git -c user.email=a@b -c user.name=a commit -qm i
-printf '# catalog yours\nheal-ok approved\nneeds-repro Needs-Info\nself-create bot-filed\n' >.github/routines/labels.tsv
+# self-heal is a label and the routine's name (and its branch prefix): only the label is renamed
+printf '# catalog yours\nheal-ok approved\nneeds-repro Needs-Info\nself-create bot-filed\nself-heal fixer\n' >.github/routines/labels.tsv
 bash "$H/routines.sh" add self-heal >/dev/null || bad "add self-heal failed"
 r=.github/routines/self-heal.md
-[ "$(sed -n 's/^labels: //p' $r)" = "self-heal approved Needs-Info" ] && ok "labels: line uses the repo's names" || bad "labels: $(grep '^labels:' $r)"
-grep -q -- '--label approved --json' $r && grep -q -- '--label bot-filed`' $r && grep -q '`Needs-Info`' $r \
-  && ok "the prompt says approved, Needs-Info, bot-filed" || bad "prompt not renamed"
+[ "$(sed -n 's/^labels: //p' $r)" = "fixer approved Needs-Info" ] && ok "labels: line uses the repo's names" || bad "labels: $(grep '^labels:' $r)"
+grep -q -- '--label approved --json' $r && grep -q -- '--label bot-filed`' $r && grep -q '`Needs-Info`' $r && grep -q -- '--label fixer --title' $r \
+  && ok "the prompt says approved, Needs-Info, bot-filed, fixer" || bad "prompt not renamed"
+grep -q 'a self-heal comment' $r && ok "the routine's own name in prose stays" || bad "renamed self-heal in prose"
 grep -qE 'heal-ok|needs-repro|`self-create`' $r && bad "a catalog label is left: $(grep -noE 'heal-ok|needs-repro|`self-create`' $r | head -3)" || ok "no catalog label left"
 grep -q 'self-create routine' $r && grep -q '`self-heal/<number>-<slug>`' $r && ok "routine names and branch names untouched" || bad "renamed a non-label"
 grep -q 'approved' .github/workflows/flow-self-heal.yml && ok "rendered workflow checks the mapped label" || bad "workflow lacks mapped label"
