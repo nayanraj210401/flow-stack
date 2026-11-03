@@ -47,7 +47,7 @@ if [ -n "$root" ]; then
   wf() { git -C "$FLOW_ROOT" cat-file -e "HEAD:.github/workflows/flow-$1.yml" 2>/dev/null; }
   routine() { wf "$1" && row "$2" ok "$1 routine" || row "$2" missing "make-routines: $1${3:+ ($3)}"; }
   routine self-create monitor
-  row triage planned "#185 triage, #186 ideate"
+  routine triage triage "ideate files proposals"
   row spec ok "intent + seal with the edge-case matrix (plugin)"
   # self-heal (issues) or mention (@claude) runs the build unattended
   s=""; wf self-heal && s=self-heal; wf mention && s="${s:+$s + }mention"
@@ -56,6 +56,6 @@ if [ -n "$root" ]; then
   . "$(dirname "$0")/../../../hooks/lib.sh"
   if miss="$(factory_ready "$FLOW_ROOT")"; then ready=1; row verify ok "committed verify driver + a feature with a scenario"; else ready=""; row verify missing "${miss:-factory_ready failed}"; fi
   routine review review "ready.sh works in a session"
-  wf auto-merge && row ship ok "auto-merge routine" || row ship missing "auto-merge routine (no make-routines template yet; #184)"
+  wf auto-merge && row ship ok "auto-merge routine" || row ship missing "auto-merge routine (copy flow-stack's .github/routines/auto-merge.md; no template)"
   [ -n "$ready" ] && row factory ok "ready; impacted scenarios must also pass on HEAD (ready.sh)" || row factory missing "not ready: needs verify; --auto ship warns, or runs as plain --auto with factory_ready: enforce"
 fi

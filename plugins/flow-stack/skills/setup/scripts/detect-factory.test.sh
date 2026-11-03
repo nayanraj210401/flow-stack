@@ -15,12 +15,12 @@ echo "-- empty repo"
 out="$("$D")"
 want FACTORY STATUS
 want monitor missing make-routines
-want triage planned '#185'
+want triage missing 'make-routines: triage'
 want spec ok intent
 want implement missing make-routines
 want verify missing 'make-verifier.*feature-map'
 want review missing make-routines
-want ship missing '#184'
+want ship missing 'auto-merge.md'
 want factory missing
 [ "$(grep -n '^routines ' <<<"$out" | cut -d: -f1)" -lt "$(grep -n '^FACTORY ' <<<"$out" | cut -d: -f1)" ] \
   && ok "factory rows come after every existing row" || bad "factory rows interleave existing rows"

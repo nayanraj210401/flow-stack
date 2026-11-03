@@ -76,4 +76,67 @@ grep -q 'A `self-heal` PR goes back to its routine instead of being blocked' "$a
 ! grep -q 'heal-ok' "$am" && grep -q 'last `labeled` event for `auto-merge`' "$am" && ok "auto-merge: still a human auto-merge label, no agent-linked heal-ok shortcut" || bad "auto-merge trusts an agent-chosen issue link"
 grep -q 'also for a PR with a `flow/ready` check' "$am" && ok "auto-merge still reviews a stamped PR itself" || bad "auto-merge trusts the self-written stamp"
 
+echo "-- triage: renders without push or PR power; a safety path scores risk:high"
+"$H/routines.sh" add triage >/dev/null || bad "add triage failed"
+tw=$W/flow-triage.yml
+grep -q '^  issues: write$' $tw && grep -q '^  contents: read$' $tw && grep -q '^  pull-requests: read$' $tw && grep -q 'github_token: ${{ github.token }}' $tw &&
+  grep -q -- ' --auto Run the routine' $tw && ok "triage writes only issues, with github.token, in plain --auto" || bad "triage can push or open PRs"
+grep -q 'size:S size:M size:L risk:low' $tw && ok "triage lists the labels it needs" || bad "triage labels missing"
+cmp -s .github/routines/safety-paths.txt "$H/../templates/safety-paths.txt" && ok "add writes the default safety list" || bad "no safety list written"
+"$H/routines.sh" safety src/app.sh docs/a.md >/dev/null && ok "ordinary paths pass" || bad "ordinary path flagged"
+for p in .github/workflows/x.yml a/b/CLAUDE.md sub/.claude/agents/x.md settings.local.json '"odd\303"'; do
+  "$H/routines.sh" safety src/app.sh "$p" >/dev/null; [ $? = 1 ] && ok "safety flags $p" || bad "safety missed $p"
+done
+zo="$(printf 'src/a\0x/.flow/run.sh\0' | "$H/routines.sh" safety -z)"; [ $? = 1 ] && [ "$zo" = "$(printf 'x/.flow/run.sh\t*/.flow/*')" ] && ok "-z reads NUL-separated paths" || bad "-z missed a hit"
+git add -A && git -c user.email=t@t -c user.name=t commit -qm base && base="$(git rev-parse HEAD)" && git switch -qc pr
+echo '/nothing/*' >.github/routines/safety-paths.txt
+"$H/routines.sh" safety .github/x.yml >/dev/null; wt=$?
+"$H/routines.sh" safety --ref "$base" .github/x.yml >/dev/null; rf=$?
+[ "$wt" = 0 ] && [ "$rf" = 1 ] && ok "--ref reads the base branch's list, not the PR's" || bad "a PR shortened its own safety list (tree=$wt ref=$rf)"
+mkdir -p deep/dir && (cd deep/dir && "$H/routines.sh" safety .github/x.yml >/dev/null); [ $? = 0 ] && ok "below the repo root it still reads the repo's own list" || bad "a subdirectory fell back to the plugin default"
+printf 'src/a\n.github/x.yml' | "$H/routines.sh" safety --ref "$base" >/dev/null; [ $? = 1 ] && ok "a last line with no newline is still checked" || bad "unterminated last path skipped"
+printf 'src/a\0.github/x.yml' | "$H/routines.sh" safety -z --ref "$base" >/dev/null; [ $? = 1 ] && ok "a last -z path with no NUL is still checked" || bad "unterminated last -z path skipped"
+printf '\0' | "$H/routines.sh" safety -z >/dev/null 2>&1; [ $? = 2 ] && ok "an empty -z path is an error" || bad "an empty -z path passed"
+"$H/routines.sh" safety --ref nope x >/dev/null 2>&1; [ $? = 2 ] && ok "a bad --ref is an error, not a pass" || bad "bad --ref passed"
+nolist="$(git -c user.email=t@t -c user.name=t commit-tree "$(git mktree </dev/null)" -m empty)"; [ -n "$nolist" ] || bad "could not make a commit without the list"
+"$H/routines.sh" safety --ref "$nolist" plugins/flow-stack/hooks/guard.sh >/dev/null 2>&1; [ $? = 2 ] && ok "a base with no safety list is an error, not the generic default" || bad "no list at the base fell back"
+"$H/routines.sh" safety --ref '' .github/x.yml >/dev/null 2>&1; [ $? = 2 ] && ok "an empty --ref is an error" || bad "empty --ref read the working tree"
+printf '' | "$H/routines.sh" safety -z >/dev/null 2>&1; [ $? = 2 ] && printf '\n' | "$H/routines.sh" safety >/dev/null 2>&1; [ $? = 2 ] &&
+  ok "no paths (a failed git diff upstream) is an error, not clean" || bad "empty input passed"
+tt="$H/../templates/triage.md"
+grep -q 'routines.sh safety <files>` exits non-zero |$' "$tt" && grep -q '\*\*risk:high is never built.\*\* Add `needs-human`, and put a draft INTENT' "$tt" &&
+  ok "triage: a safety path is risk:high, which gets a draft INTENT and needs-human" || bad "triage contract"
+grep -q 'When `.github/routines/triage.md` exists' "$H/../templates/self-heal.md" && grep -q '`risk:high` is never built' "$H/../templates/self-heal.md" &&
+  grep -q 'triage miss: predicted' "$H/../templates/self-heal.md" && ok "self-heal: triage picks, never high, re-scores the diff" || bad "self-heal ignores triage"
+
+echo "-- ideate: one cited proposal, issues only; self-heal skips a proposal without a human accept"
+"$H/routines.sh" add ideate >/dev/null || bad "add ideate failed"
+iw=$W/flow-ideate.yml
+grep -q '^  issues: write$' $iw && grep -q '^  contents: read$' $iw && grep -q '^  pull-requests: read$' $iw && grep -q 'github_token: ${{ github.token }}' $iw &&
+  grep -q -- ' --auto Run the routine' $iw && grep -q 'labels="proposal accept"' $iw && ok "ideate writes only issues and needs proposal + accept" || bad "ideate render"
+it="$H/../templates/ideate.md"
+grep -q 'never more than one per run' "$it" && grep -q '\*\*2 or more independent sources\*\*' "$it" && grep -q 'no proposal: evidence below threshold' "$it" &&
+  grep -q 'make-routines/templates/triage.md` step 2' "$it" && grep -q 'routines.sh safety <files>' "$it" && grep -q '\*\*Dry run\*\*' "$it" &&
+  grep -q 'counts as no evidence at all' "$it" && grep -q 'with `proposal` as its only label' "$it" && grep -q 'Never comment, label, close, or edit other issues' "$it" &&
+  ok "ideate: max 1, two sources or none, triage's risk table, a dry run" || bad "ideate contract"
+for sh in "$H/../templates/self-heal.md" "$(git -C "$H" rev-parse --show-toplevel)/.github/routines/self-heal.md"; do
+  [ -f "$sh" ] || continue
+  grep -q 'skip it unless it carries `accept` and a human applied it, meaning the actor of the last `labeled` event for `accept`' "$sh" && grep -q '`heal-ok` alone never counts for a proposal, and a `heal-ok` no human applied' "$sh" &&
+    ok "${sh#"$(dirname "$(dirname "$sh")")"/}: a proposal needs a human accept" || bad "$sh builds a proposal without accept"
+done
+
+echo "-- one safety list"
+sp="$(git -C "$H" rev-parse --show-toplevel)/.github/routines/safety-paths.txt"
+if [ -f "$am" ] && [ -f "$sp" ]; then
+  grep -q 'origin/<base>...FETCH_HEAD | make-routines/scripts/routines.sh safety -z --ref origin/<base>' "$am" && grep -q '`.github/routines/safety-paths.txt`' "$am" && ok "auto-merge reads the safety list" || bad "auto-merge doesn't read the list"
+  ! grep -qE 'plugins/flow-stack/(hooks|agents)/|`\.mcp\.json`|`make-gates/`' "$am" && ok "auto-merge has no path list of its own" || bad "auto-merge still lists paths in prose"
+  diff <(grep -v '^#' "$H/../templates/safety-paths.txt") <(head -n "$(grep -vc '^#' "$H/../templates/safety-paths.txt")" < <(grep -v '^#' "$sp")) >/dev/null &&
+    ok "this repo's list starts with the plugin default" || bad "this repo's list dropped a default glob"
+  cd "$(dirname "$sp")/../.."
+  for p in plugins/flow-stack/hooks/guard.sh plugins/flow-stack/skills/feature-map/scripts/features.sh README.md plugins/flow-stack/skills/make-routines/templates/triage.md; do
+    "$H/routines.sh" safety "$p" >/dev/null; [ $? = 1 ] && ok "this repo flags $p" || bad "this repo missed $p"
+  done
+  "$H/routines.sh" safety plugins/flow-stack/skills/brief/SKILL.md >/dev/null && ok "this repo passes a plain skill doc" || bad "brief/SKILL.md flagged"
+fi
+
 [ "$FAILS" = 0 ] && echo "ready-check.test.sh: pass" || { echo "ready-check.test.sh: $FAILS failed"; exit 1; }

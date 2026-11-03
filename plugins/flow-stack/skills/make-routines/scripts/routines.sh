@@ -8,6 +8,9 @@
 #                                                     change a scheduled routine's cron (in its timezone) and re-render it
 #   routines.sh render                                .github/routines/*.md → .github/workflows/flow-<name>.yml
 #   routines.sh check                                 every routine's workflow matches a fresh render; no orphans
+#   routines.sh safety [-z] [--ref <ref>] [path ...]  the paths (args, else stdin lines, or NUL-separated with -z) on
+#                                                     .github/routines/safety-paths.txt (at <ref> with --ref; the
+#                                                     repo's own list without one, the plugin default only if it has none): exit 1 on any, 2 on an error
 # Frontmatter: trigger (schedule | pull_request | mention: an @claude comment from a user with write access), cron and timezone (schedule only; an IANA zone, default UTC), timeout (minutes), labels (must exist;
 # create_labels: true makes missing ones; .github/routines/labels.tsv renames catalog labels to yours on add), auth
 # (oauth | api-key), grants (token scopes it may write: issues pull-requests contents; the rest are read),
@@ -262,6 +265,7 @@ add() {
     die "$name runs on $(field "$tpl/$name.md" trigger schedule), which takes no --cron"
   fi
   profile "$preset"
+  [ -f "$dir/safety-paths.txt" ] || { cp "$tpl/safety-paths.txt" "$dir/"; echo "wrote $dir/safety-paths.txt (the paths no routine merges or builds unattended; add your own)"; }
   if [ -f "$tpl/$name.md" ]; then local body; body="$(relabel <"$tpl/$name.md")" || exit 2; printf '%s\n' "$body" >"$f"
   else printf -- '---\nabout: TODO one line: what it does and when to use it\ntrigger: schedule\ncron: "0 3 * * *"\ntimeout: 60\ngrants: issues\n---\n# %s\n\nTODO: what this routine does, its caps, and what it must never do.\n' "$name" >"$f"
   fi
@@ -299,11 +303,44 @@ check() {
   return "$bad"
 }
 
+safety() { # prints "<path><TAB><glob>" for each path on the list
+  local z="" ref="" list p g pats=() hit=0 n=0
+  while [ $# -gt 0 ]; do
+    case "$1" in -z) z=1; shift ;; --ref) [ -n "${2:-}" ] || die "--ref needs a ref"; ref="$2"; shift 2 ;; --) shift; break ;; *) break ;; esac
+  done
+  # With --ref the list comes from that commit, so a PR checked out in the working tree can't shorten its own list
+  if [ -n "$ref" ]; then
+    git rev-parse -q --verify "$ref^{commit}" >/dev/null || die "--ref $ref is not a commit"
+    # a base without the list fails closed: the generic default lacks this repo's own machinery
+    list="$(git show "$ref:$dir/safety-paths.txt" 2>/dev/null)" || die "$ref has no $dir/safety-paths.txt"
+  else
+    # the repo's own list, wherever in the checkout this runs; the plugin default only outside a repo with one
+    local own; own="$(git rev-parse --show-toplevel 2>/dev/null || echo .)/$dir/safety-paths.txt"
+    if [ -f "$own" ]; then list="$(cat "$own")"; else list="$(cat "$tpl/safety-paths.txt")"; fi
+  fi
+  while read -r g _; do case "$g" in ''|'#'*) ;; *) pats+=("$g") ;; esac; done < <(tr -d '\r' <<<"$list")
+  [ ${#pats[@]} -gt 0 ] || die "the safety list has no globs"
+  on_list() {
+    # git quotes a path with unusual bytes unless -z; a quoted path can't be matched, so it counts as a hit
+    [[ "$1" != \"* ]] || { printf '%s\tquoted path: list it with git -z and pass -z\n' "$1"; return 0; }
+    for g in "${pats[@]}"; do [[ "/${1#./}" == $g ]] && { printf '%s\t%s\n' "$1" "$g"; return 0; }; done
+    return 1
+  }
+  if [ $# -gt 0 ]; then for p; do n=$((n + 1)); on_list "$p" && hit=1; done
+  # `|| [ -n "$p" ]` keeps a last path that has no trailing separator; an empty -z entry means a broken feed
+  elif [ -n "$z" ]; then while IFS= read -r -d '' p || [ -n "$p" ]; do [ -n "$p" ] || die "an empty path in -z input"; n=$((n + 1)); on_list "$p" && hit=1; done
+  else while IFS= read -r p || [ -n "$p" ]; do [ -z "$p" ] && continue; n=$((n + 1)); on_list "$p" && hit=1; done; fi
+  # a change always has a path, so none means the command feeding this failed: that must not read as clean
+  [ "$n" -gt 0 ] || die "no paths to check"
+  return "$hit"
+}
+
 case "${1:-}" in
   list) list ;;
+  safety) shift; safety "$@" ;;
   add) shift; add "$@" ;;
   schedule) shift; schedule "$@" ;;
   render) render ;;
   check) check ;;
-  *) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac
