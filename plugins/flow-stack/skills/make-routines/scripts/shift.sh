@@ -266,9 +266,8 @@ release() { # release push|open <id>: the human's outward step, from a normal sh
     FLOW_STACK_HOME="$home" GH_CONFIG_DIR="$home/shift/gh-none" GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
     GIT_SSH_COMMAND=false GIT_TERMINAL_PROMPT=0 "$@" </dev/null); }
   mkdir -p "$home/shift/home"
-  sha="$(cleared "$d" git rev-parse -q --verify HEAD)" || die "no HEAD in $d"
-  git init -q --bare "$t/r.git" && git -C "$t/r.git" fetch -q "$d" "$sha:refs/heads/release" \
-    && cleared "$t" git clone -q -b release "$t/r.git" w || die "could not take $sha from $d"
+  git init -q --bare "$t/r.git" && cleared "$t/r.git" git fetch -q "$d" HEAD:refs/heads/release \
+    && sha="$(git -C "$t/r.git" rev-parse release)" && cleared "$t" git clone -q -b release "$t/r.git" w || die "could not take HEAD from $d"
   # the review, deslop and tour records are the agent's own, keyed by commit; nothing else under its .flow/ comes along
   mkdir -p "$t/w/.flow"; [ ! -f "$d/.flow/ready.tsv" ] || cp "$d/.flow/ready.tsv" "$t/w/.flow/ready.tsv"
   [ "$(cleared "$t/w" "$rs" mode)" = on ] || die "review gate is yolo in $sha: the shift releases only a stamped commit"
