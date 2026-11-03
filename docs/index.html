@@ -361,10 +361,9 @@ footer a { color: var(--muted); }
   <div class="wrap">
     <a class="logo" href="#top"><span class="logo-mark">⟳</span>flow-stack</a>
     <div class="nav-links">
-      <a class="opt" href="#how">How it works</a>
-      <a class="opt" href="#mods">Mods</a>
+      <a class="opt" href="#how">In your session</a>
       <a class="opt" href="#auto">Auto</a>
-      <a class="opt" href="#routines">Routines</a>
+      <a class="opt" href="#factory">Factory</a>
       <a class="opt" href="#board">Board</a>
       <a class="opt" href="#guardrails">Guardrails</a>
       <a class="opt" href="#cost">Cost</a>
@@ -378,7 +377,7 @@ footer a { color: var(--muted); }
   <div class="wrap hero-inner">
     <span class="pill"><span class="dot"></span>A plugin for Claude Code · skills + bash hooks</span>
     <h1>Spend attention like <em>money.</em></h1>
-    <p class="lede">flow-stack makes your agent agree on what "done" means before it writes code, then prove it with evidence it can't fake. You make three decisions per task. The hooks handle the rest.</p>
+    <p class="lede">flow-stack makes your agent agree on what "done" means before it writes code, then prove it with evidence it can't fake. You make three decisions per task. The hooks handle the rest, in your session or <a href="#factory">with nobody at the keyboard</a>: requests in, verified PRs out.</p>
     <div class="cta-row">
       <a class="btn primary" href="#install">Install in Claude Code →</a>
       <a class="btn" href="https://github.com/nayanraj210401/flow-stack#readme">Read the docs</a>
@@ -579,12 +578,13 @@ mul() { echo 6; } fooled one, not both.</span></div>
   </div>
 </section>
 
-<section id="routines">
+<section id="factory">
+  <span id="routines"></span>
   <div class="wrap">
     <div class="reveal">
-      <div class="kicker">Routines on GitHub Actions</div>
-      <h2>Your repo, <em>tended overnight.</em></h2>
-      <p class="sub">Claude Code's cloud routines can't load plugins, so flow-stack's hooks wouldn't run there. <code>/flow-stack:make-routines</code> writes GitHub Actions workflows that install the plugin on every run, so the guard, the fences, and the ready gate stay on with nobody watching. Pick the routines you need, and the skill asks before it opens a PR with the workflows.</p>
+      <div class="kicker">Software factory · routines on GitHub Actions</div>
+      <h2>Requests in. <em>Verified PRs out.</em></h2>
+      <p class="sub">An issue you labelled, an <code>@claude</code> comment, or a bug a routine reproduced becomes a draft PR that passed flow's ready gate. You review the spec, the code, and the product. Claude Code's cloud routines can't load plugins, so <code>/flow-stack:make-routines</code> writes GitHub Actions workflows that install the plugin on every run: the guard, the fences, and the ready gate stay on with nobody watching. The routines that ship need a factory-ready repo: a committed verify driver and a committed feature map with a scenario, because a runner sees only the clone.</p>
     </div>
     <div class="auto-grid">
       <div class="reveal">
@@ -592,8 +592,11 @@ mul() { echo 6; } fooled one, not both.</span></div>
           <div class="amode"><div class="flag">review · every PR</div><p>The <code>flow-stack:reviewer</code> agent reviews each non-draft PR in a fresh context and posts one comment with a verdict and file:line findings. It never approves, blocks, or pushes.</p></div>
           <div class="amode"><div class="flag">self-create · nightly</div><p>Hunts for bugs by running your tests and verify driver. It files an issue only when it has a repro that actually ran, checks for duplicates first, and files at most three per run.</p></div>
           <div class="amode"><div class="flag">self-heal · nightly</div><p>Takes issues a maintainer labelled <code>heal-ok</code>, reproduces each one, and fixes it through flow. A draft PR opens only after <code>ready.sh</code> stamps the commit.</p></div>
+          <div class="amode"><div class="flag">mention · @claude</div><p>An <code>@claude</code> comment from someone with write access runs through flow and ends in a draft PR, or a comment saying why it stopped. Bots, apps, and fork PRs are refused before the agent starts.</p></div>
+          <div class="amode"><div class="flag">auto-merge · on a schedule</div><p>Merges only PRs a maintainer labelled, after tests and a security review, and never one that touches the safety machinery. Repo-local for now: copy it from flow-stack's <code>.github/routines/</code>.</p></div>
         </div>
         <p class="never"><b>Each routine gets only the write access it needs.</b> <code>grants:</code> in its file sets the token: review can only comment, self-create can only file issues. Each routine is told to treat issue and PR text as data, never instructions. Each run installs flow-stack from its default branch, or the release you pin with <code>flow_ref</code>.</p>
+        <p class="never"><b>You can stop it in one command.</b> <code>gh variable set FLOW_FACTORY --body off</code> pauses every routine. Routines that push take turns, a run that hits a Claude usage limit ends green with "Stopped by a usage limit", and routines never create or edit your labels: map the catalog's names to yours in <code>.github/routines/labels.tsv</code>.</p>
       </div>
       <div class="term reveal">
         <div class="term-bar"><i></i><i></i><i></i><span class="title">make-routines · illustrative</span></div>
