@@ -103,7 +103,7 @@ and Glob and cannot run anything, so every blocker says not reproduced. Use your
   payload="$(jq -cn --arg c "$head" --arg b "$findings
 
 ---
-Checks: not run. The shift never runs a pull request's code on your machine and no container is configured, so blockers are read from the diff, not reproduced.
+Checks: not run. The shift never runs a pull request's code on your machine, so blockers are read from the diff, not reproduced.
 <sub>Staged by the flow-stack shift. This review is pending: only you can see it until you submit or discard it.</sub>" '{commit_id: $c, body: $b}')"
   plan="$st/out/${id//[^A-Za-z0-9._-]/-}.review.json"
   jq -n --arg url "$url" --arg repo "$repo" --arg v "$verdict" --argjson p "$payload" '{url: $url, repo: $repo, verdict: $v, payload: $p}' >"$plan"

@@ -171,6 +171,7 @@ flowchart LR
 - **Usage limits:** a run that hits a Claude usage limit ends green with "Stopped by a Claude usage limit" rather than a failed verdict.
 - **Your labels:** routines never create or edit labels unless the routine says `create_labels: true`. Map the catalog's names to yours in `.github/routines/labels.tsv` before `add`.
 - **Several repos:** list them in your profile's `# Repos` with a `what:` line, and `task.sh route "<request>"` picks the repo, the workspace, or asks one question.
+- **Your own overnight shift:** `make-routines add shift --local` runs on your laptop (launchd or cron, while it is on). It prepares pending reviews for PRs waiting on you, local fixes for feedback on your PRs, and proven commits for issues assigned to you, then writes a morning digest. Nothing leaves your machine until you run `shift.sh push` or `shift.sh open`.
 
 ### Cloud sessions (Claude Code on the web, Slack)
 
