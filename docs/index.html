@@ -596,7 +596,7 @@ mul() { echo 6; } fooled one, not both.</span></div>
           <div class="amode"><div class="flag">auto-merge · on a schedule</div><p>Merges only PRs a maintainer labelled, after tests and a security review, and never one that touches the safety machinery. Repo-local for now: copy it from flow-stack's <code>.github/routines/</code>.</p></div>
         </div>
         <p class="never"><b>Each routine gets only the write access it needs.</b> <code>grants:</code> in its file sets the token: review can only comment, self-create can only file issues. Each routine is told to treat issue and PR text as data, never instructions. Each run installs flow-stack from its default branch, or the release you pin with <code>flow_ref</code>.</p>
-        <p class="never"><b>You can stop it in one command.</b> <code>gh variable set FLOW_FACTORY --body off</code> pauses every routine. Routines that push take turns, a run that hits a Claude usage limit ends green with "Stopped by a Claude usage limit", and routines never create or edit your labels: map the catalog's names to yours in <code>.github/routines/labels.tsv</code>.</p>
+        <p class="never"><b>You can stop it in one command.</b> <code>gh variable set FLOW_FACTORY --body off</code> pauses every routine. Scheduled routines that push take turns, a run that hits a Claude usage limit ends green with "Stopped by a Claude usage limit", and routines never create or edit your labels: map the catalog's names to yours in <code>.github/routines/labels.tsv</code>.</p>
       </div>
       <div class="term reveal">
         <div class="term-bar"><i></i><i></i><i></i><span class="title">make-routines · illustrative</span></div>

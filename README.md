@@ -8,6 +8,7 @@ It is built from skills, bash + jq hooks, and existing tools. There is no new ru
 - [Architecture](#architecture)
 - [How you use it day to day](#how-you-use-it-day-to-day)
 - [When to use what](#when-to-use-what)
+- [Software factory mode](#software-factory-mode)
 - [Skill catalog](#skill-catalog)
 - [What it costs, and how it keeps cost down](#what-it-costs-and-how-it-keeps-cost-down)
 - [Guardrails (hooks)](#guardrails-hooks)
@@ -166,7 +167,7 @@ flowchart LR
 **Operating it:**
 
 - **Pause everything:** `gh variable set FLOW_FACTORY --body off`. `gh variable delete FLOW_FACTORY` resumes.
-- **One writer at a time:** routines that push share one concurrency group.
+- **One writer at a time:** scheduled routines that push (self-heal, auto-merge) share one concurrency group. `mention` runs per comment.
 - **Usage limits:** a run that hits a Claude usage limit ends green with "Stopped by a Claude usage limit" rather than a failed verdict.
 - **Your labels:** routines never create or edit labels unless the routine says `create_labels: true`. Map the catalog's names to yours in `.github/routines/labels.tsv` before `add`.
 - **Several repos:** list them in your profile's `# Repos` with a `what:` line, and `task.sh route "<request>"` picks the repo, the workspace, or asks one question.
