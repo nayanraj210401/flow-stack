@@ -160,6 +160,8 @@ flowchart LR
 | `self-create` | nightly | files issues only for bugs it reproduced by running the code |
 | `self-heal` | nightly | turns maintainer-labelled issues into proven draft PRs, at most 3 a run |
 | `mention` | `@claude` comment from someone with write access | runs the request through flow; draft PRs or a comment saying why it stopped |
+| `triage` | every 4 hours | labels new issues by type, readiness, size and risk; a change to the safety machinery is risk:high and is never built unattended |
+| `ideate` | weekly | files at most one `proposal`, with 2 independent cited sources; self-heal builds it only after you label it both `accept` and `heal-ok` |
 | `auto-merge` | schedule | merges PRs a maintainer labelled, after tests and a security review; never touches the safety machinery (repo-local today, see [factory.md](plugins/flow-stack/skills/flow/references/factory.md)) |
 
 **How much runs without you** is set per routine, not guessed. A routine without `contents` in `grants` runs as `--auto` and the hooks deny every push and PR. With `contents` it runs as `--auto ship`, which can push its own branch and open a PR only after `ready.sh` stamps HEAD. In a session, pair mode is unchanged.
@@ -278,7 +280,7 @@ Setup steps (secret, GitHub App, branch protection) are in [make-routines](plugi
 | `make-runner` | Generates `.claude/skills/run-<repo>/` with verified install, start, seed, reset, and stop commands. |
 | `make-playbook` | Generates `.flow/playbooks/<name>.md` from past traces, for workflows this repo repeats. |
 | `make-gates` | Generates `.flow/gates.md`: this repo's irreversible commands as deny/ask rules the guard hook enforces. |
-| `make-routines` | Generates GitHub Actions routines picked from a catalog: `review` (the reviewer agent on every PR), `self-create` (files reproducible bugs), `self-heal` (proven draft PRs), `mention` (`@claude` comments run through flow, ending in a draft PR), or your own. Cloud routines can't load plugins; Actions installs flow-stack on every run, pinnable with `flow_ref`. Asks before opening a PR with the workflows. `add shift --local` renders the shift: overnight on your laptop it prepares pending reviews, fixes for feedback on your PRs, and commits for issues assigned to you, plus a morning digest; you release each one. |
+| `make-routines` | Generates GitHub Actions routines picked from a catalog: `review` (the reviewer agent on every PR), `self-create` (files reproducible bugs), `self-heal` (proven draft PRs), `mention` (`@claude` comments run through flow, ending in a draft PR), `triage` (type, readiness, size and risk labels on new issues), `ideate` (one evidence-cited `proposal` issue a week, built only after a human `accept`), or your own. Cloud routines can't load plugins; Actions installs flow-stack on every run, pinnable with `flow_ref`. Asks before opening a PR with the workflows. `add shift --local` renders the shift: overnight on your laptop it prepares pending reviews, fixes for feedback on your PRs, and commits for issues assigned to you, plus a morning digest; you release each one. |
 | `make-skill` | Generates any other repo or personal skill, with a self-test. |
 | `tend` | Re-runs every generated skill's self-test and flags drift against the code. |
 
