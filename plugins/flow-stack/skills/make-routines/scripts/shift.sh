@@ -129,7 +129,6 @@ checkout() { # checkout <repo> <dir>: a fresh clone the agent can commit in but 
   local why
   rm -rf "$2"; mkdir -p "${2%/*}"
   gh repo clone "$1" "$2" -- -q >/dev/null 2>&1 || { echo "could not clone $1"; return 1; }
-  git -C "$2" remote get-url origin >"$2.origin"   # recorded before the agent runs: release pushes here, not to a URL it set
   why="$(factory_ready "$2")" || { echo "factory not ready: $why"; return 1; }
   git -C "$2" remote set-url --push origin release-with-shift.sh   # pushing waits for shift.sh push|open
   mkdir -p "$2/.flow/shift"; echo /.flow/shift/ >>"$2/.git/info/exclude"   # others' text there is never committable
@@ -169,6 +168,7 @@ respond_one() { # respond_one <item json>: commits answering my PR's open feedba
   base="$(jq -r .base <<<"$fb")" headref="$(jq -r .head <<<"$fb")" headsha="$(jq -r .sha <<<"$fb")"
   w="$st/work/${id//[^A-Za-z0-9._-]/-}"
   note="$(checkout "$repo" "$w")" || { result ✗ "$note"; echo 0 >&3; return; }
+  local origin; origin="$(git -C "$w" remote get-url origin)"   # read before the agent runs; release pushes only here
   git -C "$w" checkout -q -B "$headref" "$headsha" 2>/dev/null || { result ✗ "head $headsha is not in the clone" "" 1; echo 0 >&3; return; }
   printf '%s\n' "$fb" >"$w/.flow/shift/feedback.json"
   ok=1; out="$(build "$w" "Respond to the open feedback on my pull request $url, checked out here at its head. \
@@ -183,7 +183,7 @@ the reply under it.")" || ok=""
   [ -n "$ok" ] || { result ✗ "the agent failed" "" 1; return; }
   # what it did, checked here rather than taken from its word: new commits, each item named, every Check: passing on HEAD
   # only the agent's commits: a rebase brings base's commits in, and their Check: lines and words aren't its answers
-  local log; log="$(git -C "$w" log --no-merges --format='%B' HEAD --not "$headsha" "origin/$base" 2>/dev/null)"
+  local log; log="$(git -C "$w" log --cherry-pick --right-only --no-merges --format='%B' "$headsha...HEAD" --not "origin/$base" 2>/dev/null)"
   [ -n "$log" ] || { result ✗ "the agent made no commit"; return; }
   left_items="$(jq -r '.todo[]' "$w/.flow/shift/feedback.json" | while IFS= read -r t; do tr -s '[:space:]' '\n' <<<"$log" | grep -qxF -- "$t" || echo "$t"; done)"
   local checks failed=""; checks="$(sed -n 's/^Check:[[:space:]]*//p' <<<"$log")"
@@ -193,9 +193,9 @@ the reply under it.")" || ok=""
   fi
   f="$st/out/${id//[^A-Za-z0-9._-]/-}"
   jq -r '.result // ""' <<<"$out" >"$f.replies.md"
-  jq -n --arg dir "$w" --arg url "$url" --arg branch "$headref" --arg lease "$headsha" --arg replies "$f.replies.md" \
-    '{job: "respond", dir: $dir, url: $url, branch: $branch, lease: $lease, replies: $replies}' >"$f.release.json"
-  note="$(grep -c . <<<"$checks" | tr -d ' ') check(s) on $(git -C "$w" rev-list --count --no-merges HEAD --not "$headsha" "origin/$base") commit(s)"
+  jq -n --arg dir "$w" --arg url "$url" --arg branch "$headref" --arg lease "$headsha" --arg replies "$f.replies.md" --arg origin "$origin" \
+    '{job: "respond", dir: $dir, url: $url, origin: $origin, branch: $branch, lease: $lease, replies: $replies}' >"$f.release.json"
+  note="$(grep -c . <<<"$checks" | tr -d ' ') check(s) on $(git -C "$w" rev-list --count --cherry-pick --right-only --no-merges "$headsha...HEAD" --not "origin/$base") commit(s)"
   mark=✓
   [ -z "$left_items" ] || { mark="~"; note="$note; unanswered: $(tr '\n' ' ' <<<"$left_items")"; }
   [ -z "$failed" ] || { mark="~"; note="$note; failing:${failed#;}"; }
@@ -215,6 +215,7 @@ start_one() { # start_one <item json>: INTENT + slices + a branch with commits f
   rank() { case "$1" in low) echo 1 ;; med) echo 2 ;; *) echo 3 ;; esac; }
   spec=""; [ "$(rank "$risk")" -le "$(rank "$upto")" ] || spec=1
   out="$(checkout "$repo" "$w")" || { result ✗ "$out"; echo 0 >&3; return; }
+  local origin; origin="$(git -C "$w" remote get-url origin)"   # read before the agent runs; release pushes only here
   base="$(git -C "$w" rev-parse --abbrev-ref origin/HEAD 2>/dev/null)"; base="${base#origin/}"
   branch="shift/$num-$(tr '[:upper:]' '[:lower:]' <<<"$title" | tr -cs 'a-z0-9' '-' | cut -c1-40 | sed 's/^-*//; s/-*$//')"
   git -C "$w" checkout -q -b "$branch"
@@ -238,8 +239,8 @@ and write its INTENT.md and SLICES.md. $ask Don't push, comment, or open PRs: th
     result "~" "risk $risk: spec and questions only" "read $f.spec.md and answer its questions"; return
   fi
   [ "$n" != 0 ] || { result "~" "INTENT only, no commits; spec in $f.spec.md" "read $f.spec.md"; return; }
-  jq -n --arg dir "$w" --arg url "$url" --arg repo "$repo" --arg branch "$branch" --arg base "$base" --arg title "$title" --arg spec "$f.spec.md" \
-    '{job: "start", dir: $dir, url: $url, repo: $repo, branch: $branch, base: $base, title: $title, spec: $spec}' >"$f.release.json"
+  jq -n --arg dir "$w" --arg url "$url" --arg origin "$origin" --arg repo "$repo" --arg branch "$branch" --arg base "$base" --arg title "$title" --arg spec "$f.spec.md" \
+    '{job: "start", dir: $dir, url: $url, origin: $origin, repo: $repo, branch: $branch, base: $base, title: $title, spec: $spec}' >"$f.release.json"
   result ✓ "$n commit(s) on $branch; spec in $f.spec.md" "$here/shift.sh open $id"
 }
 
@@ -250,7 +251,7 @@ release() { # release push|open <id>: the human's outward step, from a normal sh
   [ -f "$f" ] || die "nothing prepared for $id ($f); run the shift first"
   case "$verb:$(jq -r .job "$f")" in push:respond|open:start) ;; *) die "$id was prepared by $(jq -r .job "$f"); use shift.sh $([ "$verb" = push ] && echo open || echo push) $id" ;; esac
   d="$(jq -r .dir "$f")"
-  url="$(cat "$d.origin" 2>/dev/null)" || die "no recorded origin for $d; run the shift again"
+  url="$(jq -r '.origin // empty' "$f")"; [ -n "$url" ] || die "no recorded origin for $id; run the shift again"
   # The clone is the agent's: its config, hooks and ready commands run here only in a cleared env (no ssh agent, gh
   # login, cloud credentials or your HOME). A review_gate: yolo would pass with nothing checked, so the gate must be on,
   # and a fresh ready.sh run must stamp this HEAD.
@@ -259,10 +260,14 @@ release() { # release push|open <id>: the human's outward step, from a normal sh
     GIT_SSH_COMMAND=false GIT_TERMINAL_PROMPT=0 "$@" </dev/null); }
   mkdir -p "$home/shift/home"
   local rs="$plugin/skills/review/scripts/ready.sh"
+  # ready.sh reads its checks from .flow/config.json, which the clean-tree check skips: use HEAD's, never an edit on top
+  if cleared git cat-file -e HEAD:.flow/config.json 2>/dev/null; then cleared git checkout -q HEAD -- .flow/config.json
+  else rm -f "$d/.flow/config.json"; fi
   [ "$(cleared "$rs" mode)" = on ] || die "review gate is yolo in $d: the shift releases only a stamped HEAD"
   cleared "$rs" && cleared "$rs" stamped || die "not ready: fix what ready.sh lists in $d, then run this again"
   # The push leaves from an empty repo holding only that commit, so none of the clone's git config or hooks runs as you
   local sha t; sha="$(cleared git rev-parse HEAD)" t="$(mktemp -d)"
+  trap 'rm -rf "$t"' RETURN   # the temp repo goes whichever way release ends
   git init -q --bare "$t" && git -C "$t" fetch -q "$d" "$sha" || { rm -rf "$t"; die "could not take $sha from $d"; }
   if [ "$verb" = push ]; then
     git -C "$t" push --force-with-lease="refs/heads/$(jq -r .branch "$f"):$(jq -r .lease "$f")" "$url" "$sha:refs/heads/$(jq -r .branch "$f")" || { rm -rf "$t"; die "push failed"; }
@@ -270,10 +275,9 @@ release() { # release push|open <id>: the human's outward step, from a normal sh
   else
     git -C "$t" push "$url" "$sha:refs/heads/$(jq -r .branch "$f")" || { rm -rf "$t"; die "push failed"; }
     printf 'Closes %s\n\n%s\n' "$(jq -r .url "$f")" "$(sed -n '/^## Goal/,/^## /{/^## /d;/^<!--/d;p;}' "$(jq -r .spec "$f")")" >"$d/.flow/shift/pr-body.md"
-    (cd "$t" && gh pr create --draft --repo "$(jq -r .repo "$f")" --base "$(jq -r .base "$f")" --head "$(jq -r .branch "$f")" \
+    (cd "$home/shift/home" && gh pr create --draft --repo "$(jq -r .repo "$f")" --base "$(jq -r .base "$f")" --head "$(jq -r .branch "$f")" \
       --title "$(jq -r .title "$f")" --body-file "$d/.flow/shift/pr-body.md")
   fi
-  rm -rf "$t"
 }
 
 run() {

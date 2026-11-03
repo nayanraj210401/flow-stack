@@ -281,22 +281,29 @@ c="$(wc -l <"$SB/claude.log")"; out="$("$S" run 2>&1)"
 check "re-run with unchanged items: no agent run" '[ "$(wc -l <"$SB/claude.log")" = "$c" ] && grep -q "nothing new" <<<"$out"'
 
 echo "release: ready.sh first, then the one outward step"
-cf="$w/acme-api-5/.flow/config.json"; [ -f "$cf" ] && cp "$cf" "$SB/cf.bak"
-echo '{"review_gate":"yolo"}' >"$cf"; out="$("$S" push acme/api#5 2>&1)"; rc=$?
+cf="$w/acme-api-5/.flow/config.json" h5="$(git -C "$w/acme-api-5" rev-parse HEAD)"
+echo '{"review_gate":"yolo"}' >"$cf"; git -C "$w/acme-api-5" add -f .flow/config.json; git -C "$w/acme-api-5" -c user.email=t@t -c user.name=t commit -qm yolo
+out="$("$S" push acme/api#5 2>&1)"; rc=$?
 check "push refuses a clone the agent set to review_gate yolo; nothing pushed" '[ $rc != 0 ] && grep -q "yolo" <<<"$out" && [ "$(heads)" = "$before" ]'
-if [ -f "$SB/cf.bak" ]; then mv "$SB/cf.bak" "$cf"; else rm "$cf"; fi
+git -C "$w/acme-api-5" reset -q --hard "$h5"; rm -f "$cf"
 check "the flow agent was launched with curl, wget, nc, ssh and scp denied" \
   'grep -- "--disallowedTools" "$SB/claude.log" | grep -q "Bash(curl:\*),Bash(wget:\*),Bash(nc:\*),Bash(ssh:\*),Bash(scp:\*)"'
 # the clone is the agent's: a ready command it planted runs only without your credentials, and its origin is ignored
-before5="$(git -C "$SB/remotes/acme/api.git" rev-parse feat-x)"
-git -C "$w/acme-api-5" remote set-url origin "$SB/remotes/evil.git"; git init -q --bare "$SB/remotes/evil.git"
+before5="$(git -C "$SB/remotes/acme/api.git" rev-parse feat-x)" head5="$(git -C "$w/acme-api-5" rev-parse HEAD)"
+git init -q --bare "$SB/remotes/evil.git"
+git -C "$w/acme-api-5" remote set-url origin "$SB/remotes/evil.git"; echo "$SB/remotes/evil.git" >"$w/acme-api-5.origin"
+# a ready command the agent committed runs, but without credentials; one it left uncommitted never runs
 mkdir -p "$w/acme-api-5/.flow"; jq -n --arg o "$SB/release-env" '{ready: [{id: "envdump", run: ("env >" + $o)}]}' >"$w/acme-api-5/.flow/config.json"
+git -C "$w/acme-api-5" add -f .flow/config.json && git -C "$w/acme-api-5" -c user.email=t@t -c user.name=t commit -qm "agent config"
+(cd "$w/acme-api-5" && for k in "review ship" "deslop done" "tour done"; do "$SB/plugin/skills/review/scripts/ready.sh" record $k >/dev/null; done)
+jq -n --arg o "$SB/uncommitted-ran" '{ready: [{id: "planted", run: ("touch " + $o)}]}' >"$w/acme-api-5/.flow/config.json"
 GH_TOKEN=secret-gh SSH_AUTH_SOCK=/tmp/agent.sock AWS_SECRET_ACCESS_KEY=secret-aws "$S" push acme/api#5 >/dev/null 2>&1
+check "an uncommitted .flow/config.json edit is replaced by HEAD's before the checks run" '[ ! -e "$SB/uncommitted-ran" ] && [ -s "$SB/release-env" ]'
 check "release runs the clone's ready commands with no gh token, ssh agent or cloud credentials" \
-  '[ -s "$SB/release-env" ] && ! grep -qE "^(GH_TOKEN|SSH_AUTH_SOCK|AWS_SECRET_ACCESS_KEY)=" "$SB/release-env" && grep -q "^GIT_CONFIG_GLOBAL=/dev/null" "$SB/release-env"'
-check "release pushes to the origin recorded before the agent ran, not one it set" \
+  '! grep -qE "^(GH_TOKEN|SSH_AUTH_SOCK|AWS_SECRET_ACCESS_KEY)=" "$SB/release-env" && grep -q "^GIT_CONFIG_GLOBAL=/dev/null" "$SB/release-env"'
+check "release pushes to the origin recorded after the agent exited, not one it set in the clone or beside it" \
   '[ -z "$(git -C "$SB/remotes/evil.git" for-each-ref)" ] && [ "$(git -C "$SB/remotes/acme/api.git" rev-parse feat-x)" = "$(git -C "$w/acme-api-5" rev-parse HEAD)" ]'
-git -C "$SB/remotes/acme/api.git" update-ref refs/heads/feat-x "$before5"; rm -f "$w/acme-api-5/.flow/config.json"
+git -C "$SB/remotes/acme/api.git" update-ref refs/heads/feat-x "$before5"; git -C "$w/acme-api-5" reset -q --hard "$head5"; rm -f "$w/acme-api-5/.flow/config.json"
 touch "$w/acme-api-5/stray"; out="$("$S" push acme/api#5 2>&1)"; rc=$?
 check "push refuses a HEAD ready.sh won't stamp; nothing pushed" '[ $rc != 0 ] && grep -q "not ready" <<<"$out" && [ "$(heads)" = "$before" ]'
 rm "$w/acme-api-5/stray"; out="$("$S" push acme/api#5 2>&1)"; rc=$?
