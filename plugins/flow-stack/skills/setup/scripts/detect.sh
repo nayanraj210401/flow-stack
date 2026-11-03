@@ -48,7 +48,7 @@ if [ -n "$root" ]; then
   routine() { wf "$1" && row "$2" ok "$1 routine" || row "$2" missing "make-routines: $1${3:+ ($3)}"; }
   routine self-create monitor
   row triage planned "#185 triage, #186 ideate"
-  row spec ok "intent + seal (plugin); edge-case matrix planned #187"
+  row spec ok "intent + seal with the edge-case matrix (plugin)"
   # self-heal (issues) or mention (@claude) runs the build unattended
   s=""; wf self-heal && s=self-heal; wf mention && s="${s:+$s + }mention"
   [ -n "$s" ] && row implement ok "$s routine" || row implement missing "make-routines: self-heal or mention (flow --auto works in a session)"

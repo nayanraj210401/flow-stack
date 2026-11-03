@@ -130,6 +130,48 @@ Type a skill yourself when you want a specific thing: `/flow-stack:challenge`, `
 | After a frustrating session | `/flow-stack:reflect` | proposed taste and lesson updates you approve |
 | New repo | `/flow-stack:setup` → `/flow-stack:feature-map` → `/flow-stack:make-verifier` | a driver that proves this app works the way a user uses it |
 | Installed a new plugin or hook | `/flow-stack:setup adapt` | flow-stack re-fits itself around your toolchain |
+| Run flow-stack with nobody at the keyboard | `/flow-stack:make-routines` | GitHub Actions routines: see [Software factory mode](#software-factory-mode) |
+
+## Software factory mode
+
+The same flow can run without you: requests come in, flow turns each one into a verified PR, and you review the spec, the code, and the product. The hooks still hold. An unattended run gets the guard, the fences, and the ready gate, because each GitHub Actions job installs the plugin.
+
+Use it when the repo can prove its own changes. **Factory-ready** means a *committed* verify driver (`.claude/skills/verify-*/` or `verify/`) and a *committed* feature map with at least one scenario. A runner sees only the clone, so files on your disk don't count. `/flow-stack:setup` reports it as the `factory` row. Without it, `make-routines` refuses the routines that ship.
+
+```mermaid
+flowchart LR
+  subgraph In[Requests in]
+    I1[issue labelled heal-ok]
+    I2["@claude comment"]
+    I3[self-create: bugs it reproduced]
+  end
+  In --> F["flow --auto<br/>intent → slices → verify → review"]
+  F --> G{{"ready.sh stamp<br/>(review, deslop, tour, impacted scenarios)"}}
+  G --> PR[draft PR]
+  PR --> H1([you review the code])
+  H1 --> M["merge (you, or auto-merge<br/>on a PR you labelled)"]
+  M --> H2([you review the product])
+```
+
+| Routine | Trigger | What it does |
+|---|---|---|
+| `review` | every non-draft PR | posts a fresh-context review; never approves or blocks |
+| `self-create` | nightly | files issues only for bugs it reproduced by running the code |
+| `self-heal` | nightly | turns maintainer-labelled issues into proven draft PRs, at most 3 a run |
+| `mention` | `@claude` comment from someone with write access | runs the request through flow; draft PRs or a comment saying why it stopped |
+| `auto-merge` | schedule | merges PRs a maintainer labelled, after tests and a security review; never touches the safety machinery (repo-local today, see [factory.md](plugins/flow-stack/skills/flow/references/factory.md)) |
+
+**How much runs without you** is set per routine, not guessed. A routine without `contents` in `grants` runs as `--auto` and the hooks deny every push and PR. With `contents` it runs as `--auto ship`, which can push its own branch and open a PR only after `ready.sh` stamps HEAD. In a session, pair mode is unchanged.
+
+**Operating it:**
+
+- **Pause everything:** `gh variable set FLOW_FACTORY --body off`. `gh variable delete FLOW_FACTORY` resumes.
+- **One writer at a time:** routines that push share one concurrency group.
+- **Usage limits:** a run that hits a Claude usage limit ends green with "Stopped by a Claude usage limit" rather than a failed verdict.
+- **Your labels:** routines never create or edit labels unless the routine says `create_labels: true`. Map the catalog's names to yours in `.github/routines/labels.tsv` before `add`.
+- **Several repos:** list them in your profile's `# Repos` with a `what:` line, and `task.sh route "<request>"` picks the repo, the workspace, or asks one question.
+
+Setup steps (secret, GitHub App, branch protection) are in [make-routines](plugins/flow-stack/skills/make-routines/SKILL.md). The stage-by-stage map, with what is planned and its issue, is [factory.md](plugins/flow-stack/skills/flow/references/factory.md).
 
 ## Skill catalog
 
