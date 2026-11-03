@@ -30,13 +30,18 @@ jobs:
           mkdir -p "$RUNNER_TEMP/flow-stack"
           cp .github/routines/profile.md "$RUNNER_TEMP/flow-stack/profile.md"
           echo "FLOW_STACK_HOME=$RUNNER_TEMP/flow-stack" >>"$GITHUB_ENV"
-          # create only the labels this repo lacks (names match case-insensitively, as on GitHub); never edit an existing
-          # one. A create that fails (the label exists past the first 1000, say) doesn't stop the run.
-          labels="self-heal heal-ok needs-repro"
+          # the routine's labels must exist (names match case-insensitively, as on GitHub); an existing one is never
+          # edited. A missing one stops the run, unless the routine sets create_labels: true.
+          labels="self-heal heal-ok needs-repro" miss=""
           if [ -n "$labels" ]; then
             have="$(gh label list --limit 1000 --json name --jq '.[].name')"
-            for l in $labels; do grep -qixF "$l" <<<"$have" || gh label create "$l" >/dev/null || echo "label $l not created"; done
+            for l in $labels; do
+              grep -qixF "$l" <<<"$have" && continue
+              if [ false = true ]; then gh label create "$l" >/dev/null || echo "label $l not created"
+              else echo "label $l missing: create it, map yours in .github/routines/labels.tsv, or set create_labels: true" | tee -a "$GITHUB_STEP_SUMMARY"; miss=1; fi
+            done
           fi
+          [ -z "$miss" ]
 
       # A fresh runner installs the plugin on every run: the marketplace's default branch, or the clone pinned above
       - uses: anthropics/claude-code-action@v1

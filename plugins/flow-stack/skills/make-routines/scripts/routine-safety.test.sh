@@ -40,11 +40,37 @@ echo "$*" >>"$GH_LOG"
 case "$1 $2" in "label list") printf 'Self-Heal\nbug\n' ;; esac
 GH
 chmod +x bin/gh
-step "flow-stack home and labels" | sed '/RUNNER_TEMP/d; /GITHUB_ENV/d; /profile.md/d' >labels.sh
-GH_LOG="$SB/repo/gh.log" PATH="$SB/repo/bin:$PATH" bash labels.sh || bad "label step failed"
+labels() { # run self-heal's label step as rendered; its summary goes to $SB/lsum
+  : >gh.log; : >"$SB/lsum"
+  step "flow-stack home and labels" | sed '/RUNNER_TEMP/d; /GITHUB_ENV/d; /profile.md/d' >labels.sh
+  GH_LOG="$SB/repo/gh.log" GITHUB_STEP_SUMMARY="$SB/lsum" PATH="$SB/repo/bin:$PATH" bash labels.sh >/dev/null
+}
+labels && bad "a missing label didn't stop the run" || ok "a missing label stops the run by default"
+grep -q 'label heal-ok missing' "$SB/lsum" && ok "summary names the missing label" || bad "summary: $(cat "$SB/lsum")"
+grep -q 'label create' gh.log && bad "created a label without create_labels: $(cat gh.log)" || ok "no label created by default"
+perl -pi -e "s/^labels:/create_labels: true\nlabels:/" .github/routines/self-heal.md && bash "$H/routines.sh" render >/dev/null
+labels || bad "label step failed with create_labels: true"
 [ -s gh.log ] && ! grep -q -- "--force" gh.log && ok "label step: no --force" || bad "label step: --force, or gh never ran"
 grep -qix 'label create self-heal' gh.log && bad "re-created an existing label (Self-Heal)" || ok "existing label left alone, even in another case"
-grep -qx 'label create heal-ok' gh.log && ok "missing label created" || bad "missing label not created: $(cat gh.log)"
+grep -qx 'label create heal-ok' gh.log && ok "create_labels: true creates the missing label" || bad "missing label not created: $(cat gh.log)"
+
+echo "-- labels.tsv renames catalog labels on add"
+mkdir -p "$SB/new/.github/routines" "$SB/new/verify" "$SB/new/.flow/features" && cd "$SB/new" && git init -q
+echo x >verify/run.sh; printf -- '---\nid: a\nscenario: run it\n---\n' >.flow/features/a.md
+git add -A && git -c user.email=a@b -c user.name=a commit -qm i
+printf '# catalog yours\nheal-ok approved\nneeds-repro Needs-Info\nself-create bot-filed\n' >.github/routines/labels.tsv
+bash "$H/routines.sh" add self-heal >/dev/null || bad "add self-heal failed"
+r=.github/routines/self-heal.md
+[ "$(sed -n 's/^labels: //p' $r)" = "self-heal approved Needs-Info" ] && ok "labels: line uses the repo's names" || bad "labels: $(grep '^labels:' $r)"
+grep -q -- '--label approved --json' $r && grep -q -- '--label bot-filed`' $r && grep -q '`Needs-Info`' $r \
+  && ok "the prompt says approved, Needs-Info, bot-filed" || bad "prompt not renamed"
+grep -qE 'heal-ok|needs-repro|`self-create`' $r && bad "a catalog label is left: $(grep -noE 'heal-ok|needs-repro|`self-create`' $r | head -3)" || ok "no catalog label left"
+grep -q 'self-create routine' $r && grep -q '`self-heal/<number>-<slug>`' $r && ok "routine names and branch names untouched" || bad "renamed a non-label"
+grep -q 'approved' .github/workflows/flow-self-heal.yml && ok "rendered workflow checks the mapped label" || bad "workflow lacks mapped label"
+printf 'heal-ok has space\n' >.github/routines/labels.tsv
+out="$(bash "$H/routines.sh" add self-heal --force 2>&1)"
+[[ "$out" == *"no spaces inside a name"* ]] && grep -q approved $r && ok "a bad map line is refused, the routine left as it was" || bad "bad map: $out"
+cd "$SB/repo"
 
 echo "-- usage limit vs real failure"
 step Outcome >outcome.sh
