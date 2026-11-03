@@ -281,6 +281,11 @@ c="$(wc -l <"$SB/claude.log")"; out="$("$S" run 2>&1)"
 check "re-run with unchanged items: no agent run" '[ "$(wc -l <"$SB/claude.log")" = "$c" ] && grep -q "nothing new" <<<"$out"'
 
 echo "release: ready.sh first, then the one outward step"
+cf="$w/acme-api-5/.flow/config.json"; [ -f "$cf" ] && cp "$cf" "$SB/cf.bak"
+echo '{"review_gate":"yolo"}' >"$cf"; out="$("$S" push acme/api#5 2>&1)"; rc=$?
+check "push refuses a clone the agent set to review_gate yolo; nothing pushed" '[ $rc != 0 ] && grep -q "yolo" <<<"$out" && [ "$(heads)" = "$before" ]'
+if [ -f "$SB/cf.bak" ]; then mv "$SB/cf.bak" "$cf"; else rm "$cf"; fi
+grep -q "Bash(curl:\*)" "$S" && grep -q "Bash(ssh:\*)" "$S" && echo "  ✓ the agent can't call curl, wget, nc, ssh or scp" || { echo "  ✗ send tools not denied"; fail=1; }
 touch "$w/acme-api-5/stray"; out="$("$S" push acme/api#5 2>&1)"; rc=$?
 check "push refuses a HEAD ready.sh won't stamp; nothing pushed" '[ $rc != 0 ] && grep -q "not ready" <<<"$out" && [ "$(heads)" = "$before" ]'
 rm "$w/acme-api-5/stray"; out="$("$S" push acme/api#5 2>&1)"; rc=$?

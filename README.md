@@ -171,7 +171,7 @@ flowchart LR
 - **Usage limits:** a run that hits a Claude usage limit ends green with "Stopped by a Claude usage limit" rather than a failed verdict.
 - **Your labels:** routines never create or edit labels unless the routine says `create_labels: true`. Map the catalog's names to yours in `.github/routines/labels.tsv` before `add`.
 - **Several repos:** list them in your profile's `# Repos` with a `what:` line, and `task.sh route "<request>"` picks the repo, the workspace, or asks one question.
-- **Your own overnight shift:** `make-routines add shift --local` runs on your laptop (launchd or cron, while it is on). It prepares pending reviews for PRs waiting on you, local fixes for feedback on your PRs, and proven commits for issues assigned to you, then writes a morning digest. Nothing leaves your machine until you run `shift.sh push` or `shift.sh open`.
+- **Your own overnight shift:** `make-routines add shift --local` runs on your laptop (launchd or cron, while it is on). It prepares pending reviews for PRs waiting on you, local fixes for feedback on your PRs, and proven commits for issues assigned to you, then writes a morning digest. Reviews stay pending (only you see them) and nothing is pushed or opened until you run `shift.sh push` or `shift.sh open`. It is not a sandbox: list only repos whose code you trust.
 
 ### Cloud sessions (Claude Code on the web, Slack)
 
@@ -278,7 +278,7 @@ Setup steps (secret, GitHub App, branch protection) are in [make-routines](plugi
 | `make-runner` | Generates `.claude/skills/run-<repo>/` with verified install, start, seed, reset, and stop commands. |
 | `make-playbook` | Generates `.flow/playbooks/<name>.md` from past traces, for workflows this repo repeats. |
 | `make-gates` | Generates `.flow/gates.md`: this repo's irreversible commands as deny/ask rules the guard hook enforces. |
-| `make-routines` | Generates GitHub Actions routines picked from a catalog: `review` (the reviewer agent on every PR), `self-create` (files reproducible bugs), `self-heal` (proven draft PRs), `mention` (`@claude` comments run through flow, ending in a draft PR), or your own. Cloud routines can't load plugins; Actions installs flow-stack on every run, pinnable with `flow_ref`. Asks before opening a PR with the workflows. `add shift --local` renders the shift: your overnight review requests prepared as pending reviews plus a morning digest, on your own scheduler, never sent. |
+| `make-routines` | Generates GitHub Actions routines picked from a catalog: `review` (the reviewer agent on every PR), `self-create` (files reproducible bugs), `self-heal` (proven draft PRs), `mention` (`@claude` comments run through flow, ending in a draft PR), or your own. Cloud routines can't load plugins; Actions installs flow-stack on every run, pinnable with `flow_ref`. Asks before opening a PR with the workflows. `add shift --local` renders the shift: overnight on your laptop it prepares pending reviews, fixes for feedback on your PRs, and commits for issues assigned to you, plus a morning digest; you release each one. |
 | `make-skill` | Generates any other repo or personal skill, with a self-test. |
 | `tend` | Re-runs every generated skill's self-test and flags drift against the code. |
 

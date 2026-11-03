@@ -143,7 +143,7 @@ sealed() { # sealed <dir> <cmd...>: run in <dir> with no shift token, gh config,
 
 build() { # build <dir> <prompt>: flow --auto writes commits in <dir>, sealed; its JSON on stdout
   sealed "$1" claude -p "/flow-stack:flow --auto $2" --plugin-dir "$plugin" --permission-mode bypassPermissions \
-    --disallowedTools 'Bash(git push:*),Bash(gh:*),WebFetch,WebSearch' --strict-mcp-config \
+    --disallowedTools 'Bash(git push:*),Bash(gh:*),Bash(curl:*),Bash(wget:*),Bash(nc:*),Bash(ssh:*),Bash(scp:*),WebFetch,WebSearch' --strict-mcp-config \
     --max-budget-usd "$left" --output-format json 2>/dev/null
 }
 
@@ -248,7 +248,11 @@ release() { # release push|open <id>: the human's outward step, from a normal sh
   [ -f "$f" ] || die "nothing prepared for $id ($f); run the shift first"
   case "$verb:$(jq -r .job "$f")" in push:respond|open:start) ;; *) die "$id was prepared by $(jq -r .job "$f"); use shift.sh $([ "$verb" = push ] && echo open || echo push) $id" ;; esac
   d="$(jq -r .dir "$f")"; url="$(git -C "$d" remote get-url origin)"   # the fetch URL: checkout's push URL goes nowhere on purpose
-  (cd "$d" && "$plugin/skills/review/scripts/ready.sh") || die "not ready: fix what ready.sh lists in $d, then run this again"
+  # the clone is the agent's: a review_gate: yolo it set (or the repo's) would pass with nothing checked, so release needs
+  # the gate on, a fresh ready.sh run, and the stamp that run writes for this HEAD
+  [ "$(cd "$d" && "$plugin/skills/review/scripts/ready.sh" mode)" = on ] || die "review gate is yolo in $d: the shift releases only a stamped HEAD"
+  (cd "$d" && "$plugin/skills/review/scripts/ready.sh" && "$plugin/skills/review/scripts/ready.sh" stamped) \
+    || die "not ready: fix what ready.sh lists in $d, then run this again"
   if [ "$verb" = push ]; then
     git -C "$d" push --force-with-lease="refs/heads/$(jq -r .branch "$f"):$(jq -r .lease "$f")" "$url" "HEAD:refs/heads/$(jq -r .branch "$f")"
     echo "pushed $(jq -r .branch "$f") to $(jq -r .url "$f"); replies to post: $(jq -r .replies "$f")"
