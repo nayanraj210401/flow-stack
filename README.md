@@ -136,7 +136,7 @@ Type a skill yourself when you want a specific thing: `/flow-stack:challenge`, `
 
 The same flow can run without you: requests come in, flow turns each one into a verified PR, and you review the spec, the code, and the product. The hooks still hold. An unattended run gets the guard, the fences, and the ready gate, because each GitHub Actions job installs the plugin.
 
-Use it when the repo can prove its own changes. **Factory-ready** means a *committed* verify driver (`.claude/skills/verify-*/` or `verify/`) and a *committed* feature map with at least one scenario. A runner sees only the clone, so files on your disk don't count. `/flow-stack:setup` reports it as the `factory` row. Without it, `make-routines` refuses the routines that ship.
+Use it when the repo can prove its own changes. **Factory-ready** means a *committed* verify driver (`.claude/skills/verify-*/` or `verify/`) and a *committed* feature map with at least one scenario. A runner sees only the clone, so files on your disk don't count. `/flow-stack:setup` reports it as the `factory` row. Without it, `make-routines` refuses `self-heal` (and `auto-merge`, once copied in).
 
 ```mermaid
 flowchart LR
