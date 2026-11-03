@@ -8,7 +8,8 @@
 #                                                     change a scheduled routine's cron (in its timezone) and re-render it
 #   routines.sh render                                .github/routines/*.md → .github/workflows/flow-<name>.yml
 #   routines.sh check                                 every routine's workflow matches a fresh render; no orphans
-# Frontmatter: trigger (schedule | pull_request | mention: an @claude comment from a user with write access), cron and timezone (schedule only; an IANA zone, default UTC), timeout (minutes), labels, auth
+# Frontmatter: trigger (schedule | pull_request | mention: an @claude comment from a user with write access), cron and timezone (schedule only; an IANA zone, default UTC), timeout (minutes), labels (must exist;
+# create_labels: true makes missing ones; .github/routines/labels.tsv renames catalog labels to yours on add), auth
 # (oauth | api-key), grants (token scopes it may write: issues pull-requests contents; the rest are read),
 # flow_ref (pin the plugin to a tag or branch; empty = the default branch, fresh each run). The body is the prompt.
 set -euo pipefail
@@ -110,7 +111,8 @@ render_one() { # render_one <name>: the workflow on stdout
   # GitHub keeps one pending run per group: a third queued run (a manual dispatch, say) cancels the pending one.
   [ "$trigger" = schedule ] && [[ " $grants " == *" contents "* ]] && group=flow-writers
   [[ "$timeout" =~ ^[0-9]+$ ]] || die "$f: timeout must be whole minutes, got '$timeout'"
-  [[ "$labels" =~ ^([a-z0-9:._-]+( [a-z0-9:._-]+)*)?$ ]] || die "$f: labels are space-separated, no quotes, got '$labels'"
+  [[ "$labels" =~ ^([A-Za-z0-9:._-]+( [A-Za-z0-9:._-]+)*)?$ ]] || die "$f: labels are space-separated, no quotes, got '$labels'"
+  case "$(field "$f" create_labels false)" in true|false) ;; *) die "$f: create_labels must be true or false" ;; esac
   for g in $grants; do case "$g" in issues|pull-requests|contents) ;; *) die "$f: grants takes issues pull-requests contents, got '$g'" ;; esac; done
   [[ "$ref" =~ ^[A-Za-z0-9._/-]*$ ]] || die "$f: flow_ref must be a tag or branch, got '$ref'"
   [[ ! "$ref" =~ ^[0-9a-f]{7,40}$ ]] || die "$f: flow_ref looks like a commit SHA; the clone takes a tag or branch (one that isn't 7-40 hex characters)"
@@ -132,7 +134,7 @@ render_one() { # render_one <name>: the workflow on stdout
     clone="          git clone -q --depth 1 --branch '$ref' $market \"\$RUNNER_TEMP/flow-stack-plugin\""
     mkt='${{ runner.temp }}/flow-stack-plugin'
   fi
-  R_NAME="$1" R_ON="$on" R_IF="$iff" R_GROUP="$group" R_CANCEL="$cancel" R_TIMEOUT="$timeout" R_LABELS="$labels" \
+  R_NAME="$1" R_ON="$on" R_IF="$iff" R_GROUP="$group" R_CANCEL="$cancel" R_TIMEOUT="$timeout" R_LABELS="$labels" R_CREATE="$(field "$f" create_labels false)" \
   R_AUTH="$auth" R_TOKEN="$token" R_MARKET="$mkt" R_SETUP="${guard:+$guard${clone:+$'\n'}}$clone" R_MODE="$mode" R_CTX="$ctx" \
     perl -pe 's/\@([A-Za-z_]+)\@/exists $ENV{"R_$1"} ? $ENV{"R_$1"} : die "unknown placeholder $1\n"/ge' "$tpl/workflow.yml"
 }
@@ -173,6 +175,20 @@ profile() { # profile <preset>: a headless profile for CI runs, notifications of
   echo "wrote $dir/profile.md (preset $1; edit it: it is how the routines work, and it is committed)"
 }
 
+relabel() { # stdin → stdout: a catalog template with its labels renamed to the repo's own, from $dir/labels.tsv
+  # (lines "<catalog label> <yours>"). Only label spots change: the labels: line, `name`, and --label/--add-label name.
+  local m="$dir/labels.tsv"
+  [ -f "$m" ] || { cat; return; }
+  awk 'NF && $1 !~ /^#/ && (NF != 2 || $0 ~ /[^A-Za-z0-9:._ \t-]/) { bad = 1 } END { exit bad }' "$m" \
+    || die "$m: each line is '<catalog label> <yours>', no spaces inside a name"
+  perl -e 'open M, $ARGV[0] or die; while (<M>) { next if /^\s*(#|$)/; my ($a, $b) = split; $m{$a} = $b }
+    $r = join "|", map quotemeta, sort { length $b <=> length $a } keys %m;
+    while (<STDIN>) { $fm++ if /^---$/;
+      if ($r ne "" && $fm == 1 && /^labels:/) { s/(?<=[ :])($r)(?=\s|$)/$m{$1}/g }
+      elsif ($r ne "") { s/`($r)`/`$m{$1}`/g; s/(--(?:add-|remove-)?label[ =])($r)(?=[\s`"\x27]|$)/$1$m{$2}/g }
+      print }' "$m"
+}
+
 add() {
   local name="${1:-}" preset=solo-hacker force="" cron="" tz=""; shift || true
   [[ "$name" =~ $name_re ]] || die "add <name>: lowercase letters, digits, dashes"
@@ -191,11 +207,12 @@ add() {
     die "$name runs on $(field "$tpl/$name.md" trigger schedule), which takes no --cron"
   fi
   profile "$preset"
-  if [ -f "$tpl/$name.md" ]; then cp "$tpl/$name.md" "$f"
+  if [ -f "$tpl/$name.md" ]; then local body; body="$(relabel <"$tpl/$name.md")" || exit 2; printf '%s\n' "$body" >"$f"
   else printf -- '---\nabout: TODO one line: what it does and when to use it\ntrigger: schedule\ncron: "0 3 * * *"\ntimeout: 60\ngrants: issues\n---\n# %s\n\nTODO: what this routine does, its caps, and what it must never do.\n' "$name" >"$f"
   fi
   [ -z "$cron" ] || set_schedule "$name" "$cron" "$tz"
   echo "wrote $f"
+  [ -z "$(field "$f" labels "")" ] || echo "it needs the labels $(field "$f" labels ""): a missing one stops the run (map yours in $dir/labels.tsv)"
   write_one "$name"
 }
 
