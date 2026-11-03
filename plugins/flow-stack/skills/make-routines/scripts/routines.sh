@@ -66,8 +66,8 @@ set_schedule() { # set_schedule <name> <cron> <tz or "">
 # The check says "this run's ready.sh passed on this SHA", not "an independent reviewer passed it": the guard keeps the
 # agent's tools off the ledger, but code the agent runs in the same job could still write it. So the check only lets
 # the review routine skip a self-heal head; nothing merges on it.
-stamp_step() {
-  cat <<'EOF'
+stamp_step() { # stamp_step <the label self-heal puts on its PRs>
+  sed "s|@PR_LABEL@|$1|" <<'EOF'
       # ready.sh's stamp is on this runner's disk, which is thrown away: carry it to the self-heal PR it stamped
       - name: flow/ready
         if: always()
@@ -75,8 +75,8 @@ stamp_step() {
           GH_TOKEN: ${{ github.token }}
         run: |
           t=.flow/ready.tsv; [ -f "$t" ] || exit 0
-          gh pr list --state open --label self-heal --json number,headRefOid,headRefName,isCrossRepository,isDraft \
-            --jq '.[] | select((.isCrossRepository | not) and (.headRefName | startswith("self-heal/"))) | "\(.number) \(.headRefOid) \(.isDraft)"' |
+          gh pr list --state open --label @PR_LABEL@ --json number,headRefOid,headRefName,isCrossRepository,isDraft,author \
+            --jq '.[] | select((.isCrossRepository | not) and .author.is_bot and (.headRefName | startswith("self-heal/"))) | "\(.number) \(.headRefOid) \(.isDraft)"' |
           while read -r n sha draft; do
             awk -F'\t' -v s="$sha" '$2 == s && $3 == "ready" && $4 == "pass" { f = 1 } END { exit !f }' "$t" || continue
             awk -F'\t' -v s="$sha" '$2 == s { print $1, $3, $4 }' "$t" |
@@ -170,7 +170,7 @@ render_one() { # render_one <name>: the workflow on stdout
   done
   # Only self-heal posts ready.sh's stamp as a flow/ready check run, which needs checks: write; the rest read it
   export R_PERM_checks=read
-  if [ "$1" = self-heal ] && [[ " $grants " == *" contents "* ]]; then R_PERM_checks=write stamp="$(stamp_step)"; fi
+  if [ "$1" = self-heal ] && [[ " $grants " == *" contents "* ]]; then R_PERM_checks=write stamp="$(l="${labels%% *}"; stamp_step "${l:-self-heal}")"; fi
   if [ "$trigger" = pull_request ]; then skip="$(skip_step)" run_if="        if: steps.stamp.outputs.skip != 'true'"; fi
   # Without github_token the action swaps in the Claude App's token, with every scope the App has. Only a
   # routine that pushes needs it (PRs opened with github.token don't trigger CI); the rest stay inside `grants`.

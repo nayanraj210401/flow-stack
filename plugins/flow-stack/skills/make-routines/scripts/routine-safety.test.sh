@@ -69,6 +69,7 @@ grep -q 'a self-heal comment' $r && ok "the routine's own name in prose stays" |
 grep -qE 'heal-ok|needs-repro|`self-create`' $r && bad "a catalog label is left: $(grep -noE 'heal-ok|needs-repro|`self-create`' $r | head -3)" || ok "no catalog label left"
 grep -q 'self-create routine' $r && grep -q '`self-heal/<number>-<slug>`' $r && ok "routine names and branch names untouched" || bad "renamed a non-label"
 grep -q 'approved' .github/workflows/flow-self-heal.yml && ok "rendered workflow checks the mapped label" || bad "workflow lacks mapped label"
+grep -q -- '--label fixer --json number' .github/workflows/flow-self-heal.yml && ok "flow/ready finds self-heal PRs by the mapped label" || bad "stamp step uses the catalog label"
 printf 'heal-ok has space\n' >.github/routines/labels.tsv
 out="$(bash "$H/routines.sh" add self-heal --force 2>&1)"
 [[ "$out" == *"no spaces inside a name"* ]] && grep -q approved $r && ok "a bad map line is refused, the routine left as it was" || bad "bad map: $out"

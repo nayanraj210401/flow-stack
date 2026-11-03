@@ -46,10 +46,11 @@ grep -q '^  checks: read$' $W/flow-auto-merge.yml && ! grep -q 'flow/ready' $W/f
 echo "-- self-heal: post on the stamped self-heal head only, then mark it ready"
 A=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa C=cccccccccccccccccccccccccccccccccccccccc
 cat >"$SB/prs.json" <<EOF
-[{"number":5,"headRefOid":"$A","headRefName":"self-heal/5-x","isCrossRepository":false,"isDraft":true},
- {"number":6,"headRefOid":"bbbb","headRefName":"self-heal/6-y","isCrossRepository":false,"isDraft":true},
- {"number":7,"headRefOid":"$C","headRefName":"feature/z","isCrossRepository":false,"isDraft":true},
- {"number":8,"headRefOid":"$C","headRefName":"self-heal/8-z","isCrossRepository":true,"isDraft":true}]
+[{"number":5,"headRefOid":"$A","headRefName":"self-heal/5-x","isCrossRepository":false,"isDraft":true,"author":{"is_bot":true}},
+ {"number":6,"headRefOid":"bbbb","headRefName":"self-heal/6-y","isCrossRepository":false,"isDraft":true,"author":{"is_bot":true}},
+ {"number":7,"headRefOid":"$C","headRefName":"feature/z","isCrossRepository":false,"isDraft":true,"author":{"is_bot":true}},
+ {"number":8,"headRefOid":"$C","headRefName":"self-heal/8-z","isCrossRepository":true,"isDraft":true,"author":{"is_bot":true}},
+ {"number":9,"headRefOid":"$A","headRefName":"self-heal/9-h","isCrossRepository":false,"isDraft":true,"author":{"is_bot":false}}]
 EOF
 mkdir -p .flow; printf 't1\t%s\treview\tship\tsecret note\nt2\t%s\tready\tpass\t\nt3\tbbbb\treview\tfix-first\t\nt4\t%s\tready\tpass\t\n' "$A" "$A" "$C" >.flow/ready.tsv
 bash -eo pipefail -c "$(step $W/flow-self-heal.yml)" || bad "step failed"
@@ -75,4 +76,4 @@ grep -q 'A `self-heal` PR goes back to its routine instead of being blocked' "$a
 ! grep -q 'heal-ok' "$am" && grep -q 'last `labeled` event for `auto-merge`' "$am" && ok "auto-merge: still a human auto-merge label, no agent-linked heal-ok shortcut" || bad "auto-merge trusts an agent-chosen issue link"
 grep -q 'also for a PR with a `flow/ready` check' "$am" && ok "auto-merge still reviews a stamped PR itself" || bad "auto-merge trusts the self-written stamp"
 
-[ "$FAILS" = 0 ] && echo "ready-check.test.sh: pass" || { echo "routines.test.sh: $FAILS failed"; exit 1; }
+[ "$FAILS" = 0 ] && echo "ready-check.test.sh: pass" || { echo "ready-check.test.sh: $FAILS failed"; exit 1; }
