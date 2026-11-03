@@ -13,6 +13,7 @@ permissions:
   contents: write
   issues: write
   pull-requests: write
+  checks: write
   id-token: write
 jobs:
   run:
@@ -32,7 +33,7 @@ jobs:
           echo "FLOW_STACK_HOME=$RUNNER_TEMP/flow-stack" >>"$GITHUB_ENV"
           # the routine's labels must exist (names match case-insensitively, as on GitHub); an existing one is never
           # edited. A missing one stops the run, unless the routine sets create_labels: true.
-          labels="self-heal heal-ok needs-repro" miss=""
+          labels="self-heal heal-ok needs-repro rework needs-human" miss=""
           if [ -n "$labels" ]; then
             have="$(gh label list --limit 1000 --json name --jq '.[].name')"
             for l in $labels; do
@@ -42,7 +43,6 @@ jobs:
             done
           fi
           [ -z "$miss" ]
-
       # A fresh runner installs the plugin on every run: the marketplace's default branch, or the clone pinned above
       - uses: anthropics/claude-code-action@v1
         id: claude
@@ -77,6 +77,24 @@ jobs:
               (select(.type == "result") | "result: \(.subtype) turns=\(.num_turns) cost=$\(.total_cost_usd) denied=\(.permission_denials_count // (.permission_denials | length))")' "$RUN_FILE" |
               perl -pe 's/(sk-ant-[a-z]+[0-9]*-|sk-|gh[opsu]_|github_pat_)[A-Za-z0-9_.-]{8,}/$1REDACTED/g; s/(bearer\s+|token[=:]\s*)[A-Za-z0-9._~+\/=-]{8,}/$1REDACTED/gi; chomp; $_ = substr($_, 0, /^error: / ? 160 : 300) . "\n"'
             echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
+      # ready.sh's stamp is on this runner's disk, which is thrown away: carry it to the self-heal PR it stamped
+      - name: flow/ready
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          t=.flow/ready.tsv; [ -f "$t" ] || exit 0
+          gh pr list --state open --label self-heal --json number,headRefOid,headRefName,isCrossRepository,isDraft,author \
+            --jq '.[] | select((.isCrossRepository | not) and .author.is_bot and (.headRefName | startswith("self-heal/"))) | "\(.number) \(.headRefOid) \(.isDraft)"' |
+          while read -r n sha draft; do
+            awk -F'\t' -v s="$sha" '$2 == s && $3 == "ready" && $4 == "pass" { f = 1 } END { exit !f }' "$t" || continue
+            awk -F'\t' -v s="$sha" '$2 == s { print $1, $3, $4 }' "$t" |
+              jq -Rs --arg sha "$sha" '{name: "flow/ready", head_sha: $sha, status: "completed", conclusion: "success",
+                output: {title: "ready.sh stamped this commit", summary: ("```\n" + . + "```")}}' |
+              gh api "repos/$GITHUB_REPOSITORY/check-runs" --input - >/dev/null || { echo "::warning::flow/ready not posted on #$n"; continue; }
+            [ "$draft" != true ] || gh pr ready "$n" </dev/null || echo "::warning::#$n stays a draft"
+            echo "flow/ready on #$n at ${sha:0:7}" >>"$GITHUB_STEP_SUMMARY"
+          done
       # The runner's disk is thrown away, so show whatever the run queued in GATES.md before it is lost
       - name: Open gates
         if: always()

@@ -62,13 +62,14 @@ git add -A && git -c user.email=a@b -c user.name=a commit -qm i
 printf '# catalog yours\nheal-ok approved\nneeds-repro Needs-Info\nself-create bot-filed\nself-heal fixer\n' >.github/routines/labels.tsv
 bash "$H/routines.sh" add self-heal >/dev/null || bad "add self-heal failed"
 r=.github/routines/self-heal.md
-[ "$(sed -n 's/^labels: //p' $r)" = "fixer approved Needs-Info" ] && ok "labels: line uses the repo's names" || bad "labels: $(grep '^labels:' $r)"
+[ "$(sed -n 's/^labels: //p' $r)" = "fixer approved Needs-Info rework needs-human" ] && ok "labels: line uses the repo's names" || bad "labels: $(grep '^labels:' $r)"
 grep -q -- '--label approved --json' $r && grep -q -- '--label bot-filed`' $r && grep -q '`Needs-Info`' $r && grep -q -- '--label fixer --title' $r \
   && ok "the prompt says approved, Needs-Info, bot-filed, fixer" || bad "prompt not renamed"
 grep -q 'a self-heal comment' $r && ok "the routine's own name in prose stays" || bad "renamed self-heal in prose"
 grep -qE 'heal-ok|needs-repro|`self-create`' $r && bad "a catalog label is left: $(grep -noE 'heal-ok|needs-repro|`self-create`' $r | head -3)" || ok "no catalog label left"
 grep -q 'self-create routine' $r && grep -q '`self-heal/<number>-<slug>`' $r && ok "routine names and branch names untouched" || bad "renamed a non-label"
 grep -q 'approved' .github/workflows/flow-self-heal.yml && ok "rendered workflow checks the mapped label" || bad "workflow lacks mapped label"
+grep -q -- '--label fixer --json number' .github/workflows/flow-self-heal.yml && ok "flow/ready finds self-heal PRs by the mapped label" || bad "stamp step uses the catalog label"
 printf 'heal-ok has space\n' >.github/routines/labels.tsv
 out="$(bash "$H/routines.sh" add self-heal --force 2>&1)"
 [[ "$out" == *"no spaces inside a name"* ]] && grep -q approved $r && ok "a bad map line is refused, the routine left as it was" || bad "bad map: $out"
