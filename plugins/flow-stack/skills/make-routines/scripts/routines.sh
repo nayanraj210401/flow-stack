@@ -311,7 +311,8 @@ safety() { # prints "<path><TAB><glob>" for each path on the list
   # With --ref the list comes from that commit, so a PR checked out in the working tree can't shorten its own list
   if [ -n "$ref" ]; then
     git rev-parse -q --verify "$ref^{commit}" >/dev/null || die "--ref $ref is not a commit"
-    list="$(git show "$ref:$dir/safety-paths.txt" 2>/dev/null)" || list="$(cat "$tpl/safety-paths.txt")"
+    # a base without the list fails closed: the generic default lacks this repo's own machinery
+    list="$(git show "$ref:$dir/safety-paths.txt" 2>/dev/null)" || die "$ref has no $dir/safety-paths.txt"
   elif [ -f "$dir/safety-paths.txt" ]; then list="$(cat "$dir/safety-paths.txt")"
   else list="$(cat "$tpl/safety-paths.txt")"; fi
   while read -r g _; do case "$g" in ''|'#'*) ;; *) pats+=("$g") ;; esac; done < <(tr -d '\r' <<<"$list")

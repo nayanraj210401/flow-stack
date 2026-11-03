@@ -93,6 +93,8 @@ echo '/nothing/*' >.github/routines/safety-paths.txt
 "$H/routines.sh" safety .github/x.yml >/dev/null && "$H/routines.sh" safety --ref "$base" .github/x.yml >/dev/null; [ $? = 1 ] &&
   ok "--ref reads the base branch's list, not the PR's" || bad "a PR shortened its own safety list"
 "$H/routines.sh" safety --ref nope x >/dev/null 2>&1; [ $? = 2 ] && ok "a bad --ref is an error, not a pass" || bad "bad --ref passed"
+nolist="$(git commit-tree "$(git mktree </dev/null)" -m empty)"
+"$H/routines.sh" safety --ref "$nolist" plugins/flow-stack/hooks/guard.sh >/dev/null 2>&1; [ $? = 2 ] && ok "a base with no safety list is an error, not the generic default" || bad "no list at the base fell back"
 "$H/routines.sh" safety --ref '' .github/x.yml >/dev/null 2>&1; [ $? = 2 ] && ok "an empty --ref is an error" || bad "empty --ref read the working tree"
 printf '' | "$H/routines.sh" safety -z >/dev/null 2>&1; [ $? = 2 ] && printf '\n' | "$H/routines.sh" safety >/dev/null 2>&1; [ $? = 2 ] &&
   ok "no paths (a failed git diff upstream) is an error, not clean" || bad "empty input passed"
