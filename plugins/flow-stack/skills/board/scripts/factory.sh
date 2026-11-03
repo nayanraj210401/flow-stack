@@ -36,13 +36,12 @@ map='{}' lt="$(git rev-parse --show-toplevel 2>/dev/null)/.github/routines/label
 # one card per item: where it is (status) and where its state says it belongs (col)
 board="$(jq -sc --argjson map "$map" '
   def names: [.nodes[]?.name | $map[.] // .];
-  def col: if .type == "pr" and .state == "MERGED" then "Merged"
-    elif .type == "issue" and .state == "CLOSED" and .reason == "COMPLETED" then "Merged"
-    elif .state != "OPEN" then "Merged"
+  def col: if .state != "OPEN" then "Merged"
     elif any(.labels[]; . == "needs-human") then "Blocked"
     elif .type == "pr" and any(.labels[]; . == "rework") then "Rework"
     elif .type == "pr" and (.ready or (.draft | not)) then "Review"
     elif .type == "pr" then "Building"
+    elif .status == "Merged" then "Triage"
     else .status // "Triage" end;
   map(.data.repositoryOwner.projectV2 // empty) as $p
   | if ($p | length) == 0 then error("project not found or no access (a PAT needs the project scope)") else . end
@@ -57,7 +56,8 @@ board="$(jq -sc --argjson map "$map" '
           refs: ([($c.body // "") | scan("#([0-9]+)") | .[0] | tonumber] | unique)}
        | . + {col: col}]}' <<<"$raw" 2>&1)" || { echo "factory.sh: $board" >&2; exit 1; }
 
-moves() { jq -c '.options as $o | .cards[] | select(.col != null and .col != .status and .col != "Ready")
+# never into Ready: col is Ready only for a card already there (an open issue keeps a human's column)
+moves() { jq -c '.options as $o | .cards[] | select(.col != .status)
   | .col as $to | {id, ref, from: (.status // "no status"), to: $to, option: ([$o[] | select(.name == $to)][0].id // null)}' <<<"$board"; }
 
 case "$cmd" in
@@ -78,13 +78,13 @@ case "$cmd" in
       def median: sort | if length == 0 then null else .[length / 2 | floor] end;
       def rank: {"risk:low": 0, "risk:med": 1, "risk:high": 2}[.];
       .cards as $c | ($c | map(select(.type == "pr"))) as $prs | ($prs | map(select(.merged != null))) as $m
-      | ([.options[].name] + [$c[] | .col // .status // "No status"] | reduce .[] as $n ([]; if index([$n]) then . else . + [$n] end)) as $cols
+      | ([.options[].name] + [$c[] | .col] | reduce .[] as $n ([]; if index([$n]) then . else . + [$n] end)) as $cols
       | ([$c[] | select(.type == "issue" and any(.labels[]; . == "bug" or . == "type:bug"))
           | . as $b | select(any($m[]; .repo == $b.repo and (.number | IN($b.refs[]))))]) as $esc
       | ([$prs[] | ([.labels[] | rank | values] | max) as $a | ([.issues[].labels[] | rank | values] | max) as $p
           | select($a != null and $p != null) | $a > $p]) as $risk
       | {url, title,
-         columns: [$cols[] as $n | {name: $n, cards: [$c[] | select((.col // .status // "No status") == $n) | {ref, title, url, type, open: (.state == "OPEN")}]}],
+         columns: [$cols[] as $n | {name: $n, cards: [$c[] | select((.col) == $n) | {ref, title, url, type, open: (.state == "OPEN")}]}],
          cycle: {merged: ($m | length),
            intake_h: ([$m[] | .created as $pc | .issues[] | h(.created; $pc)] | median),
            build_h: ([$m[] | h(.created; .merged)] | median)},
