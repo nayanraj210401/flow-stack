@@ -261,7 +261,7 @@ release() { # release push|open <id>: the human's outward step, from a normal sh
   # hooks or local git config; ready.sh runs there with no credentials in its environment (it still runs as you). A
   # review_gate: yolo would pass with nothing checked, so the gate must be on, and that run must stamp the commit.
   local sha t rs="$plugin/skills/review/scripts/ready.sh"
-  t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
+  t="$(mktemp -d)"; trap "rm -rf $(printf %q "$t")" EXIT
   cleared() { (cd "$1" && shift && env -i PATH="$PATH" HOME="$home/shift/home" TMPDIR="${TMPDIR:-/tmp}" LANG="${LANG:-C.UTF-8}" \
     FLOW_STACK_HOME="$home" GH_CONFIG_DIR="$home/shift/gh-none" GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
     GIT_SSH_COMMAND=false GIT_TERMINAL_PROMPT=0 "$@" </dev/null); }
