@@ -88,3 +88,39 @@ The workflow changes always get their own branch and PR. Never commit them to th
 `$S check`: every workflow matches a fresh render of its routine, no generated workflow outlives its routine, and the profile exists.
 
 Measure it after two weeks: the share of `self-heal` PRs merged, of `self-create` issues not closed as invalid, and of `review` findings you acted on. Below half, tighten that prompt before adding routines.
+
+## The shift: your own overnight work, on your machine
+
+Routines serve a repo. The shift serves you: work waiting on you overnight gets prepared, never sent, and you release it in the morning. It runs on your scheduler (launchd on macOS, cron elsewhere) because it needs your identity. Jobs: `review` and `brief` (read-only), `respond` and `start` (write code in a local checkout). Nothing happens without a `shift:` block in the profile's frontmatter:
+
+```yaml
+shift:
+  when: "0 5 * * 1-5"            # local time
+  repos: [acme/api, me/flow-stack]  # owner/name only; items from other repos are dropped
+  max_items: 5
+  budget_usd: 5                  # the reviewer's spend cap for one run
+  jobs:
+    review:  {from: github-review-requested}
+    respond: {from: github-my-prs}
+    start:   {from: github-assigned, build_up_to: med}
+    brief:   {to: file}          # file | notify
+```
+
+- **Sources** are adapters: `github-review-requested`, `github-my-prs`, `github-assigned`, `github-project:<owner>/<n>[:<status>]`, or any command that prints a JSON array of `{id, url, repo, kind, title, updated}` (a Linear or Jira CLI from your Toolchain). A command with commas goes in the block form (`review:` then `from: <command>` on its own line), since `{…}` splits on commas.
+- **`review`**: for each PR, the `reviewer` agent reads the diff in a scratch dir with only Read, Grep, and Glob, so it never runs the PR's code and the PR's text is a file it is told is data. The result is a **pending** GitHub review on the PR's head commit: only you see it until you submit or discard it. Its checks say "not run": the shift runs on your machine, while it is on, with no container, so it never runs a PR's code.
+- **`respond`**: for each of your PRs with unresolved threads, changes requested, failing checks, or a merge conflict, the shift clones the repo under `shift/work/<id>` and runs `/flow-stack:flow --auto` there. The feedback goes in a file the agent is told is data. It makes one commit per thread or failing check, each naming the item and ending with a `Check: <command>` line, and rebases when the PR conflicts. Its last message is the drafted replies (`shift/out/<id>.replies.md`). The shift then checks the result itself: every item named by a commit, every `Check:` passing on HEAD. Anything missing makes the item `~`. Release: `shift.sh push <id>`.
+- **`start`**: for each issue assigned to you, flow opens a task in a clone, writes INTENT.md and SLICES.md, and builds proven commits on `shift/<n>-<title>`. A `risk:low|med|high` label above `build_up_to` (default `med`; no label counts as `med`) gets the spec and its questions only, and any commit then makes the item `✗`. Release: `shift.sh open <id>` (a draft PR that closes the issue).
+- **Factory-ready only**: `respond` and `start` refuse a repo without a committed verify driver and a feature map with a scenario (the same test as `factory_ready`), and say which one is missing.
+- **The agent can commit; the plain ways to send are closed, but it is not a sandbox**: no shift token in its environment, an empty `gh` config, no git global config or credential helper, ssh off, a push URL that goes nowhere, `--auto`, and `git push`, `gh`, `curl`, `wget`, `nc`, `ssh`, `scp` and web tools denied. It runs as you, though, with your files readable (the shift token, your `gh` login), and its `Check:` lines run outside Claude. So code, or other people's comments and issue text, that talks it into an interpreter call could still send. That's why it runs only on repos you list in `shift.repos`, whose code you trust, and why nothing is released until you run `shift.sh push` or `open`. A container would close this; by choice the shift runs on your laptop without one.
+- **Release is yours** (`push` / `open`, from your normal shell and identity). Nothing runs in the agent's clone besides the fetch: the prepared commit and the base the shift saw are fetched into an empty repo and checked out fresh, with only the clone's `.flow/ready.tsv` (the agent's review, deslop and tour records, keyed by commit) copied over, so an uncommitted edit, the clone's git config and its hooks never run. `ready.sh` runs in that checkout with no credentials in its environment (no ssh agent, `gh` token or cloud keys; it still runs as you, so it can read files you can): the review gate must be on (a `review_gate: yolo` is refused) and that run must stamp the commit, meaning lint, the ready commands and the feature scenarios its diff against that base touches passed. The agent's task (its INTENT checks, seals and blind checks) stays in the clone and is not run. The stamp is not a review: those records are the agent's own, so read the diff before you release. The push leaves from the empty repo to the origin read before the agent ran and written down after it exited. `push` is one `--force-with-lease` against the head the shift saw; `open` is a push and `gh pr create --draft`. A later run of the same item deletes the earlier release first, so only the latest prepared commit can go out. The replies are yours to post.
+- **`brief`**: `$FLOW_STACK_HOME/digest/shift-<date>.md` (next to wrap's pages), one line per item: `✓` ready to release, `~` needs you, `✗` blocked (why), each with the command or link that releases it. `to: notify` also sends one notification through the profile's `notify:`.
+- **Idempotent**: an item is keyed by URL + `updated`; a re-run skips what it has seen and does nothing when nothing changed. One run at a time: a second run while one holds `shift/lock` exits.
+- **Never outward**: `run` never submits, pushes, comments, opens a PR, or moves a ticket. Its only GitHub write is the pending review.
+- **Access**: only the token in `$FLOW_STACK_HOME/shift/token`, a fine-grained token for `shift.repos` (Pull requests: read and write, Contents: read, Issues: read). The run clears its own environment (no ssh agent, no cloud credentials, its own `gh` config), so the shift's own `gh` calls use only that token.
+
+```bash
+$S add shift --local          # writes $FLOW_STACK_HOME/shift/run.sh + a launchd plist (or crontab line); prints the install command
+<dir>/scripts/shift.sh run --dry-run   # plans and the digest under shift/dry/, nothing staged on GitHub
+```
+
+Installing the scheduler entry is yours to run (`--local` prints the command). Re-run `add shift --local --force` after the plugin moves (an update) or `when:` changes, then its printed install command again: it replaces the earlier entry (launchd `bootout` first; the crontab line is tagged `# flow-stack-shift`). `release: auto` (opening low-risk `start` drafts unattended) waits for a repo factory policy that can allow it.

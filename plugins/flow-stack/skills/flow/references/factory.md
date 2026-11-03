@@ -10,7 +10,7 @@ Stages marked **planned** don't exist yet; don't act as if they do.
 
 | Stage | Served today by | Planned | Human touchpoint |
 |---|---|---|---|
-| Monitor | `self-create` routine (finds bugs by running code); CI on main | prod signals; the shift's watchers for a person: assigned work, feedback on my PRs, review requests (#188, #189) | none |
+| Monitor | `self-create` routine (finds bugs by running code); CI on main; the shift for a person (`make-routines add shift --local`): review requests, feedback on your PRs, assigned issues, prepared overnight on your machine and released by you | prod signals | none |
 | Triage | `triage` routine: type, readiness, size and risk labels at intake (a safety path is risk:high, never built); `ideate` routine: at most one evidence-cited `proposal` a week | | **one human label before bot work is built**: `heal-ok` (or, with triage, an approved `triage:ready`); a `proposal` needs `accept` |
 | Spec | `intent` (goal, non-goals, runnable checks, blind checks, an edge-case matrix) + `seal`, which enforces the matrix | | **review the spec**: the intent gate in a session; under `--auto` the agent approves it. A risk:high issue gets a draft INTENT and `needs-human`, never code |
 | Implement | `self-heal` routine; `mention` routine (`@claude` runs through flow with the plugin, draft PRs only); `flow --auto` in any session; `task.sh route` picks the repo for a request with none named | cloud sessions (#194); shipping linked PR sets across repos (#190) | none |
