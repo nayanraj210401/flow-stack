@@ -316,6 +316,11 @@ git -C "$SB/remotes/acme/api.git" update-ref refs/heads/feat-x "$before5"; git -
 echo stray >"$w/acme-api-5/stray"; git -C "$w/acme-api-5" add stray; git -C "$w/acme-api-5" commit -qm "stray: no review records"
 out="$("$S" push acme/api#5 2>&1)"; rc=$?
 check "push refuses a HEAD ready.sh won't stamp (a commit with no review records); nothing pushed" '[ $rc != 0 ] && grep -q "not ready" <<<"$out" && [ "$(heads)" = "$before" ]'
+git -C "$w/acme-api-5" reset -q --hard "$head5"
+echo 'echo broken' >"$w/acme-api-5/app.sh"; git -C "$w/acme-api-5" commit -qam "break the toy scenario"; (cd "$w/acme-api-5" && "$SB/bin/rec")
+out="$("$S" push acme/api#5 2>&1)"; rc=$?
+check "push refuses a reviewed commit that breaks an impacted feature scenario; nothing pushed" \
+  '[ $rc != 0 ] && grep -q "not ready" <<<"$out" && grep -q "toy" <<<"$out" && [ "$(heads)" = "$before" ]'
 git -C "$w/acme-api-5" reset -q --hard "$head5"; out="$("$S" push acme/api#5 2>&1)"; rc=$?
 check "push: the PR branch now has the commit, replies pointed to" \
   '[ $rc = 0 ] && [ "$(git -C "$SB/remotes/acme/api.git" rev-parse feat-x)" = "$(git -C "$w/acme-api-5" rev-parse HEAD)" ] && grep -q "replies to post" <<<"$out"'
