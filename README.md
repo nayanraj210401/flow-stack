@@ -172,6 +172,7 @@ flowchart LR
 - **One writer at a time:** scheduled routines that push (self-heal, auto-merge) share one concurrency group. `mention` runs per comment.
 - **Usage limits:** a run that hits a Claude usage limit ends green with "Stopped by a Claude usage limit" rather than a failed verdict.
 - **Your labels:** routines never create or edit labels unless the routine says `create_labels: true`. Map the catalog's names to yours in `.github/routines/labels.tsv` before `add`.
+- **A live board:** name a GitHub Project in your profile (`factory:` then `  project: <owner>/<n>`) and `/flow-stack:board` adds a Factory panel; `board/scripts/factory.sh apply` moves each card to the column its issue or PR state implies. It reads label names through `labels.tsv`, and never moves a card into Ready (that one is yours).
 - **Several repos:** list them in your profile's `# Repos` with a `what:` line, and `task.sh route "<request>"` picks the repo, the workspace, or asks one question.
 - **Your own overnight shift:** `make-routines add shift --local` runs on your laptop (launchd or cron, while it is on). It prepares pending reviews for PRs waiting on you, local fixes for feedback on your PRs, and proven commits for issues assigned to you, then writes a morning digest. Reviews stay pending (only you see them), and the shift script itself never pushes or opens anything: that is `shift.sh push` or `shift.sh open`, which you run. It is not a sandbox: list only repos whose code you trust.
 
