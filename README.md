@@ -171,6 +171,22 @@ flowchart LR
 - **Your labels:** routines never create or edit labels unless the routine says `create_labels: true`. Map the catalog's names to yours in `.github/routines/labels.tsv` before `add`.
 - **Several repos:** list them in your profile's `# Repos` with a `what:` line, and `task.sh route "<request>"` picks the repo, the workspace, or asks one question.
 
+### Cloud sessions (Claude Code on the web, Slack)
+
+Cloud sessions don't install plugins on their own, even ones your repo's `.claude/settings.json` enables. Install flow-stack in the environment's setup script:
+
+1. On claude.ai/code, open the environment's settings and give it **Trusted** network access (the install clones from GitHub).
+2. Set its **setup script** to:
+   ```bash
+   claude plugin marketplace add https://github.com/nayanraj210401/flow-stack.git
+   claude plugin install flow-stack@flow-stack
+   ```
+3. Commit a feature map (`.flow/features/`). `.flow/` is otherwise gitignored, and flow's ready gate stays off in a clone without it.
+4. Optional: set `FLOW_STACK_HOME` in the repo's `.claude/settings.json` `env` key to point the hooks at a committed profile.
+5. Start a session and check that the plugin loaded: the first reply carries the `## Profile` block, and `/flow-stack:` completes.
+
+What's been tested (#194): the install command works in a cloud shell, and `env` from `.claude/settings.json` reaches the hooks. Still unconfirmed: whether a plugin installed by the setup script loads at launch. If step 5 fails, comment on #194. One known limit: cloud sessions have no GitHub GraphQL, so `gh pr create` and `gh pr ready` fail there (`HTTP 403`). A cloud session can build and stamp a branch, but use a routine or your laptop to open the PR.
+
 Setup steps (secret, GitHub App, branch protection) are in [make-routines](plugins/flow-stack/skills/make-routines/SKILL.md). The stage-by-stage map, with what is planned and its issue, is [factory.md](plugins/flow-stack/skills/flow/references/factory.md).
 
 ## Skill catalog
