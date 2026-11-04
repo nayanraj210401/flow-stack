@@ -56,13 +56,15 @@ elif e="$(gh api "repos/$repo/branches/$def/protection" 2>&1 >/dev/null)"; then 
 elif grep -q 'Branch not protected' <<<"$e"; then row protect missing "$def: require a PR and a passing check"
 else row protect unknown "$def: no PR ruleset, and classic protection needs admin to read"; fi
 
-# list, not get: a 404 from get can mean "not set" or "no access"; a list that succeeds can tell them apart
-if vars="$(gh variable list --json name -q '.[].name' 2>/dev/null)"; then
-  if grep -qx FLOW_FACTORY <<<"$vars"; then
-    v="$(gh variable get FLOW_FACTORY 2>/dev/null)"
-    [ "$v" = off ] && row kill off "FLOW_FACTORY=off: every routine is paused" || row kill on "FLOW_FACTORY=$v: routines run"
-  else row kill on "routines run (gh variable set FLOW_FACTORY --body off pauses them)"; fi
-else row kill unknown "can't read repo variables"; fi
+# list, not get: a 404 from get can mean "not set" or "no access"; a list that succeeds can tell them apart.
+# vars.FLOW_FACTORY resolves repo first, then org (org-owned repos only; a user repo's org endpoint is a 422).
+kill() { [ "$1" = off ] && row kill off "FLOW_FACTORY=off$2: every routine is paused" || row kill on "FLOW_FACTORY=$1$2: routines run"; }
+if ! vars="$(gh variable list --json name -q '.[].name' 2>/dev/null)"; then row kill unknown "can't read repo variables"
+elif grep -qx FLOW_FACTORY <<<"$vars"; then kill "$(gh variable get FLOW_FACTORY 2>/dev/null)" ""
+elif [ "$(gh api "repos/$repo" -q .owner.type 2>/dev/null)" != Organization ]; then row kill on "routines run (gh variable set FLOW_FACTORY --body off pauses them)"
+elif ! ov="$(gh api "repos/$repo/actions/organization-variables" -q '.variables[] | select(.name == "FLOW_FACTORY") | .value' 2>/dev/null)"; then row kill unknown "can't read org variables"
+elif [ -n "$ov" ]; then kill "$ov" " (org)"
+else row kill on "routines run (gh variable set FLOW_FACTORY --body off pauses them)"; fi
 
 if l="$(gh label list --limit 500 --json name -q '.[].name' 2>/dev/null)"; then
   want="$(awk '$1 == "heal-ok" { print $2 }' "$root/.github/routines/labels.tsv" 2>/dev/null)"; want="${want:-heal-ok}"

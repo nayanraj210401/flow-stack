@@ -23,7 +23,9 @@ case "\$1 \$2" in
   "api repos/acme/app/actions/organization-secrets") [ "\$m" = orgsec ] && echo CLAUDE_CODE_OAUTH_TOKEN || exit 1 ;;
   "api repos/acme/app/rules/branches/main") [ "\$m" = reader ] && echo 1 || echo 0 ;;
   "api repos/acme/app/branches/main/protection") case "\$m" in team) echo '{}' ;; admin) echo 'gh: Branch not protected (HTTP 404)' >&2; exit 1 ;; *) echo 'gh: Not Found (HTTP 404)' >&2; exit 1 ;; esac ;;
-  "variable list") case "\$m" in reader) echo OTHER ;; admin|team) echo FLOW_FACTORY ;; *) echo 'HTTP 404' >&2; exit 1 ;; esac ;;
+  "api repos/acme/app") case "\$m" in orgsec|orgoff|orglocked) echo Organization ;; *) echo User ;; esac ;;
+  "api repos/acme/app/actions/organization-variables") case "\$m" in orgoff) echo off ;; orgsec) echo '' ;; *) exit 1 ;; esac ;;
+  "variable list") case "\$m" in reader|orgsec|orgoff|orglocked) echo OTHER ;; admin|team) echo FLOW_FACTORY ;; *) echo 'HTTP 404' >&2; exit 1 ;; esac ;;
   "variable get") [ "\$m" = admin ] && echo off || echo on ;;
   "label list") [ "\$m" = nolabels ] && exit 1; echo approved ;;
   "issue list") [ "\$m" = nolabels ] && exit 1; case "\$*" in *--label*) echo 2 ;; *) echo 7 ;; esac ;;
@@ -63,6 +65,12 @@ want kill on; grep -q 'FLOW_FACTORY=on' <<<"$out" && ok "reads the variable's va
 
 echo orgsec >"$SB/mode"; out="$(bash "$D")"
 want secret ok; grep -q '(org secret)' <<<"$out" && ok "an org secret shared with the repo counts" || bad "org secret"
+
+want kill on
+echo orgoff >"$SB/mode"; out="$(bash "$D")"
+want kill off; grep -q 'FLOW_FACTORY=off (org)' <<<"$out" && ok "an org-level FLOW_FACTORY=off pauses" || bad "org kill: $(grep '^kill' <<<"$out")"
+echo orglocked >"$SB/mode"; out="$(bash "$D")"
+want kill unknown
 
 echo nolabels >"$SB/mode"; out="$(bash "$D")"
 want labels unknown
