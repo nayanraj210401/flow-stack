@@ -107,5 +107,14 @@ expect deny  "cd $SB/wt-ok && true
 cd $SB/wt-no
 gh pr ready 1"
 expect deny  "cd $SB/wt-ok; gh pr ready 1 && cd $SB/wt-no && gh pr create --title x"
+expect deny  "cd $SB/wt-ok && c''d $SB/wt-no && gh pr ready 1"
+expect deny  "cd $SB/wt-ok && c\\d $SB/wt-no && gh pr ready 1"
+expect deny  "cd $SB/wt-ok && cd\${IFS}$SB/wt-no && gh pr ready 1"
+expect deny  "cd $SB/wt-ok && env -C $SB/wt-no gh pr ready 1"
+expect deny  "cd $SB/wt-ok && cd; gh pr ready 1"
+# another clone with its own stamp and review_gate: yolo is not this repo: judged by the session root
+git clone -q "$SB/wt-ok" "$SB/other" && mkdir -p "$SB/other/.flow" && echo '{"review_gate":"yolo"}' >"$SB/other/.flow/config.json"
+printf '%s\t%s\tready\tpass\n' "$(date +%s)" "$(git -C "$SB/other" rev-parse HEAD)" >"$SB/other/.flow/ready.tsv"
+expect deny  "cd $SB/other && gh pr ready 1"
 
 [ "$FAILS" -eq 0 ] && echo "ok" || { echo "$FAILS failed"; exit 1; }

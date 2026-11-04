@@ -333,12 +333,13 @@ pr_drafts() {
 }
 if [ -d "$FLOW_DIR" ] && flow_enabled ready && [ -n "$pr_cmd" ] && ! pr_drafts <<<"$code"; then
   ready="$(cd "$(dirname "$0")/../skills/review/scripts" && pwd)/ready.sh"
-  # `cd <dir> && …` with no other cd is judged in <dir>'s repo; a dir outside any repo keeps the session's.
-  rroot="$FLOW_ROOT"
-  if [[ "$cmd" =~ ^[[:space:]]*cd[[:space:]]+([^[:space:]\;\&\|\`\$\(\)]+)[[:space:]]*\&\&(.*)$ ]] \
-     && ! grep -Eq '(^|[^[:alnum:]_./-])(cd|pushd|popd)([[:space:]]|$)' <<<"${BASH_REMATCH[2]}"; then
-    d="${BASH_REMATCH[1]//[\"\']/}"; d="${d/#\~/$HOME}"; [[ "$d" == /* ]] || d="$FLOW_CWD/$d"
-    rroot="$(git -C "$d" rev-parse --show-toplevel 2>/dev/null || echo "$FLOW_ROOT")"
+  # `cd <dir> && gh pr create|ready …` (one plain gh call after it) is judged in <dir> when <dir> is a worktree of
+  # this repo; anything else (another clone, no repo, more shell after the cd) keeps the session's root.
+  rroot="$FLOW_ROOT" plain='^[[:space:]]*cd[[:space:]]+([A-Za-z0-9_./~@+,:=-]+)[[:space:]]*&&[[:space:]]*gh[[:space:]]+pr[[:space:]]+(create|ready)([[:space:]][^;&|`$()<>\\]*)?$'
+  if [[ "$cmd" != *$'\n'* && "$cmd" =~ $plain ]]; then
+    d="${BASH_REMATCH[1]/#\~\//$HOME/}"; [[ "$d" == /* ]] || d="$FLOW_CWD/$d"
+    [ "$(git -C "$d" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" != "$FLOW_MAIN/.git" ] ||
+      rroot="$(git -C "$d" rev-parse --show-toplevel)"
   fi
   if [ "$(cd "$rroot" && "$ready" mode)" != yolo ] && ! (cd "$rroot" && "$ready" stamped); then
     pre_decide deny "flow ready-for-review: HEAD isn't stamped ready. Human review is the expensive step, so run $ready (it lists what's missing), or open a draft PR (--draft) meanwhile. review_gate: yolo in the profile or .flow/config.json turns this off."
