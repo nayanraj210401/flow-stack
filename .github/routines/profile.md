@@ -15,6 +15,8 @@ dojo: off                         # off | light (explain-back) | on (TODO(you))
 digest: off                       # off | terminal | page: how /flow-stack:wrap delivers the daily brief
 review_gate: on                   # on | yolo: on = a PR needs ready.sh (review, deslop, tour, checks) before human review
 rigor: lean                   # lean | standard | strict: how much ceremony flow spends per task
+factory_ready: enforce            # warn | enforce: --auto ship in a repo that isn't factory-ready runs as plain --auto
+auto_merge: low-risk              # labelled | low-risk: auto-merge also merges unlabelled risk:low size:S self-heal PRs
 ---
 
 # Who

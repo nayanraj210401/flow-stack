@@ -1,5 +1,5 @@
 ---
-about: merges maintainer-labelled, tested PRs that pass a security review; never touches the safety machinery, max 3 per run
+about: merges maintainer-labelled PRs, and with auto_merge: low-risk unlabelled risk:low self-heal PRs, after a security review; never touches the safety machinery, max 3 per run
 trigger: schedule
 cron: "17 */2 * * *"
 timezone: "Asia/Kolkata"
@@ -31,6 +31,21 @@ The default branch must require the `tests` check, by classic protection or by a
 - `gh pr view <n> --json mergeable` is `MERGEABLE`;
 - `additions + deletions` is at most 400, and the PR changes fewer than 100 files (the `files` list stops at 100, so a bigger PR can't be path-checked here);
 - no changed path is on the safety list, `.github/routines/safety-paths.txt` (edit the list there, never here): `gh pr view <n> --json files --jq '.files[].path' | make-routines/scripts/routines.sh safety` (the installed plugin's script, never a copy in the checkout) prints each hit and exits non-zero (this is a first pass; step 2 checks the full list from git). Any non-zero exit, an error included, means the PR is the human's to merge, however small: label `auto-merge-blocked` and comment which paths.
+
+## 1b. Low-risk self-heal PRs, no label needed (opt-in)
+
+Only when the default branch's `.github/routines/profile.md` has the line `auto_merge: low-risk` and `.github/routines/triage.md` exists. The profile sits on the safety list, so only a human can turn this on. Otherwise skip this section: every merge needs the label above.
+
+Also list `gh pr list --state open --label self-heal --json number,title,isDraft,isCrossRepository,baseRefName,headRefName,headRefOid,createdAt,additions,deletions,files,labels,author,body`. Merge both lists, oldest first, then take at most 3. An unlabelled PR from this list is a candidate when every one of these holds, in place of step 1's two label bullets; step 1's other bullets still apply:
+
+- **It is self-heal's, for one issue:** `author.is_bot` is true, the body has exactly one `Fixes #<i>`, and the head branch starts with `self-heal/<i>-`.
+- **A human with write access approved that issue's current text:** issue `<i>` is open and has `heal-ok` on it now. In its timeline (`gh api repos/{owner}/{repo}/issues/<i>/timeline --paginate`), the last `labeled` event for `heal-ok` has an `actor.type` of `User` whose `collaborators/<login>/permission --jq .permission` is `admin`, `maintain`, or `write` (the same bar as step 1; triage role is not enough to merge). No `renamed` event comes after it, and the body was not edited after it: `gh api graphql -f query='{repository(owner:"<owner>",name:"<repo>"){issue(number:<i>){lastEditedAt}}}'` is null or earlier than that event's `created_at`.
+- **Triage scored it before the approval:** the issue has `triage:ready`, `size:S` and `risk:low` and no other `triage:`, `size:` or `risk:` label, no `needs-human`, and the last `labeled` event for each of those three comes before the `heal-ok` approval.
+- **Nothing a bot added stands in the way:** no label is on the issue or PR now that a non-`User` added, other than `self-heal`, `rework`, and triage's `type:`, `triage:`, `size:`, `risk:` labels.
+- **self-heal stamped this head:** `gh api "repos/{owner}/{repo}/commits/<headRefOid>/check-runs?check_name=flow/ready" --jq '[.check_runs[] | select(.app.slug == "github-actions" and .conclusion == "success" and .output.title == "ready.sh stamped this commit")] | length'` is at least 1.
+- **Your own re-score is low**, after step 2.1's fetch, by triage's risk table (`.github/routines/triage.md`) except Provable (never run scenarios or any PR code here): `additions + deletions` at most 150; `feature-map/scripts/features.sh impact --ids $(git diff --name-only --no-renames origin/<base>...FETCH_HEAD)` (the installed plugin's script) lists exactly 1 feature (a PR with whitespace in a changed path doesn't qualify); no public contract touched (CLI flag, hook payload, schema, persisted data); nothing irreversible. Any factor above low: don't merge it this way. Comment once, `auto-merge: <factor> is <value>, a human merges this`, and leave the PR as it is, with no `auto-merge-blocked`, so a maintainer can still label it.
+
+Such a PR then goes through steps 2 and 3 unchanged, and step 3's comment says it merged as low risk, with the factor table. Expected scope: with a broad safety list, only prose and docs outside it qualify, which is still code an agent follows, so step 2's review applies in full.
 
 ## 2. Security review (per candidate)
 
@@ -65,6 +80,6 @@ Only with a ship verdict and no security finding:
 
 ## Never
 
-Never merge a PR that failed any step above, a fork PR, a draft, or one that touches the safety machinery. Never approve or request changes, never push, never edit tracked files, never remove a label a human added except `auto-merge` as in step 1. Never merge more than 3 per run.
+Never merge a PR that failed any step above, a fork PR, a draft, or one that touches the safety machinery. Never merge an unlabelled PR outside step 1b. Never approve or request changes, never push, never edit tracked files, never remove a label a human added except `auto-merge` as in step 1. Never merge more than 3 per run.
 
 Anything you queue in GATES.md lands in the job summary and the `flow-gates` artifact, which nobody reads by default: also post every blocked or queued action as a PR comment. End with a table: PR, then merged (SHA), blocked (why), or skipped (why).
