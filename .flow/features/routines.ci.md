@@ -1,8 +1,8 @@
 ---
 id: routines.ci
 title: Routines on GitHub Actions
-owns: plugins/flow-stack/skills/make-routines/** .claude/skills/verify-flow-stack/scripts/routines.ci.sh
-entries: skill /flow-stack:make-routines | cli skills/make-routines/scripts/routines.sh list|add|schedule|render|check|safety | file .github/routines/<name>.md | file .github/routines/safety-paths.txt | file .github/workflows/flow-<name>.yml
+owns: plugins/flow-stack/skills/make-routines/** plugins/flow-stack/skills/setup-factory/** .claude/skills/verify-flow-stack/scripts/routines.ci.sh
+entries: skill /flow-stack:make-routines | skill /flow-stack:setup-factory | cli skills/setup-factory/scripts/state.sh | cli skills/make-routines/scripts/routines.sh list|add|schedule|render|check|safety | file .github/routines/<name>.md | file .github/routines/safety-paths.txt | file .github/workflows/flow-<name>.yml
 scenario: bash .claude/skills/verify-flow-stack/scripts/routines.ci.sh
 status: verified
 verified: 2026-10-29 90da7be

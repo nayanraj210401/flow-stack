@@ -26,6 +26,8 @@ A repo is factory-ready when it has a **committed** verify driver (`.claude/skil
 
 ## Fixes
 
+`/flow-stack:setup-factory` runs these in order (verify first) and stops at `factory ok`.
+
 | Row missing | Run |
 |---|---|
 | monitor, review | `/flow-stack:make-routines` (`self-create`, `review`) |
