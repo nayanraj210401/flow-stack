@@ -59,9 +59,9 @@ auto_merge: low-risk              # labelled | low-risk: auto-merge also merges 
      A rule is never OK to break. A preference belongs in Taste. -->
 - Never push to the default branch.
 - Push, PR, and merge only as the running routine's file allows; never deploy or publish.
-- No new runtime dependency: hooks and scripts use bash, jq, git, and perl only.
-- Never loosen a guard, fence, seal, gate, or the review bar to make a symptom go away.
-- Never bump the plugin version or edit a CHANGELOG release entry; releases are the human's.
+- No new runtime dependency: nothing beyond bash, jq, git, perl and the POSIX userland; an optional tool degrades gracefully when missing.
+- Never widen what a guard, fence, seal, gate, or the review bar lets through beyond a proven false positive, and that payload becomes a test.
+- Never bump the version in plugin.json or marketplace.json; releases are the human's.
 
 # Taste
 <!-- Your preferences; the rubric for deslop, unslop, review, and brief.
@@ -71,7 +71,7 @@ auto_merge: low-risk              # labelled | low-risk: auto-merge also merges 
 - 2026-10-28 · smallest diff that works; delete before adding · src: preset solo-hacker
 - 2026-10-28 · no abstraction until the third copy · src: preset solo-hacker
 - 2026-11-04 · reuse an existing script, hook helper (hooks/lib.sh) or skill before adding one; `rg` the verbs first · src: owner's profile
-- 2026-11-04 · bash: quote every expansion, jq for all JSON (never grep or sed it), runs on both macOS and Linux userlands · src: repo convention
+- 2026-11-04 · bash: quote every expansion, jq for JSON in new code, runs on both macOS and Linux userlands · src: repo convention
 - 2026-11-04 · a hook fails safe: a parse error or missing tool never blocks the user's session silently, it says why · src: repo convention
 - 2026-11-04 · a fix lands at the root cause, not a special case for the one payload that broke · src: principles fix-root-causes
 
@@ -79,7 +79,7 @@ auto_merge: low-risk              # labelled | low-risk: auto-merge also merges 
 - 2026-10-28 · replies in 3 lines or fewer unless asked · src: preset solo-hacker
 - 2026-11-04 · skill and doc prose: imperative, one idea per sentence, no filler or hedging; cut a sentence that restates another · src: principles reader-first
 - 2026-11-04 · a skill change keeps its SKILL.md description routing-accurate: what it does and when to use it · src: repo convention
-- 2026-11-04 · commit and PR titles: conventional-commit style, lowercase, no trailing period · src: git log
+- 2026-11-04 · commit titles: conventional-commit style, lowercase, no trailing period; PR titles follow the running routine's shape rule · src: git log, self-heal.md
 
 ## UI
 
@@ -89,8 +89,8 @@ auto_merge: low-risk              # labelled | low-risk: auto-merge also merges 
 ## Testing
 - 2026-10-28 · one end-to-end check per feature beats many unit tests · src: preset solo-hacker
 - 2026-11-04 · every behavior change comes with a `*.test.sh` next to the script or hook, seen failing before the fix · src: principles red-before-green
-- 2026-11-04 · a hook test drives the hook with Claude Code's real JSON payload, not a hand-made subset · src: verify-flow-stack
-- 2026-11-04 · a stop.sh false-positive fix adds its payload as a case in verify-flow-stack's claims.stop.sh · src: .flow/lessons.md 2026-10-08
+- 2026-11-04 · a hook test drives the hook with the real payload's shape and the fields the hook reads, through verify-flow-stack's lib.sh helpers · src: verify-flow-stack
+- 2026-11-04 · a stop.sh false-positive fix adds its payload as a case in verify-flow-stack's claims.stop.sh · src: owner's lessons, 2026-10-08
 
 # Toolchain
 <!-- How flow-stack fits your existing setup. Written by setup (adaptation step); edit freely.
