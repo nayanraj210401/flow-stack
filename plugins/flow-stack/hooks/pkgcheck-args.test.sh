@@ -50,4 +50,11 @@ expect deny  'pnpm add -r notreal-pkg'
 expect deny  'npm install -t notreal-pkg'
 expect deny  'pip install -t vendor notreal-pkg'
 
+# Text that only mentions an install is not looked up (#159): heredoc bodies, -m/--body, echo.
+expect allow $'cat > notes.md <<\'EOF\'\nTo try it: npm install notreal-pkg\nEOF'
+expect allow 'git commit -m "docs: explain npm install notreal-pkg"'
+expect allow 'gh pr create --draft --title x --body "run pip install notreal-pkg"'
+expect allow "echo 'npm install notreal-pkg'"
+expect deny  'git commit -m "x" && npm install notreal-pkg'
+
 [ "$FAILS" -eq 0 ] && echo ok || { echo "$FAILS failed"; exit 1; }
