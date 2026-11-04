@@ -100,6 +100,9 @@ expect allow "cd ../wt-ok && gh pr create --title x"
 expect deny  "cd $SB/wt-no && gh pr ready 1"
 expect deny  "cd $SB/norepo && gh pr ready 1"
 expect deny  "cd $SB/wt-ok && cd $SB/wt-no && gh pr ready 1"
+expect deny  "cd $SB/wt-ok && { cd $SB/wt-no; gh pr ready 1; }"
+expect deny  "cd $SB/wt-ok && builtin cd $SB/wt-no && gh pr ready 1"
+expect deny  "cd $SB/wt-ok && bash -c 'cd $SB/wt-no && gh pr ready 1'"
 expect deny  "cd $SB/wt-ok && true
 cd $SB/wt-no
 gh pr ready 1"

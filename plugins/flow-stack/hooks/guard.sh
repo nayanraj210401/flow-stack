@@ -336,7 +336,7 @@ if [ -d "$FLOW_DIR" ] && flow_enabled ready && [ -n "$pr_cmd" ] && ! pr_drafts <
   # `cd <dir> && …` with no other cd is judged in <dir>'s repo; a dir outside any repo keeps the session's.
   rroot="$FLOW_ROOT"
   if [[ "$cmd" =~ ^[[:space:]]*cd[[:space:]]+([^[:space:]\;\&\|\`\$\(\)]+)[[:space:]]*\&\&(.*)$ ]] \
-     && ! grep -Eq '(^|[;&|(`])[[:space:]]*(cd|pushd)[[:space:]]' <<<"${BASH_REMATCH[2]}"; then
+     && ! grep -Eq '(^|[^[:alnum:]_./-])(cd|pushd|popd)([[:space:]]|$)' <<<"${BASH_REMATCH[2]}"; then
     d="${BASH_REMATCH[1]//[\"\']/}"; d="${d/#\~/$HOME}"; [[ "$d" == /* ]] || d="$FLOW_CWD/$d"
     rroot="$(git -C "$d" rev-parse --show-toplevel 2>/dev/null || echo "$FLOW_ROOT")"
   fi
