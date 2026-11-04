@@ -16,13 +16,14 @@ touch .github/workflows/ci.yml .github/workflows/flow-review.yml
 cat >"$SB/bin/gh" <<EOF
 #!/usr/bin/env bash
 m="\$(cat "$SB/mode")"
+[ "\$2" = --paginate ] && set -- "\$1" "\${@:3}"
 case "\$1 \$2" in
   "auth status") [ "\$m" != noauth ] ;;
   "repo view") [ "\$m" = broken ] && exit 1; case "\$*" in *defaultBranchRef*) echo main ;; *) echo acme/app ;; esac ;;
   "secret list") case "\$m" in admin) echo OTHER ;; team) printf 'OTHER\nANTHROPIC_API_KEY\n' ;; *) exit 1 ;; esac ;;
   "api repos/acme/app/actions/organization-secrets") [ "\$m" = orgsec ] && echo CLAUDE_CODE_OAUTH_TOKEN || exit 1 ;;
   "api repos/acme/app/rules/branches/main") [ "\$m" = reader ] && echo 1 || echo 0 ;;
-  "api repos/acme/app/branches/main/protection") case "\$m" in team) echo '{}' ;; admin) echo 'gh: Branch not protected (HTTP 404)' >&2; exit 1 ;; *) echo 'gh: Not Found (HTTP 404)' >&2; exit 1 ;; esac ;;
+  "api repos/acme/app/branches/main/protection") case "\$m" in team) echo true ;; loose) echo false ;; admin) echo 'gh: Branch not protected (HTTP 404)' >&2; exit 1 ;; *) echo 'gh: Not Found (HTTP 404)' >&2; exit 1 ;; esac ;;
   "api repos/acme/app") case "\$m" in orgsec|orgoff|orglocked) echo Organization ;; noowner) exit 1 ;; *) echo User ;; esac ;;
   "api repos/acme/app/actions/organization-variables") case "\$m" in orgoff) echo off ;; orgsec) echo '' ;; *) exit 1 ;; esac ;;
   "variable list") case "\$m" in reader|orgsec|orgoff|orglocked|noowner) echo OTHER ;; admin|team) echo FLOW_FACTORY ;; *) echo 'HTTP 404' >&2; exit 1 ;; esac ;;
@@ -82,10 +83,18 @@ want issues unknown
 echo broken >"$SB/mode"; out="$(bash "$D")"
 want gh unknown; grep -q '^secret' <<<"$out" && bad "rows printed after repo view failed" || ok "stops after repo view fails"
 
+echo loose >"$SB/mode"; out="$(bash "$D")"
+want protect missing
+
+mv .github/workflows/ci.yml "$SB/ci.yml"; out="$(bash "$D")"
+want ci none; mv "$SB/ci.yml" .github/workflows/ci.yml
+
 echo noauth >"$SB/mode"; out="$(bash "$D")"
 want gh unknown
 
-out="$(PATH=/usr/bin:/bin bash "$D")"; grep -q '^gh .*not installed' <<<"$out" && ok "says gh is not installed" || bad "no gh: $(grep '^gh' <<<"$out")"
+# a PATH with only what state.sh needs, so no gh anywhere (runners ship one in /usr/bin)
+mkdir -p "$SB/nogh"; for t in git jq sed awk grep uname head ls cat; do ln -sf "$(command -v "$t")" "$SB/nogh/$t"; done
+out="$(PATH="$SB/nogh" "$BASH" "$D")"; grep -q '^gh .*not installed' <<<"$out" && ok "says gh is not installed" || bad "no gh: $(grep '^gh' <<<"$out")"
 
 git remote set-url origin git@gitlab.com:acme/app.git; out="$(bash "$D")"
 want GITHUB none; grep -q '^secret' <<<"$out" && bad "gh rows printed without a GitHub remote" || ok "no gh rows without a GitHub remote"
