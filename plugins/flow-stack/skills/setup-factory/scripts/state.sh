@@ -61,7 +61,8 @@ else row protect unknown "$def: no PR ruleset, and classic protection needs admi
 kill() { [ "$1" = off ] && row kill off "FLOW_FACTORY=off$2: every routine is paused" || row kill on "FLOW_FACTORY=$1$2: routines run"; }
 if ! vars="$(gh variable list --json name -q '.[].name' 2>/dev/null)"; then row kill unknown "can't read repo variables"
 elif grep -qx FLOW_FACTORY <<<"$vars"; then kill "$(gh variable get FLOW_FACTORY 2>/dev/null)" ""
-elif [ "$(gh api "repos/$repo" -q .owner.type 2>/dev/null)" != Organization ]; then row kill on "routines run (gh variable set FLOW_FACTORY --body off pauses them)"
+elif ! ot="$(gh api "repos/$repo" -q .owner.type 2>/dev/null)" || [ -z "$ot" ]; then row kill unknown "can't read the repo's owner"
+elif [ "$ot" != Organization ]; then row kill on "routines run (gh variable set FLOW_FACTORY --body off pauses them)"
 elif ! ov="$(gh api "repos/$repo/actions/organization-variables" -q '.variables[] | select(.name == "FLOW_FACTORY") | .value' 2>/dev/null)"; then row kill unknown "can't read org variables"
 elif [ -n "$ov" ]; then kill "$ov" " (org)"
 else row kill on "routines run (gh variable set FLOW_FACTORY --body off pauses them)"; fi
