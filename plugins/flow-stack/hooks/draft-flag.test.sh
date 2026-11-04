@@ -90,4 +90,19 @@ expect allow 'gh pr create --title x \
 expect deny  "bash -c \$'gh pr create --title \\'a -d\\''"
 expect allow "bash -c \$'gh pr create --title x --draft'"
 
+# #257: a leading `cd <dir> &&` is judged by that dir's repo; a dir outside any repo falls back to the session root.
+git worktree add -q "$SB/wt-ok" -b ok && git -C "$SB/wt-ok" commit -q --allow-empty -m s
+git worktree add -q "$SB/wt-no" -b no && git -C "$SB/wt-no" commit -q --allow-empty -m u
+printf '%s\t%s\tready\tpass\n' "$(date +%s)" "$(git -C "$SB/wt-ok" rev-parse HEAD)" >.flow/ready.tsv
+mkdir -p "$SB/norepo"
+expect allow "cd $SB/wt-ok && gh pr ready 1"
+expect allow "cd ../wt-ok && gh pr create --title x"
+expect deny  "cd $SB/wt-no && gh pr ready 1"
+expect deny  "cd $SB/norepo && gh pr ready 1"
+expect deny  "cd $SB/wt-ok && cd $SB/wt-no && gh pr ready 1"
+expect deny  "cd $SB/wt-ok && true
+cd $SB/wt-no
+gh pr ready 1"
+expect deny  "cd $SB/wt-ok; gh pr ready 1 && cd $SB/wt-no && gh pr create --title x"
+
 [ "$FAILS" -eq 0 ] && echo "ok" || { echo "$FAILS failed"; exit 1; }
