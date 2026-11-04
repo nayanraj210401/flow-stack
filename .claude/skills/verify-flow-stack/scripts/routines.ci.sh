@@ -28,6 +28,7 @@ grep -q '^notify: off' .github/routines/profile.md && ok "CI profile has notific
 grep -q '^preset: solo-hacker' .github/routines/profile.md && ok "CI profile from a preset" || bad "preset"
 check "check passes on a fresh render" "$R" check
 sees "setup's forge census sees the routines" "4 routine(s)" "$S/setup/scripts/detect.sh"
+check "setup-factory state.sh reads the GitHub side (fake gh)" bash "$S/setup-factory/scripts/state.test.sh"
 
 echo "-- edits: the routine is the source of truth"
 fails "add refuses to clobber" "$R" add self-heal

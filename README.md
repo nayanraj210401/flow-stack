@@ -131,13 +131,15 @@ Type a skill yourself when you want a specific thing: `/flow-stack:challenge`, `
 | After a frustrating session | `/flow-stack:reflect` | proposed taste and lesson updates you approve |
 | New repo | `/flow-stack:setup` → `/flow-stack:feature-map` → `/flow-stack:make-verifier` | a driver that proves this app works the way a user uses it |
 | Installed a new plugin or hook | `/flow-stack:setup adapt` | flow-stack re-fits itself around your toolchain |
-| Run flow-stack with nobody at the keyboard | `/flow-stack:make-routines` | GitHub Actions routines: see [Software factory mode](#software-factory-mode) |
+| Run flow-stack with nobody at the keyboard | `/flow-stack:setup-factory` (or `/flow-stack:make-routines` for routines alone) | GitHub Actions routines: see [Software factory mode](#software-factory-mode) |
 
 ## Software factory mode
 
 The same flow can run without you: requests come in, flow turns each one into a verified PR, and you review the spec, the code, and the product. The hooks still hold. An unattended run gets the guard, the fences, and the ready gate, because each GitHub Actions job installs the plugin.
 
 Use it when the repo can prove its own changes. **Factory-ready** means a *committed* verify driver (`.claude/skills/verify-*/` or `verify/`) and a *committed* feature map with at least one scenario. A runner sees only the clone, so files on your disk don't count. `/flow-stack:setup` reports it as the `factory` row. Without it, `make-routines` refuses `self-heal` (and `auto-merge`, once copied in).
+
+**Start here:** `/flow-stack:setup-factory`. It explains the factory, reads the repo and your machine, and asks where it should run (this laptop, a server or VPS, GitHub Actions, cloud sessions), what it should do, up to what risk it builds alone (`risk:high` never gets code), and how far it goes. It tunes your profile, makes the repo factory-ready, and sets up the routines or the shift. Repo changes end in one draft PR; a machine-only setup stays local, with no PR.
 
 ```mermaid
 flowchart LR
@@ -192,7 +194,7 @@ Cloud sessions don't install plugins on their own, even ones your repo's `.claud
 
 What's been tested (#194): the install command works in a cloud shell, and `env` from `.claude/settings.json` reaches the hooks. Still unconfirmed: whether a plugin installed by the setup script loads at launch. If step 5 fails, comment on #194. One known limit: cloud sessions have no GitHub GraphQL, so `gh pr create` and `gh pr ready` fail there (`HTTP 403`). A cloud session can build and stamp a branch, but use a routine or your laptop to open the PR.
 
-Setup steps (secret, GitHub App, branch protection) are in [make-routines](plugins/flow-stack/skills/make-routines/SKILL.md). The stage-by-stage map, with what is planned and its issue, is [factory.md](plugins/flow-stack/skills/flow/references/factory.md).
+`/flow-stack:setup-factory` walks all of this in order. Setup steps (secret, GitHub App, branch protection) are in [make-routines](plugins/flow-stack/skills/make-routines/SKILL.md). The stage-by-stage map, with what is planned and its issue, is [factory.md](plugins/flow-stack/skills/flow/references/factory.md).
 
 ## Skill catalog
 
@@ -281,6 +283,7 @@ Setup steps (secret, GitHub App, branch protection) are in [make-routines](plugi
 | `make-runner` | Generates `.claude/skills/run-<repo>/` with verified install, start, seed, reset, and stop commands. |
 | `make-playbook` | Generates `.flow/playbooks/<name>.md` from past traces, for workflows this repo repeats. |
 | `make-gates` | Generates `.flow/gates.md`: this repo's irreversible commands as deny/ask rules the guard hook enforces. |
+| `setup-factory` | Sets up a software factory on any host: this laptop, a server or VPS, GitHub Actions, or cloud sessions. It explains the factory, reads the repo's and machine's state (loop stages, host, profile, shift, plus secret, branch rules, labels and kill switch on GitHub), and interviews you: where it runs, what it does, up to what risk it builds alone, how far it goes, risky paths, solo or team. It tunes your profile, fixes verify first, hands the picks to `make-routines` and the shift, and ends in a draft PR for repo changes or local changes only for a machine setup. |
 | `make-routines` | Generates GitHub Actions routines picked from a catalog: `review` (the reviewer agent on every PR), `self-create` (files reproducible bugs), `self-heal` (proven draft PRs), `mention` (`@claude` comments run through flow, ending in a draft PR), `triage` (type, readiness, size and risk labels on new issues), `ideate` (one evidence-cited `proposal` issue a week, built only after a human `accept`), or your own. Cloud routines can't load plugins; Actions installs flow-stack on every run, pinnable with `flow_ref`. Asks before opening a PR with the workflows. `add shift --local` renders the shift: overnight on your laptop it prepares pending reviews, fixes for feedback on your PRs, and commits for issues assigned to you, plus a morning digest; you release each one. |
 | `make-skill` | Generates any other repo or personal skill, with a self-test. |
 | `tend` | Re-runs every generated skill's self-test and flags drift against the code. |
@@ -328,7 +331,7 @@ A rework loop or a wrong approach usually costs more than the overhead. Judge it
 ### How cost is kept down
 
 1. **Bookkeeping is bash, not the model.** Evidence, seals, probes, blind-check runs, the audit trail, the auto handoff, diffstat, and the slice-done proofs are shell scripts and hooks. They cost zero model tokens, which is why no rigor level turns them off.
-2. **Small always-on footprint.** The 18 principles are one skill with on-demand files. The nine skills you invoke yourself (setup, forge, wrap…) are hidden from the model's list. Descriptions are kept to their trigger phrases. Together these cut the always-on listing from about 4.8k to about 1.6k tokens.
+2. **Small always-on footprint.** The 18 principles are one skill with on-demand files. The eleven skills you invoke yourself (setup, forge, wrap…) are hidden from the model's list. Descriptions are kept to their trigger phrases. Together these cut the always-on listing from about 4.8k to about 1.6k tokens.
 3. **Ceremony scales with the task.** Questions and one-line edits skip the task folder entirely. For real tasks, `rigor` in your profile decides what runs:
 
    | Step | lean | standard (default) | strict |
