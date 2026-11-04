@@ -116,5 +116,13 @@ expect deny  "cd $SB/wt-ok && cd; gh pr ready 1"
 git clone -q "$SB/wt-ok" "$SB/other" && mkdir -p "$SB/other/.flow" && echo '{"review_gate":"yolo"}' >"$SB/other/.flow/config.json"
 printf '%s\t%s\tready\tpass\n' "$(date +%s)" "$(git -C "$SB/other" rev-parse HEAD)" >"$SB/other/.flow/ready.tsv"
 expect deny  "cd $SB/other && gh pr ready 1"
+# the target is resolved like the shell's cd: L/.. is the dir holding L (here the unstamped session root), not wt-ok
+mkdir -p "$SB/wt-ok/sub" && ln -s "$SB/wt-ok/sub" L
+expect deny  "cd L/.. && gh pr create --title x"
+rm L
+expect deny  "cd .git && gh pr ready 1"
+HOME="$SB" expect allow "cd ~/wt-ok && gh pr ready 1"
+mkdir -p sub2 && pushd sub2 >/dev/null; expect allow "cd ../../wt-ok && gh pr ready 1"; popd >/dev/null
+pushd "$SB/wt-no" >/dev/null; expect allow "cd ../wt-ok && gh pr ready 1"; expect deny  "gh pr ready 1"; popd >/dev/null
 
 [ "$FAILS" -eq 0 ] && echo "ok" || { echo "$FAILS failed"; exit 1; }

@@ -337,9 +337,11 @@ if [ -d "$FLOW_DIR" ] && flow_enabled ready && [ -n "$pr_cmd" ] && ! pr_drafts <
   # this repo; anything else (another clone, no repo, more shell after the cd) keeps the session's root.
   rroot="$FLOW_ROOT" plain='^[[:space:]]*cd[[:space:]]+([A-Za-z0-9_./~@+,:=-]+)[[:space:]]*&&[[:space:]]*gh[[:space:]]+pr[[:space:]]+(create|ready)([[:space:]][^;&|`$()<>\\]*)?$'
   if [[ "$cmd" != *$'\n'* && "$cmd" =~ $plain ]]; then
-    d="${BASH_REMATCH[1]/#\~\//$HOME/}"; [[ "$d" == /* ]] || d="$FLOW_CWD/$d"
-    [ "$(git -C "$d" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" != "$FLOW_MAIN/.git" ] ||
-      rroot="$(git -C "$d" rev-parse --show-toplevel)"
+    # resolved the way the shell's cd does (logical `..`, CDPATH off), not the way git -C does (physical)
+    d="$(cd "$FLOW_CWD" 2>/dev/null && CDPATH='' cd -- "${BASH_REMATCH[1]/#\~\//$HOME/}" 2>/dev/null && pwd)" || d=""
+    if [ -n "$d" ] && [ "$(git -C "$d" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" = "$FLOW_MAIN/.git" ]; then
+      rroot="$(git -C "$d" rev-parse --show-toplevel 2>/dev/null)" && [ -n "$rroot" ] || rroot="$FLOW_ROOT"
+    fi
   fi
   if [ "$(cd "$rroot" && "$ready" mode)" != yolo ] && ! (cd "$rroot" && "$ready" stamped); then
     pre_decide deny "flow ready-for-review: HEAD isn't stamped ready. Human review is the expensive step, so run $ready (it lists what's missing), or open a draft PR (--draft) meanwhile. review_gate: yolo in the profile or .flow/config.json turns this off."
