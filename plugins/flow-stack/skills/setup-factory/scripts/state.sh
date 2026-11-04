@@ -35,27 +35,34 @@ t="$(jq -r '.commands.test // empty' "$root/.flow/config.json" 2>/dev/null)"
 url="$(git -C "$root" remote get-url origin 2>/dev/null)"
 case "$url" in *github.com*) ;; *) row GITHUB none "no github.com origin: routines can't run; laptop only"; exit 0 ;; esac
 row GITHUB STATUS "${url%.git}"
-gh auth status >/dev/null 2>&1 || { row gh unknown "gh not logged in: gh auth login"; exit 0; }
+command -v gh >/dev/null || { row gh unknown "gh not installed: https://cli.github.com"; exit 0; }
+gh auth status >/dev/null 2>&1 || { row gh unknown "gh not logged in to github.com: gh auth login"; exit 0; }
 cd "$root" || exit 0
 repo="$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null)" || { row gh unknown "gh repo view failed"; exit 0; }
 def="$(gh repo view --json defaultBranchRef -q .defaultBranchRef.name 2>/dev/null)"
 
-if s="$(gh secret list --json name -q '.[].name' 2>/dev/null)"; then
-  grep -qxE 'CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_API_KEY' <<<"$s" && row secret ok "$(grep -xE 'CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_API_KEY' <<<"$s" | head -n1)" \
-    || row secret missing "claude setup-token, then gh secret set CLAUDE_CODE_OAUTH_TOKEN"
+# repo secrets need admin to list; org secrets shared with the repo count too
+key='CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_API_KEY'
+rs="$(gh secret list --json name -q '.[].name' 2>/dev/null)"; listed=$?
+os="$(gh api "repos/$repo/actions/organization-secrets" -q '.secrets[].name' 2>/dev/null)"
+if k="$(grep -xE "$key" <<<"$rs" | head -n1)" && [ -n "$k" ]; then row secret ok "$k"
+elif k="$(grep -xE "$key" <<<"$os" | head -n1)" && [ -n "$k" ]; then row secret ok "$k (org secret)"
+elif [ "$listed" -eq 0 ]; then row secret missing "claude setup-token, then gh secret set CLAUDE_CODE_OAUTH_TOKEN"
 else row secret unknown "can't list secrets (needs admin)"; fi
 
 # rulesets are readable with read access; classic protection needs admin, and only an admin hears "Branch not protected"
-if n="$(gh api "repos/$repo/rules/branches/$def" -q 'length' 2>/dev/null)" && [ "${n:-0}" -gt 0 ]; then row protect ok "$def: $n ruleset rule(s)"
+if n="$(gh api "repos/$repo/rules/branches/$def" -q '[.[] | select(.type == "pull_request")] | length' 2>/dev/null)" && [ "${n:-0}" -gt 0 ]; then row protect ok "$def: a ruleset requires a PR"
 elif e="$(gh api "repos/$repo/branches/$def/protection" 2>&1 >/dev/null)"; then row protect ok "$def: branch protection"
 elif grep -q 'Branch not protected' <<<"$e"; then row protect missing "$def: require a PR and a passing check"
-else row protect unknown "$def: no ruleset, and classic protection needs admin to read"; fi
+else row protect unknown "$def: no PR ruleset, and classic protection needs admin to read"; fi
 
-if v="$(gh variable get FLOW_FACTORY 2>"${TMPDIR:-/tmp}/state.$$")"; then
-  [ "$v" = off ] && row kill off "FLOW_FACTORY=off: every routine is paused" || row kill on "FLOW_FACTORY=$v: routines run"
-elif grep -qi 'not found' "${TMPDIR:-/tmp}/state.$$"; then row kill on "routines run (gh variable set FLOW_FACTORY --body off pauses them)"
+# list, not get: a 404 from get can mean "not set" or "no access"; a list that succeeds can tell them apart
+if vars="$(gh variable list --json name -q '.[].name' 2>/dev/null)"; then
+  if grep -qx FLOW_FACTORY <<<"$vars"; then
+    v="$(gh variable get FLOW_FACTORY 2>/dev/null)"
+    [ "$v" = off ] && row kill off "FLOW_FACTORY=off: every routine is paused" || row kill on "FLOW_FACTORY=$v: routines run"
+  else row kill on "routines run (gh variable set FLOW_FACTORY --body off pauses them)"; fi
 else row kill unknown "can't read repo variables"; fi
-rm -f "${TMPDIR:-/tmp}/state.$$"
 
 if l="$(gh label list --limit 500 --json name -q '.[].name' 2>/dev/null)"; then
   want="$(awk '$1 == "heal-ok" { print $2 }' "$root/.github/routines/labels.tsv" 2>/dev/null)"; want="${want:-heal-ok}"
