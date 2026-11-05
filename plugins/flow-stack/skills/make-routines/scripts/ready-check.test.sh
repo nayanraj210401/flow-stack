@@ -79,6 +79,9 @@ grep -q 'last `labeled` event for `auto-merge`' "$am" && ok "auto-merge: a human
 if grep -q 'heal-ok' "$am"; then
   grep -q '`auto_merge: low-risk`' "$am" && grep -q 'head branch starts with `self-heal/<i>-`' "$am" && grep -q 'lastEditedAt' "$am" &&
     ok "auto-merge: the heal-ok path is opt-in, branch-bound, and edit-checked" || bad "auto-merge trusts an agent-chosen issue link"
+  for bar in 'Filter first, then merge the survivors' 'is `admin`, `maintain`, or `write`' 'first `committed` event comes after the `heal-ok`' 'never had a `rework` label' '`reviewDecision` is not `CHANGES_REQUESTED`' 'no `unowned` row' 'non-empty `scenario:`' 'For a step 1b PR, also run every 1b bullet' 'check-runs?check_name=flow/ready' 'holds no HTML comment'; do
+    grep -qF "$bar" "$am" && ok "1b bar: $bar" || bad "1b lost a bar: $bar"
+  done
   for f in "$H/../templates/self-heal.md" "$(dirname "$am")/self-heal.md"; do
     grep -q 'lastEditedAt. is later than the approval' "$f" && grep -q "only comments created before the approval and never edited" "$f" && grep -qF "<!--" "$f" && grep -q renamed "$f" && ok "self-heal builds only human-approved text: $(basename "$(dirname "$f")")" || bad "self-heal builds an issue edited after heal-ok: $f"
   done

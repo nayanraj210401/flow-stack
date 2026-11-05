@@ -60,7 +60,7 @@ auto_merge: low-risk              # labelled | low-risk: auto-merge also merges 
 - Never push to the default branch.
 - Push, PR, and merge only as the running routine's file allows; never deploy or publish.
 - No new runtime dependency: nothing beyond bash, jq, git, perl and the POSIX userland; an optional tool degrades gracefully when missing.
-- Never widen what a guard, fence, seal, gate, or the review bar lets through beyond a proven false positive, and that payload becomes a test.
+- Never widen what a guard, fence, seal, gate, or the review bar lets through on your own: past a proven false positive (its payload becomes a test), widening is a human decision, made in a PR a human merges.
 - Never bump the version in plugin.json or marketplace.json; releases are the human's.
 
 # Taste

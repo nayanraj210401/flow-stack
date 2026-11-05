@@ -16,7 +16,7 @@ digest: off                       # off | terminal | page: how /flow-stack:wrap 
 review_gate: on                   # on | yolo: on = a PR needs ready.sh (review, deslop, tour, checks) before human review
 rigor: standard                   # lean | standard | strict: how much ceremony flow spends per task
 factory_ready: warn               # warn | enforce: --auto ship / --gha in a repo with no committed verify driver + feature map warns, or (enforce) runs as plain --auto
-auto_merge: labelled              # labelled | low-risk: the auto-merge routine also merges unlabelled risk:low size:S self-heal PRs (read from .github/routines/profile.md)
+auto_merge: labelled              # labelled | low-risk: the auto-merge routine also merges unlabelled risk:low size:S self-heal PRs (read from .github/routines/profile.md; needs the auto-merge routine, see factory.md)
 ---
 
 # Who
