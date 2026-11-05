@@ -41,7 +41,9 @@ lit="$(perl -e '
 #     ${VAR:?} aborts instead of expanding to nothing, so guarded targets pass.
 while IFS= read -r seg; do
   grep -Eq '[[:space:]](-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)([[:space:]]|$)' <<<"$seg" || continue
-  if grep -Eq "[[:space:]][\"']?(/|~|\\\$HOME|\\\$\{HOME\})/?\*?[\"']?([[:space:]]|\$)" <<<"$seg"; then
+  # "." and ".." segments are resolved first, so /./*, /usr/../* and ~/./ read as the / and ~ they are.
+  nseg="$(perl -pe 's{(?<=\s)(["\x27]?)((?:~|\$HOME|\$\{HOME\}|(?=/))(?:["\x27]?/[^\s"\x27]*)?)}{ my ($q, $p) = ($1, $2); my ($root, @s) = split m{/}, $p, -1; my @o; for (@s) { next if $_ eq "." || $_ eq ""; if ($_ eq "..") { pop @o; next } push @o, $_ } $q . $root . "/" . join("/", @o) }ge' <<<"$seg")"
+  if grep -Eq "[[:space:]][\"']?(/|~|\\\$HOME|\\\$\{HOME\})/?(\.?\*)?[\"']?([[:space:]]|\$)" <<<"$nseg"; then
     pre_decide deny "flow guard: recursive delete of / or home is never allowed."
   fi
   if sed -E 's/\$\{[A-Za-z_0-9]+:\?[^}]*\}//g' <<<"$seg" | grep -Eq '\$\{?[A-Za-z_0-9@*]'; then
