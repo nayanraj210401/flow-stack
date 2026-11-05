@@ -80,7 +80,7 @@ if grep -q 'heal-ok' "$am"; then
   grep -q '`auto_merge: low-risk`' "$am" && grep -q 'head branch starts with `self-heal/<i>-`' "$am" && grep -q 'lastEditedAt' "$am" &&
     ok "auto-merge: the heal-ok path is opt-in, branch-bound, and edit-checked" || bad "auto-merge trusts an agent-chosen issue link"
   for f in "$H/../templates/self-heal.md" "$(dirname "$am")/self-heal.md"; do
-    grep -q 'lastEditedAt' "$f" && grep -q 'renamed' "$f" && ok "self-heal builds only human-approved text: $(basename "$(dirname "$f")")" || bad "self-heal builds an issue edited after heal-ok: $f"
+    grep -q 'lastEditedAt. is later than the approval' "$f" && grep -q "only comments created before the approval and never edited" "$f" && grep -qF "<!--" "$f" && grep -q renamed "$f" && ok "self-heal builds only human-approved text: $(basename "$(dirname "$f")")" || bad "self-heal builds an issue edited after heal-ok: $f"
   done
 fi
 grep -q 'also for a PR with a `flow/ready` check' "$am" && ok "auto-merge still reviews a stamped PR itself" || bad "auto-merge trusts the self-written stamp"
