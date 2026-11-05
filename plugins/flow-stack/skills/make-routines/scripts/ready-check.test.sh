@@ -73,7 +73,22 @@ grep -q 'More than 2 means two rework rounds' "$H/../templates/self-heal.md" && 
 grep -q 'never push to any other PR' "$H/../templates/self-heal.md" && ok "rework only on PRs self-heal opened" || bad "no own-PR rule"
 grep -q 'their stamped heads skip it. Rework comes from people' "$H/../templates/self-heal.md" && ! grep -q 'rework' "$H/../templates/review.md" && ok "review starts no rework; people and auto-merge do" || bad "review claims to start rework"
 grep -q 'A `self-heal` PR goes back to its routine instead of being blocked' "$am" && ok "auto-merge sends a non-ship self-heal PR to rework" || bad "auto-merge has no rework path"
-! grep -q 'heal-ok' "$am" && grep -q 'last `labeled` event for `auto-merge`' "$am" && ok "auto-merge: still a human auto-merge label, no agent-linked heal-ok shortcut" || bad "auto-merge trusts an agent-chosen issue link"
+grep -q 'last `labeled` event for `auto-merge`' "$am" && ok "auto-merge: a human auto-merge label stays the default path" || bad "auto-merge lost its human label path"
+# an unlabelled self-heal merge (1b) rests on an issue link the agent wrote, so it is opt-in, bound to the branch, and
+# every issue self-heal can build from must be text a human approved (no edit or rename after heal-ok)
+if grep -q 'heal-ok' "$am"; then
+  grep -q '`auto_merge: low-risk`' "$am" && grep -q 'head branch starts with `self-heal/<i>-`' "$am" && grep -q 'lastEditedAt' "$am" &&
+    ok "auto-merge: the heal-ok path is opt-in, branch-bound, and edit-checked" || bad "auto-merge trusts an agent-chosen issue link"
+  b1="$(sed -n '/^## 1b\./,/^## 2\./p' "$am")"
+  for bar in 'Filter first, re-score included' 'is `admin`, `maintain`, or `write`' 'exactly one `labeled` event for `heal-ok` and no `unlabeled`' 'no `labeled` event for `rework`' 'comes before the `heal-ok` approval' 'that a non-`User` added' '`reviewDecision` is not `CHANGES_REQUESTED`' 'every changed path appears in one of those rows' 'non-empty `scenario:`' 'check-runs?check_name=flow/ready' 'no HTML comment' 'link-reference comment'; do
+    grep -qF "$bar" <<<"$b1" && ok "1b bar: $bar" || bad "1b lost a bar: $bar"
+  done
+  grep -qF 'For a step 1b PR, also run every 1b bullet' "$am" && ok "1b re-checked before the merge" || bad "1b not re-checked before the merge"
+  grep -qF 'does the diff do what issue `<i>` asks' "$am" && ok "reviewer checks the diff fits the issue" || bad "reviewer never checks the diff fits the issue"
+  for f in "$H/../templates/self-heal.md" "$(dirname "$am")/self-heal.md"; do
+    grep -q 'lastEditedAt. is later than the approval' "$f" && grep -q "only comments created before the approval and never edited" "$f" && grep -qF "<!--" "$f" && grep -q renamed "$f" && ok "self-heal builds only human-approved text: $(basename "$(dirname "$f")")" || bad "self-heal builds an issue edited after heal-ok: $f"
+  done
+fi
 grep -q 'also for a PR with a `flow/ready` check' "$am" && ok "auto-merge still reviews a stamped PR itself" || bad "auto-merge trusts the self-written stamp"
 
 echo "-- triage: renders without push or PR power; a safety path scores risk:high"
