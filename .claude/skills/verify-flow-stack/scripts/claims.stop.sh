@@ -5,7 +5,9 @@
 . "$(dirname "$0")/lib.sh"; sandbox claims.stop
 toy_task demo "mul multiplies" "no division"
 TR="$SB/transcript.jsonl"
-fresh() { : >"$TR"; }
+fresh() { : >"$TR"; rm -rf .flow/tasks/*/stop-blocked "$FLOW_STACK_HOME/stop-blocked"; }
+prompt() { jq -nc --arg t "$1" '{type:"user", message:{role:"user", content:$t}}' >>"$TR"; }
+relay()  { jq -nc --arg t "$1" '{type:"user", message:{role:"user", content:$t}, isMeta:true}' >>"$TR"; }
 edit() { jq -nc --arg f "$1" '{type:"assistant", message:{content:[{type:"tool_use", name:"Edit", input:{file_path:$f}}]}}' >>"$TR"; }
 shell() { jq -nc --arg c "$1" '{type:"assistant", message:{content:[{type:"tool_use", name:"Bash", input:{command:$c}}]}}' >>"$TR"; }
 N=0
@@ -139,6 +141,29 @@ expect stop.sh "$(stop)" block "in a task, the reason names the checks that coun
 has "$OUT" "evidence.sh C<n>" && has "$OUT" "ready.sh" && ! has "$OUT" "smoke" && ok "in-task reason: C/S, features, ready.sh; no smoke" || bad "in-task reason: $OUT"
 fresh; shell "git status >/dev/null 2>&1 && ls 2>&1 | head; echo x >> .flow/tasks/demo/notes.md"; say "Done."
 expect stop.sh "$(stop)" allow "Bash with only null, fd, and .flow redirects"
+
+echo "-- the current turn only (the human prompt is the window)"
+fresh; edit "$PWD/src/calc.sh"
+prompt "make it merge-ready"
+say "PR #199 is ready to merge, both checks pass."
+expect stop.sh "$(stop)" allow "an old edit before a human prompt is not in scope"
+fresh; edit "$PWD/src/calc.sh"
+relay "Another Claude session sent a message:
+<agent-message>hand-back body</agent-message>"
+say "PR #199 is ready to merge."
+expect stop.sh "$(stop)" block "a relayed message is not a human prompt, so the edit still counts"
+fresh; edit "$PWD/src/calc.sh"
+prompt "not the edit's turn, but a token like system-reminder appears in a later relay"
+relay "Update on pull request #199: checks pass"
+prompt "ship it"
+say "Done."
+expect stop.sh "$(stop)" allow "a fresh human prompt after the edit clears the window"
+fresh; prompt "make it merge-ready"; edit "$PWD/src/calc.sh"; say "Done."
+expect stop.sh "$(stop)" block "an edit made in this turn still blocks"
+echo "-- block once per edit"
+fresh; edit "$PWD/src/calc.sh"; say "Done, tests pass."
+expect stop.sh "$(stop)" block "first reply without a check is sent back"
+expect stop.sh "$(stop)" allow "the same edit is not sent back twice"
 
 echo "-- outside a task"
 "$S/flow/scripts/task.sh" close >/dev/null 2>&1 || rm -f .flow/ACTIVE
