@@ -6,7 +6,8 @@ set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)"
 R="$H/../skills/make-routines/scripts/routines.sh"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 
 SB="$(mktemp -d "${TMPDIR:-/tmp}/factory.XXXXXX")"; SB="$(cd "$SB" && pwd -P)"
@@ -29,7 +30,7 @@ flag() { cat "$FLOW_STACK_HOME/auto/s" 2>/dev/null; }
 stamp() { printf 't\t%s\tready\tpass\t\n' "$(git rev-parse HEAD)" >>.flow/ready.tsv; }
 profile() { printf -- '---\nprofile_version: 1\nfactory_ready: %s\n---\n' "$1" >"$FLOW_STACK_HOME/profile.md"; }
 
-echo "-- not ready, warn (no profile key): the message, and shipping still works"
+: "-- not ready, warn (no profile key): the message, and shipping still works"
 out="$(prompt 'ship it --auto ship')"
 grep -q 'factory not ready' <<<"$out" && grep -q 'make-verifier' <<<"$out" && grep -q 'feature-map' <<<"$out" \
   && ok "warns and names both fixes" || bad "no warning: $out"
@@ -37,7 +38,7 @@ grep -q 'factory not ready' <<<"$out" && grep -q 'make-verifier' <<<"$out" && gr
 stamp; [ "$(decide 'git push origin feat/x')" = allow ] && ok "stamped push allowed" || bad "push not allowed"
 prompt '--no-auto' >/dev/null
 
-echo "-- not ready, enforce: plain --auto"
+: "-- not ready, enforce: plain --auto"
 profile enforce
 out="$(prompt 'ship it --auto ship')"
 grep -q 'factory not ready' <<<"$out" && grep -q 'plain --auto' <<<"$out" && ok "says it downgraded" || bad "no downgrade message: $out"
@@ -50,14 +51,14 @@ grep -q 'factory not ready' <<<"$out" && grep -q 'plain --auto' <<<"$out" && [ -
   && ok "--gha on a runner downgrades too" || bad "--gha not downgraded: flag '$(flag)' $out"
 prompt '--no-auto' >/dev/null
 
-echo "-- on disk but not committed is not ready"
+: "-- on disk but not committed is not ready"
 mkdir -p .claude/skills/verify-toy .flow/features
 echo '# verify' >.claude/skills/verify-toy/SKILL.md
 printf -- '---\nid: toy\nscenario: bash verify.sh\n---\n' >.flow/features/toy.md
 out="$(prompt '--auto ship')"; grep -q 'factory not ready' <<<"$out" && ok "uncommitted driver + map: not ready" || bad "counted as ready: $out"
 prompt '--no-auto' >/dev/null
 
-echo "-- make-routines refuses self-heal and auto-merge in a non-ready repo"
+: "-- make-routines refuses self-heal and auto-merge in a non-ready repo"
 for n in self-heal auto-merge; do
   if err="$("$R" add "$n" 2>&1)"; then bad "$n added"; else
     grep -q 'verify driver' <<<"$err" && grep -q 'feature map' <<<"$err" && ok "$n refused, missing items listed" || bad "$n: $err"
@@ -65,7 +66,7 @@ for n in self-heal auto-merge; do
   [ ! -f ".github/routines/$n.md" ] && ok "$n: nothing written" || bad "$n: wrote a routine"
 done
 
-echo "-- committed driver, map with only a comment or README scenario: still not ready"
+: "-- committed driver, map with only a comment or README scenario: still not ready"
 printf -- '---\nid: toy\nscenario: # todo\n---\nscenario: in the body\n' >.flow/features/toy.md; echo 'scenario: x' >.flow/features/README.md
 mkdir -p .flow/features/sub && printf -- '---\nscenario: bash x.sh\n---\n' >.flow/features/sub/nested.md
 printf -- '---\nid: q\nscenario: ""\n---\n' >.flow/features/quoted.md
@@ -74,7 +75,7 @@ out="$(prompt '--auto ship')"; grep -q 'feature map' <<<"$out" && ! grep -q 'ver
   && ok "only the map is missing" || bad "$out"
 prompt '--no-auto' >/dev/null
 
-echo "-- committed driver + feature map with a scenario: nothing changes"
+: "-- committed driver + feature map with a scenario: nothing changes"
 printf -- '---\nid: toy\nscenario: bash verify.sh\n---\n' >.flow/features/toy.md
 git add -f .flow/features && git commit -qm map
 out="$(prompt '--auto ship')"
@@ -85,7 +86,7 @@ prompt '--no-auto' >/dev/null
 err="$(cd .flow && "$R" add self-heal 2>&1)" && [ -f .flow/.github/routines/self-heal.md ] && ok "self-heal added (from a subdirectory too)" || bad "self-heal refused in a ready repo: $err"
 rm -rf .flow/.github
 
-echo "-- pair mode replays the base commit's hooks decision for decision"
+: "-- pair mode replays the base commit's hooks decision for decision"
 base="$(git -C "$H" merge-base HEAD origin/main 2>/dev/null || true)"
 if [ -z "$base" ]; then
   # CI must compare (test.yml fetches full history); a local clone without origin/main may skip
@@ -107,4 +108,4 @@ else
   done
 fi
 
-[ "$FAILS" -eq 0 ] && echo "== factory · PASS" || { echo "== factory · FAIL ($FAILS)"; exit 1; }
+[ "$FAILS" -eq 0 ] && echo "== factory · PASS ($PASSES passed)" || { echo "== factory · FAIL ($FAILS)"; exit 1; }

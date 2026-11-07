@@ -4,7 +4,8 @@
 set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 
 SB="$(mktemp -d "${TMPDIR:-/tmp}/stop-docs.XXXXXX")"; SB="$(cd "$SB" && pwd -P)"; trap 'rm -rf "$SB"' EXIT
@@ -45,4 +46,4 @@ is allow "sed -i '' 's/a/b/' \"notes.md\""
 is block "sed -i '' 's/a/b/' src/app.sh"
 is block "sed -i '' 's/a/b/' README.md src/app.sh"
 
-[ "$FAILS" -eq 0 ] && echo "== stop-docs · PASS" || { echo "== stop-docs · FAIL ($FAILS)"; exit 1; }
+[ "$FAILS" -eq 0 ] && echo "== stop-docs · PASS ($PASSES passed)" || { echo "== stop-docs · FAIL ($FAILS)"; exit 1; }

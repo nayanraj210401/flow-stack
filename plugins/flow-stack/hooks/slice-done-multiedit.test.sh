@@ -4,7 +4,8 @@
 set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 
 SB="$(mktemp -d "${TMPDIR:-/tmp}/slicedone.XXXXXX")"; SB="$(cd "$SB" && pwd -P)"
@@ -32,7 +33,7 @@ want() { # want <decision> <label> <tool> <tool_input>
 }
 edits() { jq -nc --arg f "$SF" --argjson e "$1" '{file_path:$f, edits:$e}'; }
 
-echo "-- marking a slice done by hand is denied"
+: "-- marking a slice done by hand is denied"
 want deny "Edit to done" Edit "$(jq -nc --arg f "$SF" '{file_path:$f, old_string:"status: todo", new_string:"status: done"}')"
 want deny "MultiEdit to done" MultiEdit "$(edits '[{"old_string":"status: todo","new_string":"status: done"}]')"
 want deny "MultiEdit, done in a later edit" MultiEdit "$(edits '[{"old_string":"fence: src/**","new_string":"fence: src/a"},{"old_string":"status: todo","new_string":"status: done"}]')"
@@ -43,11 +44,11 @@ want deny "two spaces after the colon" Edit "$(jq -nc --arg f "$SF" '{file_path:
 want deny "tab after the colon" Edit "$(jq -nc --arg f "$SF" '{file_path:$f, old_string:"status: todo", new_string:"status:\tdone"}')"
 want deny "Write with a new done slice" Write "$(jq -nc --arg f "$SF" --rawfile c "$SF" '{file_path:$f, content:($c | sub("status: todo"; "status:  done"))}')"
 
-echo "-- other SLICES.md edits stay allowed"
+: "-- other SLICES.md edits stay allowed"
 want allow "Write leaving the file as it was" Write "$(jq -nc --arg f "$SF" --rawfile c "$SF" '{file_path:$f, content:$c}')"
 want allow "Edit another field" Edit "$(jq -nc --arg f "$SF" '{file_path:$f, old_string:"fence: src/**", new_string:"fence: src/a"}')"
 want allow "MultiEdit another field" MultiEdit "$(edits '[{"old_string":"fence: src/**","new_string":"fence: src/a"}]')"
 want allow "MultiEdit leaving a done line as it was" MultiEdit "$(edits '[{"old_string":"status: done","new_string":"status: done"}]')"
 want allow "MultiEdit reopening a done slice" MultiEdit "$(edits '[{"old_string":"status: done","new_string":"status: doing"}]')"
 
-[ "$FAILS" = 0 ] && echo "== slice-done-multiedit · PASS" || { echo "== slice-done-multiedit · FAIL ($FAILS)"; exit 1; }
+[ "$FAILS" = 0 ] && echo "== slice-done-multiedit · PASS ($PASSES passed)" || { echo "== slice-done-multiedit · FAIL ($FAILS)"; exit 1; }

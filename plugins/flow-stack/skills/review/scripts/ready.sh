@@ -21,6 +21,7 @@ sk="$here/../.."
 ledger="$FLOW_DIR/ready.tsv"
 profile="${FLOW_STACK_HOME:-$HOME/.flow-stack}/profile.md"
 sha() { git -C "$FLOW_ROOT" rev-parse "${1:-HEAD}" 2>/dev/null; }
+v=0; for a in "$@"; do { [ "$a" = -v ] || [ "$a" = --verbose ]; } && v=1; done
 
 mode() {
   local v; v="$(jq -r '.review_gate // empty' "$FLOW_DIR/config.json" 2>/dev/null)"
@@ -73,7 +74,7 @@ base=""; [ "${1:-}" = --base ] && base="${2:-}"
 if [ "$(mode)" = yolo ]; then echo "review gate: yolo; nothing to check, PRs go straight to review"; exit 0; fi
 [ -n "$base" ] || base="$(merge_base)"
 head="$(sha)"; fails=0
-pass() { echo "  ✓ $*"; }
+pass() { [ "$v" = 1 ] && echo "  ✓ $*"; }
 miss() { echo "  ✗ $*"; fails=$((fails + 1)); }
 run() { # run <label> <cmd>: through evidence.sh so an active task records it
   ( cd "$FLOW_ROOT" && "$sk/verify/scripts/evidence.sh" "$1" "$2" >/dev/null 2>&1 </dev/null )

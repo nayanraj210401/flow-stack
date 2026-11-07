@@ -6,7 +6,8 @@ set -uo pipefail
 D="$(cd "$(dirname "$0")" && pwd)"; PLUGIN="$(cd "$D/../../.." && pwd)"
 SEAL="$D/seal.sh"; T="$PLUGIN/skills/flow/scripts/task.sh"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 
 SB="$(mktemp -d "${TMPDIR:-/tmp}/seal-backslash.XXXXXX")"; SB="$(cd "$SB" && pwd -P)"
@@ -23,17 +24,17 @@ S=".flow/tasks/bs/SEALS"
 f='src/a\nb.txt'
 echo old >"$f"; git add -A; git commit -qm f
 
-echo "-- add writes the path as given, and re-adding replaces it"
+: "-- add writes the path as given, and re-adding replaces it"
 "$SEAL" add "$f" >/dev/null; "$SEAL" add "$f" >/dev/null
 [ "$("$SEAL" list)" = "$f" ] && ok "one seal, exact path" || bad "SEALS: $(cat "$S")"
 
-echo "-- edit-guard sees it sealed"
+: "-- edit-guard sees it sealed"
 d="$(jq -nc --arg c "$PWD" --arg p "$PWD/$f" '{hook_event_name:"PreToolUse",session_id:"s",cwd:$c,tool_name:"Write",tool_input:{file_path:$p,content:"x"}}' |
   "$PLUGIN/hooks/edit-guard.sh" | jq -r '.hookSpecificOutput.permissionDecision // "allow"')"
 [ "$d" = ask ] && ok "Write asks" || bad "Write → ${d:-allow}, want ask"
 
-echo "-- rm finds it"
+: "-- rm finds it"
 "$SEAL" rm "$f" >/dev/null 2>&1 && [ ! -s "$S" ] && ok "unsealed" || bad "rm failed: $(cat "$S")"
 
-[ "$FAILS" -eq 0 ] && { echo "== seal-backslash · PASS"; exit 0; }
+[ "$FAILS" -eq 0 ] && { echo "== seal-backslash · PASS ($PASSES passed)"; exit 0; }
 echo "== seal-backslash · FAIL ($FAILS)"; exit 1

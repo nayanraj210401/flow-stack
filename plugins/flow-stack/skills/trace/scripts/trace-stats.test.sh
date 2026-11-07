@@ -3,7 +3,8 @@
 set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)"; PLUGIN="$(cd "$H/../../.." && pwd)"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 SB="$(mktemp -d "${TMPDIR:-/tmp}/trace-stats.XXXXXX")"; SB="$(cd "$SB" && pwd -P)"; trap 'rm -rf "$SB"' EXIT
 export FLOW_STACK_HOME="$SB/home" CLAUDE_CONFIG_DIR="$SB/claude" FLOW_CLAUDE_JSON="$SB/claude.json"
@@ -24,4 +25,4 @@ case "$out" in
   *) bad "no trail → output has no '## git' section" ;;
 esac
 
-[ "$FAILS" -eq 0 ] && echo "PASS" || { echo "FAIL: $FAILS"; exit 1; }
+[ "$FAILS" -eq 0 ] && echo "PASS ($PASSES passed)" || { echo "FAIL: $FAILS"; exit 1; }

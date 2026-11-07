@@ -9,7 +9,7 @@ export FLOW_STACK_HOME="$SB/home" HOME="$SB/hm" PATH="$SB/bin:$PATH" SB
 export SSH_AUTH_SOCK="$SB/agent.sock" AWS_SECRET_ACCESS_KEY=leak GITHUB_TOKEN=leak FLOW_SHIFT_CLEAN=1   # an inherited marker must not skip the scrub
 mkdir -p "$HOME" "$FLOW_STACK_HOME/shift" "$SB/bin"
 fail=0
-ok() { echo "  ✓ $1"; }
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $1"; fail=1; }
 check() { if eval "$2"; then ok "$1"; else bad "$1"; fi; }
 
@@ -339,4 +339,4 @@ check "the re-run of acme/api#5 failed" 'grep -q "^✗ acme/api#5 · the agent f
 pushed="$(git -C "$SB/remotes/acme/api.git" rev-parse feat-x)"; out="$("$S" push acme/api#5 2>&1)"; rc=$?
 check "push finds nothing prepared; the branch is untouched" '[ $rc != 0 ] && grep -q "nothing prepared" <<<"$out" && [ "$(git -C "$SB/remotes/acme/api.git" rev-parse feat-x)" = "$pushed" ]'
 
-[ $fail = 0 ] && echo PASS || { echo FAIL; exit 1; }
+[ $fail = 0 ] && echo "PASS ($PASSES passed)" || { echo FAIL; exit 1; }

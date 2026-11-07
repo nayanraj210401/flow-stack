@@ -4,7 +4,8 @@
 set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 
 SB="$(mktemp -d "${TMPDIR:-/tmp}/env-read.XXXXXX")"; SB="$(cd "$SB" && pwd -P)"
@@ -25,7 +26,7 @@ expect() { # expect <want> <command>
   [ "$got" = "$1" ] && ok "$1: $2" || bad "$2 → $got, want $1"
 }
 
-echo "-- .env reads: deny"
+: "-- .env reads: deny"
 expect deny 'cat .env'
 expect deny 'cat "./.env"'
 expect deny "cat '.env'"
@@ -35,12 +36,12 @@ expect deny 'cat .env.production.local'
 expect deny 'cat .env..'
 expect deny 'head -n 3 config/.env.local'
 expect deny 'echo hi && tail .env|wc -l'
-echo "-- example/sample/template and non-.env names: allow"
+: "-- example/sample/template and non-.env names: allow"
 expect allow 'cat .env.example'
 expect allow 'cat ".env.sample" .env.template'
 expect allow 'cat src/env.ts'
 expect allow 'cat .envrc.md'
 expect allow 'grep FOO README.md'
 
-[ "$FAILS" -eq 0 ] && { echo "env-read: PASS"; exit 0; }
+[ "$FAILS" -eq 0 ] && { echo "env-read: PASS ($PASSES passed)"; exit 0; }
 echo "env-read: FAIL ($FAILS)"; exit 1

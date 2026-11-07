@@ -5,7 +5,8 @@ set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)"; PLUGIN="$(cd "$H/.." && pwd)"
 T="$PLUGIN/skills/flow/scripts/task.sh"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 
 SB="$(mktemp -d "${TMPDIR:-/tmp}/unpointed.XXXXXX")"; SB="$(cd "$SB" && pwd -P)"
@@ -22,13 +23,13 @@ git worktree add -q ../sub-wt -b worker/sub; SW="$(cd ../sub-wt && pwd -P)"
 M="$SB/main"
 edit() { jq -nc --arg c "$1" --arg f "$1/app.ts" '{hook_event_name:"PreToolUse",session_id:"wt",cwd:$c,tool_name:"Edit",tool_input:{file_path:$f,old_string:"1",new_string:"2"}}'; }
 
-echo "-- an unpointed worktree has no task"
+: "-- an unpointed worktree has no task"
 [ -z "$(cd "$W" && "$T" active)" ] && ok "task.sh active is empty" || bad "active: '$(cd "$W" && "$T" active)'"
 out="$(edit "$W" | "$H/edit-guard.sh" 2>/dev/null)"
 case "$out" in *deny*) bad "edit-guard fenced the human's edit: $out" ;; *) ok "edit outside main's fence is not denied" ;; esac
 [ ! -e "$(git -C "$W" rev-parse --absolute-git-dir)/flow-lane" ] && ok "no flow-lane written" || bad "flow-lane written"
 
-echo "-- the main checkout and joined lanes keep working"
+: "-- the main checkout and joined lanes keep working"
 [ "$(cd "$M" && "$T" active)" = bughunt ] && ok "main still leads bughunt" || bad "main active"
 jq -c '. + {agent_id:"a1"}' <<<"$(edit "$SW")" >"$SB/in.json"
 echo '{"pid":4242,"cwd":"'"$M"'"}' >"$CLAUDE_CONFIG_DIR/sessions/4242.json"
@@ -38,4 +39,4 @@ FLOW_SESSION_PID=4242 "$H/edit-guard.sh" <"$SB/in.json" >/dev/null 2>&1
 out="$(edit "$SW" | "$H/edit-guard.sh" 2>/dev/null)"
 case "$out" in *deny*) ok "joined lane is fenced" ;; *) bad "joined lane not fenced: $out" ;; esac
 
-[ "$FAILS" -eq 0 ] && echo "unpointed-worktree: PASS" || { echo "unpointed-worktree: FAIL ($FAILS)"; exit 1; }
+[ "$FAILS" -eq 0 ] && echo "unpointed-worktree: PASS ($PASSES passed)" || { echo "unpointed-worktree: FAIL ($FAILS)"; exit 1; }

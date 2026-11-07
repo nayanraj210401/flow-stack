@@ -3,7 +3,8 @@
 set -uo pipefail
 D="$(cd "$(dirname "$0")" && pwd)"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 SB="$(mktemp -d "${TMPDIR:-/tmp}/status-empty-title.XXXXXX")"; SB="$(cd "$SB" && pwd -P)"
 trap 'rm -rf "$SB"' EXIT
@@ -19,4 +20,4 @@ s1="$(jq -c '.slices[] | select(.id == "S1") | [.title, .status]' <<<"$out" 2>/d
 s2="$(jq -c '.slices[] | select(.id == "S2") | [.title, .status]' <<<"$out" 2>/dev/null)"
 [ "$s2" = '["named","todo"]' ] && ok "a titled slice is unchanged" || bad "S2 → $s2"
 [ "$FAILS" = 0 ] || { echo "== status-empty-title · FAIL ($FAILS)"; exit 1; }
-echo "== status-empty-title · PASS"
+echo "== status-empty-title · PASS ($PASSES passed)"
