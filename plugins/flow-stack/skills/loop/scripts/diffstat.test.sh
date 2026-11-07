@@ -17,4 +17,9 @@ grep -q '^added=5 ' <<<"$out" && ok "added=5 (3 + 2, binary 0)" || bad "wrong to
 grep -q '+3 .*nonl.txt' <<<"$out" && ok "unterminated last line counted" || bad "nonl.txt: $out"
 grep -q '+0 .*bin.dat' <<<"$out" && ok "binary counts 0" || bad "bin.dat: $out"
 grep -q "empty.txt" <<<"$out" && ok "empty file still listed" || bad "empty.txt dropped: $out"
+mkdir -p src/sub; echo a >src/top.sh; echo b >src/sub/deep.sh
+out="$(bash "$D/diffstat.sh" 'src/*.sh')"
+grep -q '^added=2 ' <<<"$out" && ok "src/*.sh crosses / like the fence hook" || bad "fence glob: $out"
+out="$(bash "$D/diffstat.sh" 'src/**/*.sh')"
+grep -q '^added=2 ' <<<"$out" && ok "src/**/*.sh matches zero dirs" || bad "** glob: $out"
 [ "$FAILS" = 0 ]
