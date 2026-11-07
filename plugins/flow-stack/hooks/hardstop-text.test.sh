@@ -5,7 +5,8 @@
 set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 
 SB="$(mktemp -d "${TMPDIR:-/tmp}/hardstop-text.XXXXXX")"; SB="$(cd "$SB" && pwd -P)"
@@ -26,7 +27,7 @@ expect() { # expect <want> <command>
   [ "$got" = "$1" ] && ok "$1: ${2//$'\n'/⏎}" || bad "${2//$'\n'/⏎} → $got, want $1"
 }
 
-echo "-- text that names a stopped command passes"
+: "-- text that names a stopped command passes"
 expect allow $'cat > notes.md <<\'EOF\'\nthe rm -rf / guard\nEOF'
 expect allow $'cat > notes.md <<EOF\nblock git push --force origin main\nEOF'
 expect allow "git commit -m 'block git push --force origin main'"
@@ -34,7 +35,7 @@ expect allow 'git commit -m "fix: rm -rf ~ hard stop"'
 expect allow 'echo "rm -rf /"'
 expect allow 'echo the rm -rf / guard'
 expect allow 'echo "rm -rf $DIR is risky"'
-echo "-- real invocations are still stopped"
+: "-- real invocations are still stopped"
 expect deny 'rm -rf /'
 expect deny 'sudo rm -rf /'
 expect deny "bash -c 'rm -rf /'"
@@ -61,19 +62,19 @@ expect deny 'echo "$(rm -rf /)"'
 expect deny $'cat <<EOF\n$(rm -rf /)\nEOF'
 expect deny 'git commit -m "$(rm -rf /)"'
 expect deny 'find . -exec echo {} + -exec rm -rf ~ +'
-echo "-- a heredoc a shell runs is code"
+: "-- a heredoc a shell runs is code"
 expect deny $'bash <<\'EOF\'\nrm -rf ~\nEOF'
 expect deny $'sh -s <<EOF\nrm -rf /\nEOF'
 expect deny $'ssh host <<EOF\nrm -rf ~\nEOF'
 expect deny $'cd x && bash <<EOF\ngit push -f origin main\nEOF'
 expect allow $'git commit -F - <<\'EOF\'\nthe rm -rf / guard\nEOF'
 expect allow $'cat <<EOF > n.md\nblock git push -f origin main\nEOF'
-echo "-- << that starts no heredoc hides nothing"
+: "-- << that starts no heredoc hides nothing"
 expect deny $'echo " <<EOF"\nrm -rf /\nEOF'
 expect deny $'echo $((1<<n))\nrm -rf /'
 expect deny $'grep x <<<EOF\nrm -rf /'
 expect deny $'git commit -m \'see <<EOF\'\nrm -rf /'
 expect deny $'echo $((1<<n))\ngit push -f origin main'
 
-[ "$FAILS" -eq 0 ] && { echo "== hardstop-text · PASS"; exit 0; }
+[ "$FAILS" -eq 0 ] && { echo "== hardstop-text · PASS ($PASSES passed)"; exit 0; }
 echo "== hardstop-text · FAIL ($FAILS)"; exit 1

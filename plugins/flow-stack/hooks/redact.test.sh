@@ -4,7 +4,8 @@
 set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 
 SB="$(mktemp -d "${TMPDIR:-/tmp}/redact.XXXXXX")"
@@ -79,4 +80,4 @@ keeps 'ls -u foo'
 keeps 'git commit -m "Add basic validation for users"'
 keeps 'docker run -u 1000:1000 img'
 
-[ "$FAILS" -eq 0 ] && echo "PASS" || { echo "FAIL: $FAILS"; exit 1; }
+[ "$FAILS" -eq 0 ] && echo "PASS ($PASSES passed)" || { echo "FAIL: $FAILS"; exit 1; }

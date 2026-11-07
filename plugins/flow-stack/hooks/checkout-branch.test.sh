@@ -5,7 +5,8 @@
 set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 
 SB="$(mktemp -d "${TMPDIR:-/tmp}/checkout-branch.XXXXXX")"; SB="$(cd "$SB" && pwd -P)"
@@ -33,13 +34,13 @@ expect() { # expect <want> <command>
   [ "$got" = "$1" ] && ok "$1: $2" || bad "$2 → $got, want $1"
 }
 
-echo "-- switching branches passes"
+: "-- switching branches passes"
 expect allow 'git checkout main'
 expect allow 'git checkout feature/tests/x'
 expect allow 'git checkout -b tests/x'
 expect allow 'git checkout -b feat/a.test.sh feat/base'
 expect allow 'git checkout -B tests/y'
-echo "-- writing a test through checkout/restore is denied"
+: "-- writing a test through checkout/restore is denied"
 expect deny 'git checkout -- tests/a.test.sh'
 expect deny 'git checkout HEAD -- tests/a.test.sh'
 expect deny 'git checkout tests/a.test.sh'
@@ -49,5 +50,5 @@ expect deny "git checkout main 'tests/*.test.sh'"
 expect deny 'git checkout HEAD tests/gone.test.sh'
 expect deny 'cd src && git checkout HEAD tests/a.test.sh'
 
-[ "$FAILS" -eq 0 ] && { echo "== checkout-branch · PASS"; exit 0; }
+[ "$FAILS" -eq 0 ] && { echo "== checkout-branch · PASS ($PASSES passed)"; exit 0; }
 echo "== checkout-branch · FAIL ($FAILS)"; exit 1

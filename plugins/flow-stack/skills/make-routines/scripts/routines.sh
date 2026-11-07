@@ -17,6 +17,7 @@
 # flow_ref (pin the plugin to a tag or branch; empty = the default branch, fresh each run). The body is the prompt.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
+v=0; for a in "$@"; do { [ "$a" = -v ] || [ "$a" = --verbose ]; } && v=1; done
 tpl="$here/../templates"
 dir=.github/routines
 market=https://github.com/nayanraj210401/flow-stack.git
@@ -292,10 +293,12 @@ schedule() { # schedule <name> <cron> [--tz <zone>]: change an existing routine'
 }
 
 check() {
-  local n w ns bad=0; ns="$(names)" || exit 2
+  local n w ns bad=0 ok=0; ns="$(names)" || exit 2
   [ -f "$dir/profile.md" ] || { echo "✗ $dir/profile.md missing"; bad=1; }
   for n in $ns; do
-    if diff -q <(render_one "$n") ".github/workflows/flow-$n.yml" >/dev/null 2>&1; then echo "✓ $n"
+    if diff -q <(render_one "$n") ".github/workflows/flow-$n.yml" >/dev/null 2>&1; then
+      [ "$v" = 1 ] && echo "✓ $n"
+      ok=$((ok + 1))
     else echo "✗ $n: .github/workflows/flow-$n.yml differs from $dir/$n.md (routines.sh render)"; bad=1; fi
   done
   for w in .github/workflows/flow-*.yml; do
@@ -303,6 +306,7 @@ check() {
     n="${w##*/flow-}"; n="${n%.yml}"
     [ -f "$dir/$n.md" ] || { echo "✗ $w: its routine $dir/$n.md is gone (delete the workflow)"; bad=1; }
   done
+  [ "$bad" = 0 ] && echo "$ok routines in sync"
   return "$bad"
 }
 

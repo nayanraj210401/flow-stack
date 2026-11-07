@@ -3,7 +3,8 @@
 set -uo pipefail
 S="$(cd "$(dirname "$0")" && pwd)/seal.sh"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 SB="$(mktemp -d "${TMPDIR:-/tmp}/seal-matrix.XXXXXX")"; SB="$(cd "$SB" && pwd -P)"
 trap 'rm -rf "$SB"' EXIT
@@ -110,4 +111,4 @@ printf '# Intent · x\n\n## Goal\n```sh\nno matrix here\n' >"$I"
 seals && ok "unclosed fence without a matrix seals as before" || bad "no-matrix INTENT blocked: $(cat "$SB/out")"
 
 [ "$FAILS" = 0 ] || { echo "== seal-matrix · FAIL ($FAILS)"; exit 1; }
-echo "== seal-matrix · PASS"
+echo "== seal-matrix · PASS ($PASSES passed)"

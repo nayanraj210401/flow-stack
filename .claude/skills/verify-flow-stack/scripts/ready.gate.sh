@@ -80,7 +80,7 @@ fails "record refuses an unknown id" "$R" record nope done
 fails "record refuses a run id (it's live, not recorded)" "$R" record e2e done
 printf '{"commands":{"lint":"bash -n src/calc.sh"},"ready":[{"id":"e2e","run":"bash tests/test_add.sh"},{"id":"sec-scan","do":"Run the security MCP on the diff"}]}\n' >.flow/config.json
 check "record accepts a do id" "$R" record sec-scan done "0 findings"
-sees "passing run gate shows" "✓ e2e" "$R"
+sees "passing run gate shows" "✓ e2e" "$R" -v
 check "all custom gates green passes" "$R"
 printf '{"commands":{"lint":"bash -n src/calc.sh"}}\n' >.flow/config.json
 

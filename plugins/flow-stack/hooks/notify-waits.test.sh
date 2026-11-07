@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # notify-waits.test.sh: notify.sh logs permission waits to waits.jsonl, even with notify: off.
 set -uo pipefail
+pass=0
 H="$(cd "$(dirname "$0")" && pwd)"
 SB="$(mktemp -d "${TMPDIR:-/tmp}/notify-waits.XXXXXX")"; trap 'rm -rf "$SB"' EXIT
 export FLOW_STACK_HOME="$SB/home" HOME="$SB/hm"; mkdir -p "$HOME" "$FLOW_STACK_HOME"
 printf -- '---\nnotify: off\n---\n' >"$FLOW_STACK_HOME/profile.md"
-W="$FLOW_STACK_HOME/waits.jsonl"; fail=0
+W="$FLOW_STACK_HOME/waits.jsonl"; fail=0 pass=0
 send() { printf '%s' "$1" | bash "$H/notify.sh"; }
 send '{"notification_type":"permission_prompt","session_id":"s1","message":"m"}'; rc1=$?
 send '{"notification_type":"elicitation_dialog","session_id":"s2"}'
@@ -19,4 +20,4 @@ jq -e '.sid=="s2" and .kind=="elicitation_dialog"' <<<"$(sed -n 2p "$W" 2>/dev/n
 rm -rf "$W"; mkdir "$W"   # unwritable target: must fail open
 send '{"notification_type":"permission_prompt","session_id":"s4"}'; rc=$?
 [ "$rc" = 0 ] || { echo "  ✗ failed write changed exit to $rc"; fail=1; }
-[ "$fail" = 0 ] && { echo "  ✓ waits logged, idle/Stop skipped, fail open"; echo PASS; } || exit 1
+[ "$fail" = 0 ] && { pass=$((pass+1)); echo "$pass passed"; } || exit 1

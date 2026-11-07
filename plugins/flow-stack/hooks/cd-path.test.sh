@@ -4,7 +4,8 @@
 set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 
 SB="$(mktemp -d "${TMPDIR:-/tmp}/cd-path.XXXXXX")"; SB="$(cd "$SB" && pwd -P)"
@@ -30,7 +31,7 @@ expect() { # expect <want> <command>
   [ "$got" = "$1" ] && ok "$1: $2" || bad "$2 → $got, want $1"
 }
 
-echo "-- blind checks: deny however the path is reached"
+: "-- blind checks: deny however the path is reached"
 expect deny 'cat .flow/tasks/x/blind/a'
 expect deny 'cd .flow/tasks/x && cat blind/a'
 expect deny 'cd .flow/tasks/x/blind; cat a'
@@ -38,18 +39,18 @@ expect deny 'cd .flow && cd tasks/x && cat blind/a'
 expect deny "cd $PWD/.flow/tasks/x && cat blind/a"
 expect deny 'ls .flow/tasks/*/bl*'
 expect deny 'cat .flow/tasks/x/b?ind/a'
-echo "-- sealed checks: ask however the path is reached"
+: "-- sealed checks: ask however the path is reached"
 expect ask 'echo x > tests/a.test.sh'
 expect ask 'cd tests && echo x > a.test.sh'
 expect ask 'cd tests && echo x >a.test.sh'
 expect ask 'cd tests && sed -i s/t/u/ a.test.sh'
 expect ask 'cd src && rm ../tests/a.test.sh'
-echo "-- unrelated commands pass"
+: "-- unrelated commands pass"
 expect allow 'cd .flow/tasks/x && cat SLICES.md'
 expect allow 'ls .flow/tasks/*/SLICES.md'
 expect allow 'cd tests && echo x > b.test.sh'
 expect allow 'cd src && cat a.test.sh'
 expect allow 'cd tests && cat a.test.sh'
 
-[ "$FAILS" -eq 0 ] && { echo "== cd-path · PASS"; exit 0; }
+[ "$FAILS" -eq 0 ] && { echo "== cd-path · PASS ($PASSES passed)"; exit 0; }
 echo "== cd-path · FAIL ($FAILS)"; exit 1
