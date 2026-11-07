@@ -55,6 +55,17 @@ touch .flow/tasks/demo/INTENT.md
 hook anchor.sh "$(up)"; echo "$OUT" >"$ART/anchor.txt"
 has "$OUT" "[flow anchor · demo] goal: Users can multiply two integers" && ok "anchor goal" || bad "anchor: $OUT"
 has "$OUT" "[flow anchor] not doing: no division" && ok "anchor non-goal" || bad "no non-goal"
+
+echo "-- the anchor is injected once, refreshes only on change, and skips relays"
+up_s() { jq -nc --arg cwd "$PWD" --arg s "$1" --arg p "$2" '{cwd:$cwd, session_id:$s, hook_event_name:"UserPromptSubmit", prompt:$p}'; }
+hook anchor.sh "$(up_s S1 next)"
+has "$OUT" "[flow anchor · demo] goal:" && ok "a new session anchors" || bad "first anchor: $OUT"
+hook anchor.sh "$(up_s S1 next)"
+[ -z "$OUT" ] && ok "an unchanged anchor isn't re-injected" || bad "re-anchored unchanged: $OUT"
+hook anchor.sh "$(up_s S2 next)"
+has "$OUT" "[flow anchor · demo] goal:" && ok "a different session anchors its own once" || bad "second session anchor: $OUT"
+hook anchor.sh "$(up_s S3 "$(printf 'Another Claude session sent a message:\n<agent-message from="x">\n  updated the plan\n</agent-message>')")"
+[ -z "$OUT" ] && ok "a relayed prompt injects nothing" || bad "relay injected: $OUT"
 hook pre-compact.sh "$(jq -nc --arg cwd "$PWD" '{cwd:$cwd, hook_event_name:"PreCompact"}')"
 A=.flow/tasks/demo/HANDOFF.auto.md
 [ -f "$A" ] && grep -q '^## Resume' "$A" && grep -q '^- doing · S1' "$A" && ok "HANDOFF.auto.md snapshot" || bad "no/partial auto handoff"
