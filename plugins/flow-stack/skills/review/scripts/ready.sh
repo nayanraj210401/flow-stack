@@ -74,7 +74,7 @@ base=""; [ "${1:-}" = --base ] && base="${2:-}"
 if [ "$(mode)" = yolo ]; then echo "review gate: yolo; nothing to check, PRs go straight to review"; exit 0; fi
 [ -n "$base" ] || base="$(merge_base)"
 head="$(sha)"; fails=0
-pass() { [ "$v" = 1 ] && echo "  ✓ $*"; }
+pass() { if [ "$v" = 1 ]; then echo "  ✓ $*"; fi; }
 miss() { echo "  ✗ $*"; fails=$((fails + 1)); }
 run() { # run <label> <cmd>: through evidence.sh so an active task records it
   ( cd "$FLOW_ROOT" && "$sk/verify/scripts/evidence.sh" "$1" "$2" >/dev/null 2>&1 </dev/null )
