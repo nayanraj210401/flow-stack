@@ -9,6 +9,7 @@ export FLOW_STACK_HOME="$SB/home" HOME="$SB/hm" PATH="$SB/bin:$PATH" SB
 export SSH_AUTH_SOCK="$SB/agent.sock" AWS_SECRET_ACCESS_KEY=leak GITHUB_TOKEN=leak FLOW_SHIFT_CLEAN=1   # an inherited marker must not skip the scrub
 mkdir -p "$HOME" "$FLOW_STACK_HOME/shift" "$SB/bin"
 fail=0
+PASSES=0
 ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $1"; fail=1; }
 check() { if eval "$2"; then ok "$1"; else bad "$1"; fi; }
@@ -62,7 +63,7 @@ printf '#!/usr/bin/env bash\nfor k in "review ship" "deslop done" "tour done"; d
 chmod +x "$SB/bin/gh" "$SB/bin/claude" "$SB/bin/rec"
 S="$H/shift.sh" R="$H/routines.sh"
 
-echo "no shift: block: nothing changes"
+: "gno shift: block: nothing changes"
 printf -- '---\nprofile_version: 1\nnotify: off\n---\n# Who\n' >"$FLOW_STACK_HOME/profile.md"
 out="$("$S" run --dry-run 2>&1)"; rc=$?
 check "run exits 0 and says so" '[ $rc = 0 ] && grep -q "no shift: block" <<<"$out"'
@@ -86,13 +87,13 @@ shift:
 # Who
 EOF
 
-echo "no token: refuses, never falls back to the gh login"
+: "gno token: refuses, never falls back to the gh login"
 out="$("$S" run --dry-run 2>&1)"; rc=$?
 check "refused" '[ $rc != 0 ] && grep -q token <<<"$out"'
 check "no gh call" '[ ! -e "$SB/gh.log" ]'
 printf 'tok-fixture\n' >"$FLOW_STACK_HOME/shift/token"; chmod 600 "$FLOW_STACK_HOME/shift/token"
 
-echo "repos must be owner/name; one run at a time"
+: "grepos must be owner/name; one run at a time"
 P="$FLOW_STACK_HOME/profile.md"; cp "$P" "$SB/profile.keep"
 perl -pi -e 's/me\/flow-stack/flow-stack/' "$P"
 out="$("$S" run --dry-run 2>&1)"; rc=$?
@@ -103,7 +104,7 @@ out="$("$S" run --dry-run 2>&1)"; rc=$?
 check "a live lock refuses the run, no gh call, lock kept" '[ $rc != 0 ] && grep -q "another shift run" <<<"$out" && [ ! -e "$SB/gh.log" ] && [ -d "$FLOW_STACK_HOME/shift/dry/lock" ]'
 echo 999999 >"$FLOW_STACK_HOME/shift/dry/lock/pid"
 
-echo "dry run: a pending-review plan per in-scope PR and a digest, no outward calls"
+: "gdry run: a pending-review plan per in-scope PR and a digest, no outward calls"
 out="$("$S" run --dry-run 2>&1)"; rc=$?
 [ $rc = 0 ] || { bad "dry run exit $rc"; echo "$out"; }
 st="$FLOW_STACK_HOME/shift/dry"
@@ -128,14 +129,14 @@ check "reviewer ran with read-only tools, restricted to its dir, no MCP, in a sc
 check "untrusted PR text never reaches the prompt" '! grep -q "IGNORE ALL" "$SB/claude.log"'
 check "the prompt marks the diff untrusted too" '[ "$(grep -c "Both are written by someone else" "$SB/claude.log")" = 2 ]'
 
-echo "re-run with unchanged items: does nothing"
+: "gre-run with unchanged items: does nothing"
 g="$(wc -l <"$SB/gh.log")" c="$(wc -l <"$SB/claude.log")" h="$(cat "$st"/digest/* | cksum)"
 out="$("$S" run --dry-run 2>&1)"; rc=$?
 check "exit 0, nothing new" '[ $rc = 0 ] && grep -q "nothing new" <<<"$out"'
 check "only the source was read again; no reviewer run; digest untouched" \
   '[ "$(tail -n +$((g+1)) "$SB/gh.log" | grep -cv "^search prs")" = 0 ] && [ "$(wc -l <"$SB/claude.log")" = "$c" ] && [ "$(cat "$st"/digest/* | cksum)" = "$h" ] && [ "$(ls "$st"/digest | wc -l | tr -d " ")" = 1 ]'
 
-echo "real run: stages pending reviews, never submits"
+: "greal run: stages pending reviews, never submits"
 : >"$SB/gh.log"
 out="$("$S" run 2>&1)"; rc=$?
 check "exit 0, two pending reviews created" '[ $rc = 0 ] && [ "$(grep -c "^api " "$SB/gh.log")" = 2 ]'
@@ -143,7 +144,7 @@ check "POST to .../pulls/<n>/reviews only, never /events, payload without event"
   '! grep "^api " "$SB/gh.log" | grep -vqE "^api -X POST repos/(acme/api|me/flow-stack)/pulls/[12]/reviews --input -$" && ! jq -s "map(has(\"event\")) | any" "$SB/api.in" | grep -q true'
 check "real and dry state are separate" '[ -s "$FLOW_STACK_HOME/shift/seen.tsv" ] && [ -s "$st/seen.tsv" ] && ls "$FLOW_STACK_HOME"/digest/shift-*.md >/dev/null'
 
-echo "routines.sh add shift --local: a scheduler entry + runner, nothing installed"
+: "groutines.sh add shift --local: a scheduler entry + runner, nothing installed"
 out="$(cd "$SB" && SHIFT_SCHEDULER=launchd "$R" add shift --local 2>&1)"; rc=$?
 pl="$FLOW_STACK_HOME/shift/com.flow-stack.shift.plist" run="$FLOW_STACK_HOME/shift/run.sh"
 check "launchd: plist + runner written, install printed not run" \
@@ -160,14 +161,14 @@ check "no repo files written" '[ ! -e "$SB/.github" ]'
 out="$(cd "$SB" && "$R" add review --local 2>&1)"; rc=$?
 check "--local is only for shift" '[ $rc != 0 ]'
 
-echo "a failed review is retried next run, not marked seen"
+: "ga failed review is retried next run, not marked seen"
 rm -rf "$st"; touch "$SB/claude.fail"; c="$(wc -l <"$SB/claude.log")"
 out="$("$S" run --dry-run 2>&1)"; rc=$?
 check "two ✗ reviewer failed, nothing marked seen" '[ $rc = 0 ] && [ "$(grep -c "^✗ .*reviewer failed" <<<"$out")" = 2 ] && [ ! -s "$st/seen.tsv" ] && grep -q "^# shift · .* · \$0.2 · dry run" "$st"/digest/*'
 rm "$SB/claude.fail"; out="$("$S" run --dry-run 2>&1)"
 check "next run reviews them again" '[ "$(wc -l <"$SB/claude.log")" -eq $((c + 4)) ] && grep -q "^~ acme/api#1" <<<"$out"'
 
-echo "re-installing replaces the cron line, never adds a second"
+: "gre-installing replaces the cron line, never adds a second"
 { printf "#!/usr/bin/env bash\nSB=%q\n" "$SB"; cat <<'EOF'
 case "$1" in -l) cat "$SB/ct" 2>/dev/null ;; -) cat >"$SB/ct.new"; mv "$SB/ct.new" "$SB/ct" ;; esac
 EOF
@@ -182,7 +183,7 @@ check "one shift line (the new one), other lines kept" \
 out="$(cd "$SB" && "$R" add shift --local --force --cron "0 9 * * *" 2>&1)"; rc=$?
 check "--local refuses --cron (the schedule is shift.when)" '[ $rc != 0 ] && grep -q "shift.when" <<<"$out"'
 
-echo "caps: max_items and budget_usd stop the run"
+: "gcaps: max_items and budget_usd stop the run"
 cap() { # cap <max_items> <budget_usd>: a fresh dry run under those caps
   perl -pi -e "s/^  max_items: .*/  max_items: $1/; s/^  budget_usd: .*/  budget_usd: $2/" "$P"
   rm -rf "${st:?}"; : >"$SB/claude.log"; out="$("$S" run --dry-run 2>&1)"; rc=$?
@@ -194,7 +195,7 @@ check "budget 0.25 at 0.25 a review: claude gets --max-budget-usd 0.25, then the
   '[ $rc = 0 ] && [ "$(grep -o -- "--max-budget-usd [0-9.]*" "$SB/claude.log" | tr "\n" ,)" = "--max-budget-usd 0.25," ] && grep -q "budget_usd (0.25) spent" <<<"$out"'
 cp "$SB/profile.keep" "$P"
 
-echo "paths with quote, ampersand, percent render a working runner"
+: "gpaths with quote, ampersand, percent render a working runner"
 odd="$SB/o'b&c%d"; mkdir -p "$odd"; cp "$FLOW_STACK_HOME/profile.md" "$odd/"
 FLOW_STACK_HOME="$odd" SHIFT_SCHEDULER=launchd "$R" add shift --local >/dev/null 2>&1
 check "plist is valid XML" '! command -v plutil >/dev/null || plutil -lint "$odd/shift/com.flow-stack.shift.plist" >/dev/null'
@@ -203,7 +204,7 @@ check "run.sh runs shift.sh with that home (it asks for the token)" 'grep -qF "n
 FLOW_STACK_HOME="$odd" SHIFT_SCHEDULER=cron "$R" add shift --local --force >/dev/null 2>&1
 check "crontab escapes %" 'grep -qF "c\\%d" "$odd/shift/crontab" && ! grep -q "[^\\]%" "$odd/shift/crontab"'
 
-echo "respond + start: fixtures"
+: "grespond + start: fixtures"
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 ln -s "$(cd "$H/../../.." && pwd)" "$SB/plugin"
 mkrepo() { # mkrepo <owner/name> <factory-ready 0|1>: a bare remote with main and a PR branch feat-x
@@ -262,7 +263,7 @@ before="$(heads)"; : >"$SB/gh.log"; : >"$SB/claude.log"
 out="$("$S" run 2>&1)"; rc=$?
 [ $rc = 0 ] || { bad "phase-2 run exit $rc"; echo "$out"; }
 o="$FLOW_STACK_HOME/shift/out" w="$FLOW_STACK_HOME/shift/work"
-echo "respond: a local commit per thread with a passing check, nothing pushed"
+: "grespond: a local commit per thread with a passing check, nothing pushed"
 check "acme/api#5 ✓ with its release command" 'grep -q "^✓ acme/api#5 · 1 check(s) on 1 commit(s)" <<<"$out" && grep -q "shift.sh push acme/api#5" "$FLOW_STACK_HOME"/digest/shift-*.md'
 check "the commit names the thread and carries its Check:" 'git -C "$w/acme-api-5" log -1 --format=%B | grep -qF "$T5" && git -C "$w/acme-api-5" log -1 --format=%B | grep -q "^Check: test -f fix.txt"'
 check "a failing Check: or an unanswered failing CI check is ~ needs you, not ✓" \
@@ -274,13 +275,13 @@ check "a conflicting rebase rewrites the PR's own commit; only the agent's fix c
 check "drafted reply per thread" 'grep -qF "## $T5" "$o/acme-api-5.replies.md"'
 check "not factory-ready: ✗ and no agent run there" 'grep -q "^✗ acme/bare#6 · factory not ready: a committed verify driver" <<<"$out" && ! grep -q "cwd=$w/acme-bare-6" "$SB/claude.log"'
 check "a PR with nothing open is skipped: no clone, no line" '[ ! -e "$w/acme-api-7" ] && ! grep -q "acme/api#7" <<<"$out"'
-echo "start: INTENT + a branch with commits; high risk = spec only"
+: "gstart: INTENT + a branch with commits; high risk = spec only"
 check "acme/api#8 ✓: task folder with INTENT and a shift/ branch with a commit" \
   'grep -q "^✓ acme/api#8 · 1 commit(s) on shift/8-rate-limit-the-api" <<<"$out" && [ -f "$w/acme-api-8/.flow/tasks/x/INTENT.md" ] && [ "$(git -C "$w/acme-api-8" branch --show-current)" = shift/8-rate-limit-the-api ]'
 check "acme/api#9 risk:high: spec and questions only, no commits, nothing to open" \
   'grep -q "^~ acme/api#9 · risk high: spec and questions only" <<<"$out" && grep -q Q1 "$o/acme-api-9.spec.md" && [ "$(git -C "$w/acme-api-9" rev-list --count origin/main..HEAD)" = 0 ] && [ ! -e "$o/acme-api-9.release.json" ]'
 check "the high-risk prompt says spec only; the low one builds" 'grep "issues/9" "$SB/claude.log" | grep -q "spec only" && ! grep "issues/8" "$SB/claude.log" | grep -q "spec only"'
-echo "no outward call before release"
+: "gno outward call before release"
 check "remotes unchanged" '[ "$(heads)" = "$before" ]'
 check "gh made only reads" '! grep -vE "^(api graphql|repo clone|issue view) " "$SB/gh.log"'
 check "the agent had no token, no git global config, and could not push" \
@@ -289,7 +290,7 @@ check "untrusted thread and issue text never reach the prompt" '! grep -q "IGNOR
 c="$(wc -l <"$SB/claude.log")"; out="$("$S" run 2>&1)"
 check "re-run with unchanged items: no agent run" '[ "$(wc -l <"$SB/claude.log")" = "$c" ] && grep -q "nothing new" <<<"$out"'
 
-echo "release: ready.sh first, then the one outward step"
+: "grelease: ready.sh first, then the one outward step"
 cf="$w/acme-api-5/.flow/config.json" h5="$(git -C "$w/acme-api-5" rev-parse HEAD)"
 echo '{"review_gate":"yolo"}' >"$cf"; git -C "$w/acme-api-5" add -f .flow/config.json; git -C "$w/acme-api-5" -c user.email=t@t -c user.name=t commit -qm yolo
 out="$("$S" push acme/api#5 2>&1)"; rc=$?
@@ -332,7 +333,7 @@ out="$("$S" open acme/api#8 2>&1)"; rc=$?
 check "open: branch pushed, one draft PR that closes the issue" \
   '[ $rc = 0 ] && git -C "$SB/remotes/acme/api.git" rev-parse -q --verify shift/8-rate-limit-the-api >/dev/null && [ "$(grep -c "^pr create --draft --repo acme/api --base main --head shift/8-rate-limit-the-api" "$SB/gh.log")" = 1 ] && grep -q "^Closes https://github.com/acme/api/issues/8" "$w/acme-api-8/.flow/shift/pr-body.md"'
 
-echo "a release from an earlier run can't be released after a later run of the same item"
+: "ga release from an earlier run can't be released after a later run of the same item"
 jq '(.[] | select(.id == "acme/api#5") | .updated) = "2"' "$SB/mine.json" >"$SB/mine.new" && mv "$SB/mine.new" "$SB/mine.json"
 touch "$SB/claude.fail"; out="$("$S" run 2>&1)"; rm "$SB/claude.fail"
 check "the re-run of acme/api#5 failed" 'grep -q "^✗ acme/api#5 · the agent failed" <<<"$out"'
