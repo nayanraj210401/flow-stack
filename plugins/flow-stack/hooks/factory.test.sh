@@ -103,7 +103,11 @@ else
         [ "$a" = "$b" ] && ok "$repo/$p: $c → $b" || bad "$repo/$p: $c → $b, base said $a"
       done
       rm -f "$FLOW_STACK_HOME"/anchor/s.hash "$FLOW_STACK_HOME"/anchor/s.count 2>/dev/null || true
-      a="$(prompt 'fix the bug' "$O")"; b="$(prompt 'fix the bug')"
+      a="$(prompt 'fix the bug' "$O")"
+      # The baseline and candidate hooks share FLOW_STACK_HOME; clear the candidate's first-run
+      # state so both outputs represent the same fresh session, even when base == HEAD in CI.
+      rm -f "$FLOW_STACK_HOME"/anchor/s.hash "$FLOW_STACK_HOME"/anchor/s.count 2>/dev/null || true
+      b="$(prompt 'fix the bug')"
       [ "$a" = "$b" ] && ok "$repo/$p: anchor output identical (fresh session)" || bad "$repo/$p: anchor differs"
     done
   done
