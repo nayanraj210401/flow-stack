@@ -3,7 +3,7 @@ id: scripts.quiet
 title: Scripts and test suites are quiet on pass
 owns: plugins/flow-stack/hooks/*.test.sh plugins/flow-stack/skills/**/*.test.sh plugins/flow-stack/skills/review/scripts/ready.sh plugins/flow-stack/skills/make-routines/scripts/routines.sh
 entries: cli bash <any>.test.sh | cli ready.sh [-v] | cli routines.sh check [-v]
-scenario: bash plugins/flow-stack/hooks/redact.test.sh
+scenario: [ "$(bash plugins/flow-stack/hooks/redact.test.sh 2>&1 | wc -l)" -le 3 ]
 status: unverified
 verified:
 ---

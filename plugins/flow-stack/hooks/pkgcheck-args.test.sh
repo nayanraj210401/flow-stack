@@ -51,4 +51,4 @@ expect deny  'pnpm add -r notreal-pkg'
 expect deny  'npm install -t notreal-pkg'
 expect deny  'pip install -t vendor notreal-pkg'
 
-[ "$FAILS" -eq 0 ] && echo ok || { echo "$FAILS failed"; exit 1; }
+[ "$FAILS" -eq 0 ] && echo "pkgcheck-args: $PASSES passed" || { echo "pkgcheck-args: $FAILS failed"; exit 1; }

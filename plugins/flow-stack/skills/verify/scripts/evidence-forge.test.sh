@@ -58,4 +58,4 @@ grep -qE '^### [^ ]+ · S1 · PASS · exit=0$' "$E" && ok "real S1 PASS block" |
 grep -qE '^    real$' "$E" && ok "output indented inside the block" || bad "output not indented"
 
 [ "$FAILS" -eq 0 ] || { echo "evidence-forge: $FAILS failure(s)"; exit 1; }
-echo "evidence-forge: ok"
+echo "evidence-forge: $PASSES passed"

@@ -59,4 +59,4 @@ grep -q 'refused: someone has read access' summary && ok "refusal written to the
 guard write 7 o/r && ok "same-repo PR passes" || bad "same-repo PR refused"
 ! guard write 7 evil/r && ok "fork PR refused" || bad "fork PR passed"
 ! guard write 7 fail && ok "PR lookup failure refused" || bad "PR lookup failure passed"
-[ "$FAILS" = 0 ]
+[ "$FAILS" -eq 0 ] && echo "routines: $PASSES passed" || { echo "routines: $FAILS failed"; exit 1; }

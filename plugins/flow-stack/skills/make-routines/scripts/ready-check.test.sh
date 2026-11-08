@@ -155,4 +155,4 @@ if [ -f "$am" ] && [ -f "$sp" ]; then
   "$H/routines.sh" safety plugins/flow-stack/skills/brief/SKILL.md >/dev/null && ok "this repo passes a plain skill doc" || bad "brief/SKILL.md flagged"
 fi
 
-[ "$FAILS" = 0 ] && echo "ready-check.test.sh: pass" || { echo "ready-check.test.sh: $FAILS failed"; exit 1; }
+[ "$FAILS" -eq 0 ] && echo "ready-check: $PASSES passed" || { echo "ready-check: $FAILS failed"; exit 1; }

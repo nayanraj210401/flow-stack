@@ -84,6 +84,7 @@ sees "passing run gate shows" "✓ e2e" "$R" -v
 check "all custom gates green passes" "$R"
 Q="$("$R" 2>&1)"; case "$Q" in *"✓"*) bad "quiet on pass: plain run printed a ✓ line: $Q" ;; *) ok "quiet on pass: plain run prints no ✓ lines" ;; esac
 [ "$(printf '%s\n' "$Q" | wc -l | tr -d ' ')" -le 3 ] && ok "plain passing run is at most 3 lines" || bad "plain run too long: $Q"
+printf '%s\n' "$Q" | tail -n1 | grep -qE '^ready for review: [0-9a-f]{7,} stamped$' && ok "last line is the stamp contract" || bad "last line is not 'ready for review: <sha> stamped': $Q"
 printf '{"commands":{"lint":"bash -n src/calc.sh"}}\n' >.flow/config.json
 
 echo "-- flow task: acceptance checks are part of the bar"

@@ -58,4 +58,4 @@ expect ask   'git mv tests/a.test.sh tests/b'
 expect ask   'cp /tmp/x tests/a.test.sh -f'
 expect allow 'cp tests/a.test.sh tests/a.test.sh.bak'
 
-[ "$FAILS" -eq 0 ] && echo ok || { echo "$FAILS failed"; exit 1; }
+[ "$FAILS" -eq 0 ] && echo "sealed-redirect: $PASSES passed" || { echo "sealed-redirect: $FAILS failed"; exit 1; }

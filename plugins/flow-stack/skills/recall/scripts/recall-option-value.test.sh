@@ -14,4 +14,4 @@ for opt in --days --repo --skip; do
   grep -q -- "$opt needs a value" <<<"$out" && ok "$opt: names the option" || bad "$opt: got: $out"
   grep -q "unbound variable" <<<"$out" && bad "$opt: raw bash error" || ok "$opt: no raw bash error"
 done
-[ "$FAILS" = 0 ]
+[ "$FAILS" -eq 0 ] && echo "recall-option-value: $PASSES passed" || { echo "recall-option-value: $FAILS failed"; exit 1; }

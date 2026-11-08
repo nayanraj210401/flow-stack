@@ -126,4 +126,4 @@ HOME="$SB" expect allow "cd ~/wt-ok && gh pr ready 1"
 mkdir -p sub2 && pushd sub2 >/dev/null; expect allow "cd ../../wt-ok && gh pr ready 1"; popd >/dev/null
 pushd "$SB/wt-no" >/dev/null; expect allow "cd ../wt-ok && gh pr ready 1"; expect deny  "gh pr ready 1"; popd >/dev/null
 
-[ "$FAILS" -eq 0 ] && echo "ok" || { echo "$FAILS failed"; exit 1; }
+[ "$FAILS" -eq 0 ] && echo "draft-flag: $PASSES passed" || { echo "draft-flag: $FAILS failed"; exit 1; }

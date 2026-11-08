@@ -66,5 +66,5 @@ check deny  "cwd=.flow path=tasks"      Grep '{"pattern":"m","path":"tasks"}'
 check deny  "cwd=.flow no path"         Grep '{"pattern":"m"}'
 CWD_OVERRIDE=""
 
-[ "$FAILS" -eq 0 ] && { echo "read-guard: all ok"; exit 0; }
+[ "$FAILS" -eq 0 ] && { echo "read-guard: $PASSES passed"; exit 0; }
 echo "read-guard: $FAILS failed"; exit 1

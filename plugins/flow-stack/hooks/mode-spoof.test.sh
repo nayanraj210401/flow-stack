@@ -58,4 +58,4 @@ bash_is allow 'cd ~/.flow-stack && cat auto/s'
 edit_is allow "$SB/repo/notes.txt"
 edit_is allow "$SB/repo/.claude/agents/x.md"
 
-[ "$FAILS" = 0 ] && echo "mode-spoof.test.sh: pass" || { echo "mode-spoof.test.sh: $FAILS failed"; exit 1; }
+[ "$FAILS" -eq 0 ] && echo "mode-spoof: $PASSES passed" || { echo "mode-spoof: $FAILS failed"; exit 1; }
