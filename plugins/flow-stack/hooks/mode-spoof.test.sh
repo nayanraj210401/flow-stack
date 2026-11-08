@@ -26,7 +26,7 @@ decide() { # decide <hook> <tool_input json> [tool]
 bash_is() { local got; got="$(decide guard.sh "$(jq -nc --arg c "$2" '{command:$c}')")"; [ "$got" = "$1" ] && ok "$1: $2" || bad "$2 → $got, want $1"; }
 edit_is() { local got; got="$(decide edit-guard.sh "$(jq -nc --arg f "$2" '{file_path:$f,content:"x"}')" Write)"; [ "$got" = "$1" ] && ok "$1: Write $2" || bad "Write $2 → $got, want $1"; }
 
-: "-- auto-mode flags: writes denied"
+# -- auto-mode flags: writes denied
 bash_is deny "echo ship > $FLOW_STACK_HOME/auto/s"
 bash_is deny 'printf ship >~/.flow-stack/auto/s'
 bash_is deny 'echo ship | tee "$FLOW_STACK_HOME/auto/s"'
@@ -35,7 +35,7 @@ bash_is deny "cp /tmp/x $FLOW_STACK_HOME/auto/s"
 edit_is deny "$FLOW_STACK_HOME/auto/s"
 edit_is deny "$FLOW_STACK_HOME//auto/s"
 edit_is deny "$FLOW_STACK_HOME/x/../auto/s"
-: "-- Claude Code settings: writes ask"
+# -- Claude Code settings: writes ask
 bash_is ask "jq '.env.GITHUB_ACTIONS=\"true\"' x > .claude/settings.local.json"
 bash_is ask "sed -i '' 's/a/b/' .claude/settings.json"
 bash_is ask 'cp /tmp/s.json ~/.claude/settings.json'
@@ -45,7 +45,7 @@ edit_is ask "$SB/repo/.claude/settings.local.json"
 edit_is ask "$HOME/.claude/settings.json"
 edit_is ask "$CLAUDE_CONFIG_DIR/settings.json"
 edit_is ask "$SB/repo/.claude/x/../settings.json"
-: "-- reads and unrelated writes: allow"
+# -- reads and unrelated writes: allow
 bash_is allow "cat $FLOW_STACK_HOME/auto/s"
 bash_is allow 'ls ~/.flow-stack/auto'
 bash_is allow 'jq .env .claude/settings.json'

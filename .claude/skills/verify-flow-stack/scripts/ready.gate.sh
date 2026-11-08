@@ -82,6 +82,8 @@ printf '{"commands":{"lint":"bash -n src/calc.sh"},"ready":[{"id":"e2e","run":"b
 check "record accepts a do id" "$R" record sec-scan done "0 findings"
 sees "passing run gate shows" "✓ e2e" "$R" -v
 check "all custom gates green passes" "$R"
+Q="$("$R" 2>&1)"; case "$Q" in *"✓"*) bad "quiet on pass: plain run printed a ✓ line: $Q" ;; *) ok "quiet on pass: plain run prints no ✓ lines" ;; esac
+[ "$(printf '%s\n' "$Q" | wc -l | tr -d ' ')" -le 3 ] && ok "plain passing run is at most 3 lines" || bad "plain run too long: $Q"
 printf '{"commands":{"lint":"bash -n src/calc.sh"}}\n' >.flow/config.json
 
 echo "-- flow task: acceptance checks are part of the bar"

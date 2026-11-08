@@ -31,7 +31,7 @@ expect() { # expect <want> <command>
   [ "$got" = "$1" ] && ok "$1: $2" || bad "$2 → $got, want $1"
 }
 
-: "-- blind checks: deny however the path is reached"
+# -- blind checks: deny however the path is reached
 expect deny 'cat .flow/tasks/x/blind/a'
 expect deny 'cd .flow/tasks/x && cat blind/a'
 expect deny 'cd .flow/tasks/x/blind; cat a'
@@ -39,13 +39,13 @@ expect deny 'cd .flow && cd tasks/x && cat blind/a'
 expect deny "cd $PWD/.flow/tasks/x && cat blind/a"
 expect deny 'ls .flow/tasks/*/bl*'
 expect deny 'cat .flow/tasks/x/b?ind/a'
-: "-- sealed checks: ask however the path is reached"
+# -- sealed checks: ask however the path is reached
 expect ask 'echo x > tests/a.test.sh'
 expect ask 'cd tests && echo x > a.test.sh'
 expect ask 'cd tests && echo x >a.test.sh'
 expect ask 'cd tests && sed -i s/t/u/ a.test.sh'
 expect ask 'cd src && rm ../tests/a.test.sh'
-: "-- unrelated commands pass"
+# -- unrelated commands pass
 expect allow 'cd .flow/tasks/x && cat SLICES.md'
 expect allow 'ls .flow/tasks/*/SLICES.md'
 expect allow 'cd tests && echo x > b.test.sh'

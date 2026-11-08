@@ -28,16 +28,16 @@ echo 'echo new check' >tests/test_new.sh   # a test the slice adds: main has no 
 echo 'echo worktree' >>tests/test_add.sh  # main's copy differs from the worktree's
 "$SEAL" add tests/test_new.sh tests/test_add.sh >/dev/null
 
-: "-- untouched seals verify intact in the lead worktree"
+# -- untouched seals verify intact in the lead worktree
 v="$("$SEAL" verify)"; rc=$?
 [ "$rc" = 0 ] && ok "seals intact" || bad "false alarm (rc=$rc): $v"
 
-: "-- an edit in the worktree is detected"
+# -- an edit in the worktree is detected
 echo tamper >>tests/test_add.sh
 v="$("$SEAL" verify)"; rc=$?
 { [ "$rc" != 0 ] && has "$v" "CHANGED  tests/test_add.sh"; } && ok "edit detected" || bad "edit missed (rc=$rc): $v"
 
-: "-- reseal records the worktree's hash"
+# -- reseal records the worktree's hash
 "$SEAL" reseal >/dev/null
 v="$("$SEAL" verify)"; rc=$?
 [ "$rc" = 0 ] && ok "intact after reseal" || bad "reseal hashed another file (rc=$rc): $v"

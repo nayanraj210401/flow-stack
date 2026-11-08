@@ -24,3 +24,7 @@ Every script test in `.github/workflows/test.yml` runs on push/PR; a passing run
 
 ## Proof
 - a passing run of each suite prints ≤ 3 lines and exits 0; a failing suite shows its `✗` lines and a non-zero exit.
+
+## Gotchas
+- `ready.sh -v` and `routines.sh check -v` restore the per-check detail; a failing run always prints its `✗` lines and exits nonzero.
+- Section headers in test suites are `#` comments, not `echo`, so a passing suite prints one line.

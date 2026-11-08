@@ -46,7 +46,7 @@ edit() {
 }
 both() { edit "$1" "$2" PreToolUse "$3"; local pre="$OUT"; edit "$1" "$2" PostToolUse "$3"; OUT="$pre$OUT"; }
 
-: "-- the first edit holds the file; the same session edits on freely"
+# -- the first edit holds the file; the same session edits on freely
 both "$B" "$WB" src/calc.sh
 [ -z "$OUT" ] && ok "first edit: silent" || bad "first edit spoke: $OUT"
 ls "$SB/repo/.flow/holds/"* >/dev/null 2>&1 && ok "hold recorded in the main checkout's .flow/holds" || bad "no claim file"
@@ -54,7 +54,7 @@ git status --porcelain | grep -q '\.flow/holds' && bad "hold files show up in gi
 both "$B" "$WB" src/calc.sh
 [ -z "$OUT" ] && ok "holder's own edits stay silent" || bad "holder warned: $OUT"
 
-: "-- soft (default): another session's edit is allowed, with one warning naming the holder"
+# -- soft (default): another session's edit is allowed, with one warning naming the holder
 edit "$A" "$SB/repo" PreToolUse src/calc.sh
 [ -z "$OUT" ] && ok "soft: nothing denied" || bad "soft pre spoke: $OUT"
 edit "$A" "$SB/repo" PostToolUse src/calc.sh
@@ -66,7 +66,7 @@ edit "$A" "$SB/repo" PostToolUse src/calc.sh
 both "$A" "$SB/repo" src/calc.sh
 [ -z "$OUT" ] && ok "the holder keeps the claim; the warned session isn't re-warned" || bad "re-warned: $OUT"
 
-: "-- the band shows ⚡ while this checkout waits on a held file"
+# -- the band shows ⚡ while this checkout waits on a held file
 st="$(FLOW_SESSION_PID="$A" "$PLUGIN/skills/flow/scripts/status.sh" "$SB/repo")"
 [ "$(jq -c '.clash' <<<"$st")" = '[{"path":"src/calc.sh","holder":"pane-b","task":"other","slice":"S3"}]' ] \
   && ok "status.sh lists the held file" || bad "status clash: $(jq -c .clash <<<"$st")"
@@ -83,7 +83,7 @@ printf 'src/gone.sh\t123\n' >>.flow/tasks/demo/.clash   # its hold file was dele
 st_b="$(FLOW_SESSION_PID="$B" "$PLUGIN/skills/flow/scripts/status.sh" "$WB")"
 [ "$(jq -c '.clash // []' <<<"$st_b")" = '[]' ] && ok "the holder's band shows no ⚡" || bad "holder clash: $st_b"
 
-: "-- hard: the other session's edit is denied"
+# -- hard: the other session's edit is denied
 printf '{"holds":"hard"}\n' >.flow/config.json
 edit "$A" "$SB/repo" PreToolUse src/calc.sh
 [ "$(jq -r '.hookSpecificOutput.permissionDecision // empty' <<<"$OUT")" = deny ] && has "$OUT" "pane-b" \
@@ -91,7 +91,7 @@ edit "$A" "$SB/repo" PreToolUse src/calc.sh
 edit "$A" "$SB/repo" PreToolUse src/add.sh
 [ -z "$OUT" ] && ok "hard: an unclaimed file is free" || bad "hard denied a free file: $OUT"
 
-: "-- the claim lapses: holder's slice done, stale, holder gone"
+# -- the claim lapses: holder's slice done, stale, holder gone
 perl -pi -e 's/^status: doing/status: done/' .flow/tasks/other/SLICES.md
 edit "$A" "$SB/repo" PreToolUse src/calc.sh
 [ -z "$OUT" ] && ok "holder's slice done: free" || bad "still held after slice done: $OUT"
@@ -110,7 +110,7 @@ edit "$A" "$SB/repo" PreToolUse src/calc.sh
 both "$A" "$SB/repo" src/calc.sh
 has "$(cat "$f")" "$A" && ok "the next editor takes the claim" || bad "claim not taken: $(cat "$f")"
 
-: "-- a holder with no doing slice still holds (empty fields don't shift the rest)"
+# -- a holder with no doing slice still holds (empty fields don't shift the rest)
 B3="$(session pane-b3)"; printf 'other\n%s\n' "$B3" >"$(git rev-parse --git-common-dir)/worktrees/wt-b/flow-active"
 perl -pi -e 's/^status: doing/status: todo/' .flow/tasks/other/SLICES.md
 both "$B3" "$WB" src/sub.sh
@@ -118,7 +118,7 @@ edit "$A" "$SB/repo" PreToolUse src/sub.sh
 [ "$(jq -r '.hookSpecificOutput.permissionDecision // empty' <<<"$OUT")" = deny ] && ok "slice-less hold denies in hard mode" || bad "slice-less hold: $OUT · $(cat .flow/holds/* | grep sub.sh)"
 perl -pi -e 's/^status: todo/status: doing/' .flow/tasks/other/SLICES.md
 
-: "-- a worker lane of the same task never clashes"
+# -- a worker lane of the same task never clashes
 git worktree add -q -b lane-a ../wt-lane
 WL="$(cd ../wt-lane && pwd -P)"; L="$(session lane-a)"
 ( cd "$WL" && FLOW_SESSION_PID="$L" "$T" join demo >/dev/null 2>&1 )
@@ -126,7 +126,7 @@ both "$A" "$SB/repo" src/mul.sh
 both "$L" "$WL" src/mul.sh
 [ -z "$OUT" ] && ok "a lane of the holder's task edits freely" || bad "lane clashed: $OUT"
 
-: "-- off switch; edits outside src"
+# -- off switch; edits outside src
 C="$(session pane-c)"
 edit "$C" "$SB/repo" PreToolUse src/calc.sh
 [ -z "$OUT" ] || bad "a session with no task of its own was checked: $OUT"

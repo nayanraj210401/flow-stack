@@ -20,25 +20,25 @@ m() {
   if [ "$got" = "$1" ]; then ok "$2 ~ $3 → $1"; else bad "$2 ~ $3 → got $got, want $1"; fi
 }
 
-: "-- **/ matches zero directories"
+# -- **/ matches zero directories
 m yes src/a.ts       'src/**/*.ts'
 m yes a.ts           '**/*.ts'
 m yes tests/api/x.sh 'tests/**/api/**/x.sh'
 m yes src/x/a.ts     'src/**/x/**/*.ts'
 
-: "-- ** and * still cross directories"
+# -- ** and * still cross directories
 m yes src/b/c/a.ts   'src/**/*.ts'
 m yes src/b/a.ts     'src/**/*.ts'
 m yes tests/api/v1/x 'tests/api/**'
 m yes src/b/a.ts     'src/*.ts'
 
-: "-- non-matches stay non-matches"
+# -- non-matches stay non-matches
 m no  lib/a.ts       'src/**/*.ts'
 m no  src/a.js       'src/**/*.ts'
 m no  srcx/a.ts      'src/**/*.ts'
 m no  a.ts           'src/**/*.ts'
 
-: "-- flow_is_test with a **/ glob"
+# -- flow_is_test with a **/ glob
 flow_is_test src/a.spec.ts 'tests/api/** src/**/*.spec.ts' && ok "src/a.spec.ts is a test" || bad "src/a.spec.ts not a test"
 flow_is_test src/a.ts 'tests/api/** src/**/*.spec.ts' && bad "src/a.ts counted as a test" || ok "src/a.ts is not a test"
 

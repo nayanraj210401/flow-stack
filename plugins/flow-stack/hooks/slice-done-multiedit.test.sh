@@ -33,7 +33,7 @@ want() { # want <decision> <label> <tool> <tool_input>
 }
 edits() { jq -nc --arg f "$SF" --argjson e "$1" '{file_path:$f, edits:$e}'; }
 
-: "-- marking a slice done by hand is denied"
+# -- marking a slice done by hand is denied
 want deny "Edit to done" Edit "$(jq -nc --arg f "$SF" '{file_path:$f, old_string:"status: todo", new_string:"status: done"}')"
 want deny "MultiEdit to done" MultiEdit "$(edits '[{"old_string":"status: todo","new_string":"status: done"}]')"
 want deny "MultiEdit, done in a later edit" MultiEdit "$(edits '[{"old_string":"fence: src/**","new_string":"fence: src/a"},{"old_string":"status: todo","new_string":"status: done"}]')"
@@ -44,7 +44,7 @@ want deny "two spaces after the colon" Edit "$(jq -nc --arg f "$SF" '{file_path:
 want deny "tab after the colon" Edit "$(jq -nc --arg f "$SF" '{file_path:$f, old_string:"status: todo", new_string:"status:\tdone"}')"
 want deny "Write with a new done slice" Write "$(jq -nc --arg f "$SF" --rawfile c "$SF" '{file_path:$f, content:($c | sub("status: todo"; "status:  done"))}')"
 
-: "-- other SLICES.md edits stay allowed"
+# -- other SLICES.md edits stay allowed
 want allow "Write leaving the file as it was" Write "$(jq -nc --arg f "$SF" --rawfile c "$SF" '{file_path:$f, content:$c}')"
 want allow "Edit another field" Edit "$(jq -nc --arg f "$SF" '{file_path:$f, old_string:"fence: src/**", new_string:"fence: src/a"}')"
 want allow "MultiEdit another field" MultiEdit "$(edits '[{"old_string":"fence: src/**","new_string":"fence: src/a"}]')"

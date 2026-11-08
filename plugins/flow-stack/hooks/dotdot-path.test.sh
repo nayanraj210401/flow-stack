@@ -30,15 +30,15 @@ want() {
   if [ "$d" = "$2" ]; then ok "$3 → $2"; else bad "$3 → got $d, want $2"; fi
 }
 
-: "-- dot segments cannot leave the fence"
+# -- dot segments cannot leave the fence
 want "$PWD/src/../docs/a.md" deny "src/../docs/a.md"
 want "src/../docs/a.md" deny "relative src/../docs/a.md"
 want "src/../../outside.txt" deny "climbing above the root"
 want "$PWD/tests/../src/../README.md" deny "tests/../src/../README.md"
-: "-- dot segments cannot skip the seal"
+# -- dot segments cannot skip the seal
 want "$PWD/src/../tests/test_mul.sh" ask "src/../tests/test_mul.sh"
 want "tests/./test_mul.sh" ask "tests/./test_mul.sh"
-: "-- plain forms are unchanged"
+# -- plain forms are unchanged
 want "$PWD/src/calc.sh" allow "src/calc.sh"
 want "./src/calc.sh" allow "./src/calc.sh"
 want "$PWD/src/./calc.sh" allow "src/./calc.sh"

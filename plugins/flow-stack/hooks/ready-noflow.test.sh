@@ -25,7 +25,7 @@ is deny ship 'gh pr create --fill'
 is deny ship 'gh pr create --draft --fill'
 is allow pair 'gh pr create --fill'
 
-: "-- gh api and comment writes (#238)"
+# -- gh api and comment writes (#238)
 is deny ship 'gh api -X POST repos/o/r/pulls -f head=x -f base=main'
 is deny ship 'gh api --method=PATCH repos/o/r/pulls/1'
 is deny ship 'gh api repos/o/r/pulls/1/ccr/ready_for_review -f x=1'
@@ -164,7 +164,7 @@ is deny plain 'git bisect run gh pr close 1'
 is deny plain 'git rebase --exec "gh pr close 1" HEAD~1'
 RUNNER_TEMP="$SB" GITHUB_ACTIONS=true GITHUB_RUN_ID=1 RUNNER_ENVIRONMENT=github-hosted is allow ship 'gh pr review 1 --comment --body ok'
 
-: "-- --auto ship with a stamped HEAD: the REST twins of gh pr create/ready pass (cloud has no GraphQL)"
+# -- --auto ship with a stamped HEAD: the REST twins of gh pr create/ready pass (cloud has no GraphQL)
 mkdir -p .flow && printf '%s\t%s\tready\tpass\n' "$(date +%s)" "$(git rev-parse HEAD)" >.flow/ready.tsv
 is allow ship 'gh api -X POST repos/o/r/pulls -f head=feat -f base=main'
 is allow ship 'gh api -X POST repos/o/r/pulls/1/ccr/ready_for_review'

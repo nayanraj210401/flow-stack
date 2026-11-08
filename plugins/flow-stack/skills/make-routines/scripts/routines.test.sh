@@ -11,6 +11,8 @@ ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 
 SB="$(mktemp -d "${TMPDIR:-/tmp}/routines.XXXXXX")"; trap 'rm -rf "$SB"' EXIT
+Q="$(cd "$D/../../../../.." && bash "$S" check 2>&1)"; [ "$(printf '%s\n' "$Q" | wc -l | tr -d ' ')" = 1 ] && grep -qE '^[0-9]+ routines in sync' <<<"$Q" && ok "check is one summary line" || bad "check not quiet: $Q"
+V="$(cd "$D/../../../../.." && bash "$S" check -v 2>&1)"; [ "$(printf '%s\n' "$V" | wc -l | tr -d ' ')" -gt 1 ] && ok "check -v restores per-routine detail" || bad "check -v not verbose: $V"
 (cd "$D/../../../../.." && bash "$S" check >/dev/null) && ok "this repo's routines render byte-identical" || bad "routines.sh check fails at the repo root"
 
 cd "$SB" && git init -q

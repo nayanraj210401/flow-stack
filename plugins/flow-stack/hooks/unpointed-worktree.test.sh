@@ -23,13 +23,13 @@ git worktree add -q ../sub-wt -b worker/sub; SW="$(cd ../sub-wt && pwd -P)"
 M="$SB/main"
 edit() { jq -nc --arg c "$1" --arg f "$1/app.ts" '{hook_event_name:"PreToolUse",session_id:"wt",cwd:$c,tool_name:"Edit",tool_input:{file_path:$f,old_string:"1",new_string:"2"}}'; }
 
-: "-- an unpointed worktree has no task"
+# -- an unpointed worktree has no task
 [ -z "$(cd "$W" && "$T" active)" ] && ok "task.sh active is empty" || bad "active: '$(cd "$W" && "$T" active)'"
 out="$(edit "$W" | "$H/edit-guard.sh" 2>/dev/null)"
 case "$out" in *deny*) bad "edit-guard fenced the human's edit: $out" ;; *) ok "edit outside main's fence is not denied" ;; esac
 [ ! -e "$(git -C "$W" rev-parse --absolute-git-dir)/flow-lane" ] && ok "no flow-lane written" || bad "flow-lane written"
 
-: "-- the main checkout and joined lanes keep working"
+# -- the main checkout and joined lanes keep working
 [ "$(cd "$M" && "$T" active)" = bughunt ] && ok "main still leads bughunt" || bad "main active"
 jq -c '. + {agent_id:"a1"}' <<<"$(edit "$SW")" >"$SB/in.json"
 echo '{"pid":4242,"cwd":"'"$M"'"}' >"$CLAUDE_CONFIG_DIR/sessions/4242.json"

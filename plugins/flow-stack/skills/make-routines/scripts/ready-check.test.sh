@@ -37,14 +37,14 @@ EOF
 chmod +x "$SB/bin/gh"
 export SB PATH="$SB/bin:$PATH" GITHUB_REPOSITORY=o/r GITHUB_STEP_SUMMARY="$SB/summary" GITHUB_OUTPUT="$SB/out"
 
-: "-- rendered workflows"
+# -- rendered workflows
 grep -q '^  checks: write$' $W/flow-self-heal.yml && [ -n "$(step $W/flow-self-heal.yml)" ] && ok "self-heal posts flow/ready (checks: write)" || bad "self-heal has no flow/ready step"
 grep -q "if: steps.stamp.outputs.skip != 'true'" $W/flow-review.yml && ok "review runs only without a passing flow/ready" || bad "review has no skip"
 grep -q '^  checks: read$' $W/flow-self-create.yml && ! grep -q 'flow/ready' $W/flow-self-create.yml && ok "self-create: no flow/ready step, checks read" || bad "self-create grew a flow/ready step"
 grep -q '^  checks: read$' $W/flow-auto-merge.yml && ! grep -q 'flow/ready' $W/flow-auto-merge.yml && ok "auto-merge (contents, not self-heal): no flow/ready step, checks read" || bad "auto-merge posts flow/ready"
 ! grep -q '^$' $W/flow-self-create.yml && ok "an empty placeholder leaves no blank line" || bad "blank line in self-create"
 
-: "-- self-heal: post on the stamped self-heal head only, then mark it ready"
+# -- self-heal: post on the stamped self-heal head only, then mark it ready
 A=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa C=cccccccccccccccccccccccccccccccccccccccc
 cat >"$SB/prs.json" <<EOF
 [{"number":5,"headRefOid":"$A","headRefName":"self-heal/5-x","isCrossRepository":false,"isDraft":true,"author":{"is_bot":true}},
@@ -60,7 +60,7 @@ jq -e '.name == "flow/ready" and .conclusion == "success" and (.output.summary |
 [ "$(grep -c '^gh pr ready' "$SB/calls")" = 1 ] && grep -q '^gh pr ready 5$' "$SB/calls" && ok "#5 marked ready, nothing else" || bad "calls: $(grep 'pr ready' "$SB/calls")"
 rm .flow/ready.tsv "$SB/posted"; bash -eo pipefail -c "$(step $W/flow-self-heal.yml)" && [ ! -f "$SB/posted" ] && ok "no ledger: nothing posted" || bad "posted without a ledger"
 
-: "-- review: skip a stamped self-heal head, review a new or unknown one"
+# -- review: skip a stamped self-heal head, review a new or unknown one
 for c in stamped:true fresh: broken: named: other-app:; do
   : >"$SB/out"; SHA="${c%%:*}" REF=self-heal/5-x bash -eo pipefail -c "$(step $W/flow-review.yml)" || bad "$c: step failed"
   [ "$(sed -n 's/^skip=//p' "$SB/out")" = "${c#*:}" ] && ok "${c%%:*} head: skip='${c#*:}'" || bad "${c%%:*}: out '$(cat "$SB/out")'"
@@ -69,7 +69,7 @@ done
 : >"$SB/out"; SHA=stamped REF=feature/x bash -eo pipefail -c "$(step $W/flow-review.yml)"
 [ ! -s "$SB/out" ] && ok "a stamped head off a self-heal branch is still reviewed" || bad "skipped a non-self-heal PR"
 
-: "-- routine contracts"
+# -- routine contracts
 grep -q 'More than 2 means two rework rounds' "$H/../templates/self-heal.md" && grep -q 'add `needs-human`' "$H/../templates/self-heal.md" && ok "rework capped at 2 rounds, then needs-human" || bad "self-heal has no rework cap"
 grep -q 'never push to any other PR' "$H/../templates/self-heal.md" && ok "rework only on PRs self-heal opened" || bad "no own-PR rule"
 grep -q 'their stamped heads skip it. Rework comes from people' "$H/../templates/self-heal.md" && ! grep -q 'rework' "$H/../templates/review.md" && ok "review starts no rework; people and auto-merge do" || bad "review claims to start rework"
@@ -92,7 +92,7 @@ if grep -q 'heal-ok' "$am"; then
 fi
 grep -q 'also for a PR with a `flow/ready` check' "$am" && ok "auto-merge still reviews a stamped PR itself" || bad "auto-merge trusts the self-written stamp"
 
-: "-- triage: renders without push or PR power; a safety path scores risk:high"
+# -- triage: renders without push or PR power; a safety path scores risk:high
 "$H/routines.sh" add triage >/dev/null || bad "add triage failed"
 tw=$W/flow-triage.yml
 grep -q '^  issues: write$' $tw && grep -q '^  contents: read$' $tw && grep -q '^  pull-requests: read$' $tw && grep -q 'github_token: ${{ github.token }}' $tw &&
@@ -125,7 +125,7 @@ grep -q 'routines.sh safety <files>` exits non-zero |$' "$tt" && grep -q '\*\*ri
 grep -q 'When `.github/routines/triage.md` exists' "$H/../templates/self-heal.md" && grep -q '`risk:high` is never built' "$H/../templates/self-heal.md" &&
   grep -q 'triage miss: predicted' "$H/../templates/self-heal.md" && ok "self-heal: triage picks, never high, re-scores the diff" || bad "self-heal ignores triage"
 
-: "-- ideate: one cited proposal, issues only; self-heal skips a proposal without a human accept"
+# -- ideate: one cited proposal, issues only; self-heal skips a proposal without a human accept
 "$H/routines.sh" add ideate >/dev/null || bad "add ideate failed"
 iw=$W/flow-ideate.yml
 grep -q '^  issues: write$' $iw && grep -q '^  contents: read$' $iw && grep -q '^  pull-requests: read$' $iw && grep -q 'github_token: ${{ github.token }}' $iw &&
@@ -141,7 +141,7 @@ for sh in "$H/../templates/self-heal.md" "$(git -C "$H" rev-parse --show-topleve
     ok "${sh#"$(dirname "$(dirname "$sh")")"/}: a proposal needs a human accept" || bad "$sh builds a proposal without accept"
 done
 
-: "-- one safety list"
+# -- one safety list
 sp="$(git -C "$H" rev-parse --show-toplevel)/.github/routines/safety-paths.txt"
 if [ -f "$am" ] && [ -f "$sp" ]; then
   grep -q 'origin/<base>...FETCH_HEAD | make-routines/scripts/routines.sh safety -z --ref origin/<base>' "$am" && grep -q '`.github/routines/safety-paths.txt`' "$am" && ok "auto-merge reads the safety list" || bad "auto-merge doesn't read the list"

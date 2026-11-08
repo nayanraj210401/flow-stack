@@ -36,18 +36,18 @@ expect() { # expect <want> <env...> -- <command>
 flag() { cat "$FLOW_STACK_HOME/auto/s" 2>/dev/null; }
 stamp() { printf 't\t%s\tready\tpass\t\n' "$(git rev-parse HEAD)" >>.flow/ready.tsv; }
 
-: "-- off a runner: --gha is refused loudly, the session is plain --auto"
+# -- off a runner: --gha is refused loudly, the session is plain --auto
 out="$(prompt -- 'go --gha')"
 grep -q 'REFUSED' <<<"$out" && ok "warning printed" || bad "no refusal warning: $out"
 [ -f "$FLOW_STACK_HOME/auto/s" ] && [ -z "$(flag)" ] && ok "flag is plain auto" || bad "flag is '$(flag)'"
 prompt -- '--auto ship --gha' >/dev/null; [ "$(flag)" = ship ] && ok "--auto ship --gha off a runner is just ship" || bad "flag '$(flag)'"
 prompt -- '--no-auto' >/dev/null
-: "-- partial or spoofed runner env is not a runner"
+# -- partial or spoofed runner env is not a runner
 for e in GITHUB_ACTIONS=true "GITHUB_ACTIONS=true GITHUB_RUN_ID=12" "GITHUB_ACTIONS=true GITHUB_RUN_ID=12 RUNNER_ENVIRONMENT=self-hosted RUNNER_TEMP=$SB/rt" "GITHUB_ACTIONS=true GITHUB_RUN_ID=x1 RUNNER_ENVIRONMENT=github-hosted RUNNER_TEMP=$SB/rt" "GITHUB_ACTIONS=true GITHUB_RUN_ID=12 RUNNER_ENVIRONMENT=github-hosted RUNNER_TEMP=$SB/missing"; do
   prompt $e -- '--gha' >/dev/null; [ -z "$(flag)" ] && ok "refused: $e" || bad "honoured on: $e ($(flag))"
   prompt -- '--no-auto' >/dev/null
 done
-: "-- a flag file the model writes by hand does nothing off a runner"
+# -- a flag file the model writes by hand does nothing off a runner
 mkdir -p "$FLOW_STACK_HOME/auto"; echo gha >"$FLOW_STACK_HOME/auto/s"
 stamp
 expect deny -- 'gh release create v1.0.0 --target feat/x --generate-notes'
@@ -55,18 +55,18 @@ expect deny -- 'gh pr create --title x --body-file b.md'
 expect deny -- 'git push origin feat/x'
 rm -f "$FLOW_STACK_HOME/auto/s"
 
-: "-- on a runner: --gha is honoured"
+# -- on a runner: --gha is honoured
 prompt "${RUNNER[@]}" -- 'Run the routine. /flow-stack:flow --auto ship --gha' >/dev/null
 [ "$(flag)" = gha ] && ok "flag is gha" || bad "flag is '$(flag)'"
 out="$(prompt "${RUNNER[@]}" -- 'next')"; grep -q 'auto gha' <<<"$out" && ok "anchor announces gha on later prompts" || bad "no announcement: $out"
-: "-- stamped: unlocked actions pass"
+# -- stamped: unlocked actions pass
 expect allow "${RUNNER[@]}" -- 'git push origin feat/x'
 expect allow "${RUNNER[@]}" -- 'git push -u origin feat/x'
 expect allow "${RUNNER[@]}" -- 'gh pr create --title x --body-file b.md'
 expect allow "${RUNNER[@]}" -- 'gh pr merge --squash --delete-branch'
 expect allow "${RUNNER[@]}" -- 'gh release create v1.0.0 --target feat/x --generate-notes'
 expect allow "${RUNNER[@]}" -- 'gh release create v1.0.0 --target feat/x --title v1 --notes-file notes.md'
-: "-- hard stops stay denied in CI"
+# -- hard stops stay denied in CI
 expect deny "${RUNNER[@]}" -- 'git push origin main'
 expect deny "${RUNNER[@]}" -- 'git push origin feat/x:main'
 expect deny "${RUNNER[@]}" -- 'git push origin other'
@@ -83,16 +83,16 @@ expect deny "${RUNNER[@]}" -- 'npm publish'
 expect deny "${RUNNER[@]}" -- 'git reset --hard HEAD~1'
 expect deny "${RUNNER[@]}" -- 'git clean -fd'
 expect deny "${RUNNER[@]}" -- 'psql -c "drop table users"'
-: "-- unstamped HEAD: still denied"
+# -- unstamped HEAD: still denied
 printf '' >.flow/ready.tsv
 expect deny "${RUNNER[@]}" -- 'git push origin feat/x'
 expect deny "${RUNNER[@]}" -- 'gh release create v1.0.0'
 stamp
-: "-- ship on a runner does not unlock releases"
+# -- ship on a runner does not unlock releases
 prompt "${RUNNER[@]}" -- '--auto ship' >/dev/null
 expect deny "${RUNNER[@]}" -- 'gh release create v1.0.0 --target feat/x --generate-notes'
 expect allow "${RUNNER[@]}" -- 'git push origin feat/x'
-: "-- FLOW_SHIP_DRAFT=1 (@claude runs): ship opens draft PRs only"
+# -- FLOW_SHIP_DRAFT=1 (@claude runs): ship opens draft PRs only
 D=("${RUNNER[@]}" FLOW_SHIP_DRAFT=1)
 expect allow "${D[@]}" -- 'gh pr create --draft --title x --body-file b.md'
 expect deny "${D[@]}" -- 'gh pr create --title x --body-file b.md'
@@ -101,7 +101,7 @@ expect deny "${D[@]}" -- 'gh pr ready'
 expect allow "${D[@]}" -- 'git push origin feat/x'
 prompt "${RUNNER[@]}" -- '--no-auto' >/dev/null; [ ! -f "$FLOW_STACK_HOME/auto/s" ] && ok "--no-auto ends it" || bad "flag remains"
 
-: "-- plain --auto, unstamped: a PR may go back to draft, nothing else"
+# -- plain --auto, unstamped: a PR may go back to draft, nothing else
 prompt -- '--auto' >/dev/null; printf '' >.flow/ready.tsv
 expect allow -- 'gh pr ready 12 --undo'
 expect allow -- 'gh pr ready --undo 12'
@@ -112,7 +112,7 @@ expect deny -- 'gh pr ready 12 --undo && gh pr merge --squash'
 expect deny -- $'gh pr ready 12 --undo\ngh pr ready 13'
 prompt -- '--no-auto' >/dev/null
 
-: "-- the ready ledger is ready.sh's alone"
+# -- the ready ledger is ready.sh's alone
 expect ask -- 'printf "t\tabc\tready\tpass\t\n" >>.flow/ready.tsv'
 expect ask -- 'sed -i "" s/fix-first/ship/ .flow/ready.tsv'
 expect ask -- 'python3 -c "open(\".flow/ready.tsv\",\"a\").write(\"x\")"'

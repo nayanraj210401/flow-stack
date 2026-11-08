@@ -23,7 +23,7 @@ printf 'sha\ttests/t.sh\n' >.flow/tasks/x/SEALS
 git add -A && git commit -qm i
 SL=.flow/tasks/x/SLICES.md
 
-: "-- hooks.json routes MCP writers to edit-guard, not MCP readers"
+# -- hooks.json routes MCP writers to edit-guard, not MCP readers
 routed() { jq -r --arg t "$1" '[.hooks.PreToolUse[] | select(any(.hooks[].command; test("edit-guard"))) | .matcher] | any(.[]; . as $m | $t | test("^(" + $m + ")$"))' "$H/hooks.json"; }
 for t in mcp__serena__create_text_file mcp__serena__replace_content mcp__serena__replace_symbol_body mcp__serena__insert_after_symbol; do
   [ "$(routed "$t")" = true ] && ok "$t routed" || bad "$t not routed to edit-guard"
@@ -41,7 +41,7 @@ want() { # want <decision> <label> <serena tool> <tool_input>
   [ "$got" = "$1" ] && ok "$2 → $got" || bad "$2: got $got, want $1"
 }
 
-: "-- edit-guard judges serena's relative_path"
+# -- edit-guard judges serena's relative_path
 want deny  "create_text_file outside the fence" create_text_file '{"relative_path":"docs/a.md","content":"x"}'
 want allow "create_text_file inside the fence" create_text_file '{"relative_path":"src/a.py","content":"x"}'
 want ask   "replace_symbol_body in a sealed test" replace_symbol_body '{"relative_path":"tests/t.sh","name_path":"f","body":"x"}'

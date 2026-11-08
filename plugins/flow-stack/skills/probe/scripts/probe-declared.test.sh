@@ -25,7 +25,7 @@ EV=.flow/tasks/pd/EVIDENCE.md
 echo 2 >a.txt
 teeth() { grep -c "probe:$1 · TEETH" "$EV" 2>/dev/null || true; }
 
-: "-- a command other than the declared check is refused"
+# -- a command other than the declared check is refused
 for id in S1 C1; do
   "$PROBE" "$id" false >/dev/null 2>&1; rc=$?
   { [ "$rc" = 2 ] && [ "$(teeth "$id")" = 0 ]; } && ok "$id false: refused" || bad "$id false: rc=$rc, TEETH recorded $(teeth "$id")x"
@@ -33,13 +33,13 @@ done
 "$PROBE" S9 false >/dev/null 2>&1; rc=$?
 [ "$rc" != 2 ] && ok "undeclared S9: runs (no check to hold it to)" || bad "undeclared S9: refused"
 
-: "-- the declared check runs"
+# -- the declared check runs
 for id in S1 C1; do
   "$PROBE" "$id" "grep -q 2 a.txt" >/dev/null 2>&1
   [ "$(teeth "$id")" = 1 ] && ok "$id declared: TEETH" || bad "$id declared: TEETH recorded $(teeth "$id")x"
 done
 
-: "-- free labels run what they are given"
+# -- free labels run what they are given
 "$PROBE" smoke false >/dev/null 2>&1
 [ "$(teeth smoke)" = 1 ] && ok "smoke: runs" || bad "smoke: TEETH recorded $(teeth smoke)x"
 

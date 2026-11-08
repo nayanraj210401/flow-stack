@@ -7,7 +7,7 @@
 #   routines.sh schedule <name> "<m h d M w>" [--tz <zone>]
 #                                                     change a scheduled routine's cron (in its timezone) and re-render it
 #   routines.sh render                                .github/routines/*.md → .github/workflows/flow-<name>.yml
-#   routines.sh check                                 every routine's workflow matches a fresh render; no orphans
+#   routines.sh check [-v]                       every routine's workflow matches a fresh render; no orphans
 #   routines.sh safety [-z] [--ref <ref>] [path ...]  the paths (args, else stdin lines, or NUL-separated with -z) on
 #                                                     .github/routines/safety-paths.txt (at <ref> with --ref; the
 #                                                     repo's own list without one, the plugin default only if it has none): exit 1 on any, 2 on an error

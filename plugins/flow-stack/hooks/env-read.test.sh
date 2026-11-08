@@ -26,7 +26,7 @@ expect() { # expect <want> <command>
   [ "$got" = "$1" ] && ok "$1: $2" || bad "$2 → $got, want $1"
 }
 
-: "-- .env reads: deny"
+# -- .env reads: deny
 expect deny 'cat .env'
 expect deny 'cat "./.env"'
 expect deny "cat '.env'"
@@ -36,7 +36,7 @@ expect deny 'cat .env.production.local'
 expect deny 'cat .env..'
 expect deny 'head -n 3 config/.env.local'
 expect deny 'echo hi && tail .env|wc -l'
-: "-- example/sample/template and non-.env names: allow"
+# -- example/sample/template and non-.env names: allow
 expect allow 'cat .env.example'
 expect allow 'cat ".env.sample" .env.template'
 expect allow 'cat src/env.ts'

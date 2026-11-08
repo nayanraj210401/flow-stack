@@ -22,7 +22,7 @@ step() { # step <name>: the run: block of that step in flow-self-heal.yml, unind
     r && /^          / { print substr($0, 11); next } r { exit }' .github/workflows/flow-self-heal.yml
 }
 
-: "-- kill switch, groups, labels"
+# -- kill switch, groups, labels
 for w in .github/workflows/flow-*.yml; do
   n="${w##*/flow-}"; n="${n%.yml}"
   [[ "$(job_if "$w")" == *"vars.FLOW_FACTORY != 'off'"* ]] && ok "$n: FLOW_FACTORY=off skips it" || bad "$n: no kill switch"
@@ -55,7 +55,7 @@ labels || bad "label step failed with create_labels: true"
 grep -qix 'label create self-heal' gh.log && bad "re-created an existing label (Self-Heal)" || ok "existing label left alone, even in another case"
 grep -qx 'label create heal-ok' gh.log && ok "create_labels: true creates the missing label" || bad "missing label not created: $(cat gh.log)"
 
-: "-- labels.tsv renames catalog labels on add"
+# -- labels.tsv renames catalog labels on add
 mkdir -p "$SB/new/.github/routines" "$SB/new/verify" "$SB/new/.flow/features" && cd "$SB/new" && git init -q
 echo x >verify/run.sh; printf -- '---\nid: a\nscenario: run it\n---\n' >.flow/features/a.md
 git add -A && git -c user.email=a@b -c user.name=a commit -qm i
@@ -76,7 +76,7 @@ out="$(bash "$H/routines.sh" add self-heal --force 2>&1)"
 [[ "$out" == *"no spaces inside a name"* ]] && grep -q approved $r && ok "a bad map line is refused, the routine left as it was" || bad "bad map: $out"
 cd "$SB/repo"
 
-: "-- usage limit vs real failure"
+# -- usage limit vs real failure
 step Outcome >outcome.sh
 outcome() { # outcome <earlier assistant text> <last assistant text> → exit code; summary in $SB/summary
   jq -nc --arg a "$1" --arg b "$2" '[{type:"assistant",message:{content:[{type:"text",text:$a}]}},

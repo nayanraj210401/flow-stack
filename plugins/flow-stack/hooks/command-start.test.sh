@@ -30,7 +30,7 @@ want() { # want <allow|deny> <command>
   if [ "$d" = "$1" ]; then ok "$1: $2"; else bad "$2 → $d, want $1"; fi
 }
 
-: "-- outward commands behind a prefix still wait"
+# -- outward commands behind a prefix still wait
 for c in "git push origin feat" "FOO=1 git push origin feat" "FOO=1 BAR=2 gh pr create --title x" "git -C . push origin feat" \
          "git -c k=v push origin feat" "gh -R a/b pr create --title x" "gh --repo a/b pr merge 3" "npm --prefix x publish" \
          "FOO=1 npm publish" "if true; then git push origin feat; fi" "! git push origin feat" \
@@ -39,7 +39,7 @@ for c in "git push origin feat" "FOO=1 git push origin feat" "FOO=1 BAR=2 gh pr 
   want deny "$c"
 done
 
-: "-- text that only mentions them, and other subcommands, run"
+# -- text that only mentions them, and other subcommands, run
 for c in 'echo "git push"' "grep 'gh pr create' file" "echo FOO=1 git push" "git -C . status" "FOO=1 git status" "npm --prefix x test"; do
   want allow "$c"
 done

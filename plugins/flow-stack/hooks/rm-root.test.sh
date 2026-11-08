@@ -26,7 +26,7 @@ want() {
   if [ "$d" = "$1" ]; then ok "$2 → $1"; else bad "$2 → got $d, want $1"; fi
 }
 
-: "-- root and home are never deleted"
+# -- root and home are never deleted
 want deny 'rm -rf /'
 want deny 'rm -r -f /'
 want deny 'rm -f -r /'
@@ -36,7 +36,7 @@ want deny 'rm -rf "${HOME}"'
 want deny 'rm -r -f ~/'
 want deny 'cd x && rm -rf --no-preserve-root /'
 
-: "-- other targets keep their decision"
+# -- other targets keep their decision
 want allow 'rm -rf ./build'
 want allow 'rm -rf /tmp/x'
 want allow 'rm -r -f build/ dist/'

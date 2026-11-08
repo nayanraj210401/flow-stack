@@ -34,13 +34,13 @@ expect() { # expect <want> <command>
   [ "$got" = "$1" ] && ok "$1: $2" || bad "$2 → $got, want $1"
 }
 
-: "-- switching branches passes"
+# -- switching branches passes
 expect allow 'git checkout main'
 expect allow 'git checkout feature/tests/x'
 expect allow 'git checkout -b tests/x'
 expect allow 'git checkout -b feat/a.test.sh feat/base'
 expect allow 'git checkout -B tests/y'
-: "-- writing a test through checkout/restore is denied"
+# -- writing a test through checkout/restore is denied
 expect deny 'git checkout -- tests/a.test.sh'
 expect deny 'git checkout HEAD -- tests/a.test.sh'
 expect deny 'git checkout tests/a.test.sh'
