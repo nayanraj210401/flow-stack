@@ -14,7 +14,7 @@ ctx="$(tail -n 400 "$tr" | jq -nrR '
 ctx="${ctx:-0}"
 
 tok="$(profile_fm handoff_at_tokens)"
-case "$tok" in ''|*[!0-9]*|0) tok=150000 ;; esac
+[[ "$tok" =~ ^[1-9][0-9]{0,9}$ ]] || tok=150000
 
 sid="$(flow_field .session_id)"
 [ -n "$sid" ] || exit 0

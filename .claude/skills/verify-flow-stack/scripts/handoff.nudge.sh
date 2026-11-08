@@ -39,7 +39,7 @@ printf -- '---\n---\n' >"$FLOW_STACK_HOME/profile.md"
 jq -nc '{type:"assistant", isSidechain:true, message:{usage:{input_tokens:5000}}}' >>"$TR"
 hook handoff-nudge.sh "$(up S4)"
 jq -e '.hookSpecificOutput.additionalContext' <<<"$OUT" >/dev/null 2>&1 && ok "small sidechain line does not hide the nudge" || bad "sidechain hid it: $OUT"
-jq -nc '{type:"assistant", message:{model:"<synthetic>", usage:{input_tokens:0}}}' >>"$TR"
+jq -nc '{type:"assistant", message:{model:"<synthetic>", usage:{input_tokens:5000}}}' >>"$TR"
 hook handoff-nudge.sh "$(up S4)"
 [ -z "$OUT" ] && ok "synthetic zero line does not re-arm" || bad "re-nudged after synthetic: $OUT"
 usage 160000
@@ -66,6 +66,14 @@ printf -- '---\nbudget:\n  handoff_at_tokens: 0\n---\n' >"$FLOW_STACK_HOME/profi
 : >"$TR"; usage 100000
 hook handoff-nudge.sh "$(up S10)"
 [ -z "$OUT" ] && ok "threshold 0 + small ctx → quiet" || bad "nudged on threshold 0: $OUT"
+
+echo "-- an oversized or zero-padded threshold falls back to the default"
+for bad_tok in 99999999999999999999 00; do
+  printf -- '---\nbudget:\n  handoff_at_tokens: %s\n---\n' "$bad_tok" >"$FLOW_STACK_HOME/profile.md"
+  : >"$TR"; usage 100000
+  hook handoff-nudge.sh "$(up "S11-$bad_tok")"
+  [ -z "$OUT" ] && ok "threshold $bad_tok + small ctx → quiet" || bad "nudged on threshold $bad_tok: $OUT"
+done
 
 echo "-- hooks.handoff:false and a missing transcript are quiet"
 printf '{"hooks":{"handoff":false}}\n' >"$FLOW_STACK_HOME/config.json"
