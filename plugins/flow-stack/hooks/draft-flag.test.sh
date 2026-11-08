@@ -4,7 +4,8 @@
 set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 
 SB="$(mktemp -d "${TMPDIR:-/tmp}/draft-flag.XXXXXX")"; SB="$(cd "$SB" && pwd -P)"
@@ -90,4 +91,39 @@ expect allow 'gh pr create --title x \
 expect deny  "bash -c \$'gh pr create --title \\'a -d\\''"
 expect allow "bash -c \$'gh pr create --title x --draft'"
 
-[ "$FAILS" -eq 0 ] && echo "ok" || { echo "$FAILS failed"; exit 1; }
+# #257: a leading `cd <dir> &&` is judged by that dir's repo; a dir outside any repo falls back to the session root.
+git worktree add -q "$SB/wt-ok" -b ok && git -C "$SB/wt-ok" commit -q --allow-empty -m s
+git worktree add -q "$SB/wt-no" -b no && git -C "$SB/wt-no" commit -q --allow-empty -m u
+printf '%s\t%s\tready\tpass\n' "$(date +%s)" "$(git -C "$SB/wt-ok" rev-parse HEAD)" >.flow/ready.tsv
+mkdir -p "$SB/norepo"
+expect allow "cd $SB/wt-ok && gh pr ready 1"
+expect allow "cd ../wt-ok && gh pr create --title x"
+expect deny  "cd $SB/wt-no && gh pr ready 1"
+expect deny  "cd $SB/norepo && gh pr ready 1"
+expect deny  "cd $SB/wt-ok && cd $SB/wt-no && gh pr ready 1"
+expect deny  "cd $SB/wt-ok && { cd $SB/wt-no; gh pr ready 1; }"
+expect deny  "cd $SB/wt-ok && builtin cd $SB/wt-no && gh pr ready 1"
+expect deny  "cd $SB/wt-ok && bash -c 'cd $SB/wt-no && gh pr ready 1'"
+expect deny  "cd $SB/wt-ok && true
+cd $SB/wt-no
+gh pr ready 1"
+expect deny  "cd $SB/wt-ok; gh pr ready 1 && cd $SB/wt-no && gh pr create --title x"
+expect deny  "cd $SB/wt-ok && c''d $SB/wt-no && gh pr ready 1"
+expect deny  "cd $SB/wt-ok && c\\d $SB/wt-no && gh pr ready 1"
+expect deny  "cd $SB/wt-ok && cd\${IFS}$SB/wt-no && gh pr ready 1"
+expect deny  "cd $SB/wt-ok && env -C $SB/wt-no gh pr ready 1"
+expect deny  "cd $SB/wt-ok && cd; gh pr ready 1"
+# another clone with its own stamp and review_gate: yolo is not this repo: judged by the session root
+git clone -q "$SB/wt-ok" "$SB/other" && mkdir -p "$SB/other/.flow" && echo '{"review_gate":"yolo"}' >"$SB/other/.flow/config.json"
+printf '%s\t%s\tready\tpass\n' "$(date +%s)" "$(git -C "$SB/other" rev-parse HEAD)" >"$SB/other/.flow/ready.tsv"
+expect deny  "cd $SB/other && gh pr ready 1"
+# the target is resolved like the shell's cd: L/.. is the dir holding L (here the unstamped session root), not wt-ok
+mkdir -p "$SB/wt-ok/sub" && ln -s "$SB/wt-ok/sub" L
+expect deny  "cd L/.. && gh pr create --title x"
+rm L
+expect deny  "cd .git && gh pr ready 1"
+HOME="$SB" expect allow "cd ~/wt-ok && gh pr ready 1"
+mkdir -p sub2 && pushd sub2 >/dev/null; expect allow "cd ../../wt-ok && gh pr ready 1"; popd >/dev/null
+pushd "$SB/wt-no" >/dev/null; expect allow "cd ../wt-ok && gh pr ready 1"; expect deny  "gh pr ready 1"; popd >/dev/null
+
+[ "$FAILS" -eq 0 ] && echo "draft-flag: $PASSES passed" || { echo "draft-flag: $FAILS failed"; exit 1; }

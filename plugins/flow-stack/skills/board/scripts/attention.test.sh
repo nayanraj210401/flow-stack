@@ -2,6 +2,7 @@
 # attention.test.sh: attention.sh turns a transcript into prompt / answer / question / permission
 # events with capped secs, in time order even when the file is not, and never prints prompt text.
 set -uo pipefail
+pass=0
 H="$(cd "$(dirname "$0")" && pwd)"
 SB="$(mktemp -d "${TMPDIR:-/tmp}/attention.XXXXXX")"; trap 'rm -rf "$SB"' EXIT
 export CLAUDE_CONFIG_DIR="$SB/claude" FLOW_STACK_HOME="$SB/home"; mkdir -p "$CLAUDE_CONFIG_DIR/projects/-r" "$FLOW_STACK_HOME"
@@ -40,18 +41,18 @@ want='["prompt",60,60]
 ["permission",2,2]
 ["prompt",20,20]'
 fail=0
-[ "$got" = "$want" ] && echo "  ✓ events, kinds, caps, order" || { echo "  ✗ events: want
+[ "$got" = "$want" ] && pass=$((pass+1)) || { echo "  ✗ events: want
 $want
 got
 $got"; fail=1; }
 ses="$(jq -c 'select(.kind == "session") | [.sid, .title, .last - .first]' <<<"$out" 2>&1)"
-[ "$ses" = "[\"$sid\",\"Fixture title\",1345]" ] && echo "  ✓ session line" || { echo "  ✗ session: $ses"; fail=1; }
-grep -qE 'thanks|Shall I|agent prompt' <<<"$out" && { echo "  ✗ prompt text leaked"; fail=1; } || echo "  ✓ no prompt text"
+[ "$ses" = "[\"$sid\",\"Fixture title\",1345]" ] && pass=$((pass+1)) || { echo "  ✗ session: $ses"; fail=1; }
+grep -qE 'thanks|Shall I|agent prompt' <<<"$out" && { echo "  ✗ prompt text leaked"; fail=1; } || pass=$((pass+1))
 # a session that moved folders has a copy of its start in each: its events count once, from one worker
 mkdir -p "$CLAUDE_CONFIG_DIR/projects/-r2"
 jq -c 'select(.timestamp == null or (.timestamp | sub("Z$"; "") | . <= "2026-10-27T00:02:00"))' "$CLAUDE_CONFIG_DIR/projects/-r/$sid.jsonl" >"$CLAUDE_CONFIG_DIR/projects/-r2/$sid.jsonl"
 got2="$("$H/attention.sh" 2>&1 | jq -c 'select(.kind != "session") | [.kind, .wait, .secs]' 2>&1)"
-[ "$got2" = "$want" ] && echo "  ✓ a session copied into two folders counts once" || { echo "  ✗ moved session: got
+[ "$got2" = "$want" ] && pass=$((pass+1)) || { echo "  ✗ moved session: got
 $got2"; fail=1; }
 rm -rf "$CLAUDE_CONFIG_DIR/projects/-r2"
 # many busy transcripts at once: parallel workers must never splice lines (jq flushes in 4 KB blocks)
@@ -64,5 +65,5 @@ done
 "$H/attention.sh" >"$SB/busy.out" 2>/dev/null; busy="$(cat "$SB/busy.out")"   # a file, as collect.sh writes it
 bad="$(jq -cR 'fromjson? // "BAD"' <<<"$busy" | grep -c '^"BAD"$')"
 n="$(jq -cR 'fromjson? | select(.kind == "prompt" and (.sid | startswith("abcdef")))' <<<"$busy" | wc -l | tr -d ' ')"
-[ "$bad" = 0 ] && [ "$n" = $((40 * 1200)) ] && echo "  ✓ 40 busy transcripts: every line parses, none lost" || { echo "  ✗ busy: $bad unparseable lines, $n of $((40 * 1200)) prompts"; fail=1; }
-[ "$fail" = 0 ] && echo PASS || exit 1
+[ "$bad" = 0 ] && [ "$n" = $((40 * 1200)) ] && pass=$((pass+1)) || { echo "  ✗ busy: $bad unparseable lines, $n of $((40 * 1200)) prompts"; fail=1; }
+[ "$fail" = 0 ] && echo "attention: $pass passed" || exit 1
