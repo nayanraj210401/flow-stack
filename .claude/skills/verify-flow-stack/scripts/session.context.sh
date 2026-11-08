@@ -2,6 +2,9 @@
 # session.context: SessionStart primer (profile, repo entry, map/features, active task,
 # handoff after compaction), the per-prompt anchor, and the PreCompact snapshot.
 . "$(dirname "$0")/lib.sh"; sandbox session.context
+# a crashing hook still exits 0 (fail open), so "ran clean" means hooks.log took no entry from the last hook run
+hook() { rm -f "$FLOW_STACK_HOME/hooks.log"; OUT="$(printf '%s' "$2" | "$H/$1" 2>>"$ART/stderr.log")" || true; }
+nocrash() { ! [ -s "$FLOW_STACK_HOME/hooks.log" ]; }
 ss() { jq -nc --arg cwd "$PWD" --arg s "${1:-startup}" '{cwd:$cwd, hook_event_name:"SessionStart", source:$s}'; }
 up() { jq -nc --arg cwd "$PWD" '{cwd:$cwd, hook_event_name:"UserPromptSubmit", prompt:"next"}'; }
 
@@ -55,6 +58,33 @@ touch .flow/tasks/demo/INTENT.md
 hook anchor.sh "$(up)"; echo "$OUT" >"$ART/anchor.txt"
 has "$OUT" "[flow anchor · demo] goal: Users can multiply two integers" && ok "anchor goal" || bad "anchor: $OUT"
 has "$OUT" "[flow anchor] not doing: no division" && ok "anchor non-goal" || bad "no non-goal"
+
+echo "-- the anchor is injected once, refreshes only on change, and skips relays"
+up_s() { jq -nc --arg cwd "$PWD" --arg s "$1" --arg p "$2" '{cwd:$cwd, session_id:$s, hook_event_name:"UserPromptSubmit", prompt:$p}'; }
+hook anchor.sh "$(up_s S1 next)"
+has "$OUT" "[flow anchor · demo] goal:" && ok "a new session anchors" || bad "first anchor: $OUT"
+hook anchor.sh "$(up_s S1 next)"
+nocrash && [ -z "$OUT" ] && ok "an unchanged anchor isn't re-injected (hook ran clean)" || bad "re-anchored unchanged or crashed: $OUT"
+hook anchor.sh "$(up_s S2 next)"
+has "$OUT" "[flow anchor · demo] goal:" && ok "a different session anchors its own once" || bad "second session anchor: $OUT"
+hook anchor.sh "$(up_s S3 "$(printf 'Another Claude session sent a message:\n<agent-message from="x">\n  updated the plan\n</agent-message>')")"
+[ -z "$OUT" ] && ok "a relayed prompt injects nothing" || bad "relay injected: $OUT"
+echo "-- refresh on change, every 10th prompt, compact reset"
+perl -pi -e 's/^status: doing/status: todo/' .flow/tasks/demo/SLICES.md
+hook anchor.sh "$(up_s S1 next)"
+nocrash && has "$OUT" "[flow anchor · demo]" && ok "a changed anchor refreshes" || bad "no refresh on change $OUT"
+perl -pi -e 's/^status: todo/status: doing/' .flow/tasks/demo/SLICES.md
+hook anchor.sh "$(up_s S1 next)"   # restored slice: another change, re-injects and restarts the count
+silent=1; for i in 1 2 3 4 5 6 7 8; do hook anchor.sh "$(up_s S1 next)"; [ -z "$OUT" ] || silent=""; done
+[ -n "$silent" ] && ok "prompts 1-8 after an injection stay silent" || bad "re-injected too early"
+hook anchor.sh "$(up_s S1 next)"; nocrash && [ -z "$OUT" ] || bad "9th prompt: $OUT"
+hook anchor.sh "$(up_s S1 next)"
+has "$OUT" "[flow anchor · demo] goal:" && ok "the 10th unchanged prompt refreshes" || bad "no 10-prompt refresh: $OUT"
+hook session-start.sh "$(jq -nc --arg cwd "$PWD" '{cwd:$cwd, session_id:"S1", hook_event_name:"SessionStart", source:"compact"}')"
+nocrash && ok "session-start on compact ran clean" || bad "session-start"
+hook anchor.sh "$(up_s S1 next)"
+has "$OUT" "[flow anchor · demo] goal:" && ok "compaction resets the anchor: re-injected next prompt" || bad "no anchor after compact: $OUT"
+
 hook pre-compact.sh "$(jq -nc --arg cwd "$PWD" '{cwd:$cwd, hook_event_name:"PreCompact"}')"
 A=.flow/tasks/demo/HANDOFF.auto.md
 [ -f "$A" ] && grep -q '^## Resume' "$A" && grep -q '^- doing · S1' "$A" && ok "HANDOFF.auto.md snapshot" || bad "no/partial auto handoff"
@@ -63,6 +93,23 @@ hook session-start.sh "$(ss compact)"
 has "$OUT" "### Handoff (HANDOFF.auto.md)" && ok "handoff re-injected after compact" || bad "no handoff on compact"
 hook session-start.sh "$(ss startup)"
 has "$OUT" "### Handoff" && bad "handoff injected on plain startup" || ok "no handoff on plain startup"
+
+echo "-- /clear resets the anchor too"
+hook anchor.sh "$(up_s S1 next)"
+[ -z "$OUT" ] || bad "setup: anchor not settled: $OUT"
+hook session-start.sh "$(jq -nc --arg cwd "$PWD" '{cwd:$cwd, session_id:"S1", hook_event_name:"SessionStart", source:"clear"}')"
+nocrash && ok "session-start on clear ran clean" || bad "session-start on clear crashed"
+hook anchor.sh "$(up_s S1 next)"
+has "$OUT" "[flow anchor · demo] goal:" && ok "clear resets the anchor: re-injected next prompt" || bad "no anchor after clear: $OUT"
+
+echo "-- compact still resets the anchor when session-start is toggled off"
+hook anchor.sh "$(up_s S1 next)"; hook anchor.sh "$(up_s S1 next)"
+[ -z "$OUT" ] || bad "setup: anchor not settled: $OUT"
+jq '.hooks["session-start"]=false' .flow/config.json >c && mv c .flow/config.json
+hook session-start.sh "$(jq -nc --arg cwd "$PWD" '{cwd:$cwd, session_id:"S1", hook_event_name:"SessionStart", source:"compact"}')"
+nocrash && [ -z "$OUT" ] && ok "session-start off: silent on compact" || bad "session-start off printed or crashed: $OUT"
+hook anchor.sh "$(up_s S1 next)"
+has "$OUT" "[flow anchor · demo] goal:" && ok "compact with session-start off still re-anchors" || bad "anchor state survived compact with session-start off: $OUT"
 
 echo "-- toggles"
 jq '.hooks["session-start"]=false | .hooks.anchor=false' .flow/config.json >c && mv c .flow/config.json
