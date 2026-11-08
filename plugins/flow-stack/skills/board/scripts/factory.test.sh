@@ -3,9 +3,10 @@
 # them and a re-run moves nothing; collect.sh adds board.factory only when the profile names a project,
 # and the page renders the factory panel from it. gh is a stub over fixture GraphQL JSON; nothing real is touched.
 set -uo pipefail
+pass=0
 H="$(cd "$(dirname "$0")" && pwd)"
 SB="$(mktemp -d "${TMPDIR:-/tmp}/factory.XXXXXX")"; trap 'rm -rf "$SB"' EXIT
-fail=0; ck() { if eval "$2"; then echo "  ✓ $1"; else echo "  ✗ $1"; fail=1; fi; }
+fail=0; ck() { if eval "$2"; then pass=$((pass+1)); else echo "  ✗ $1"; fail=1; fi; }
 
 mkdir -p "$SB/bin" "$SB/home"
 # stub gh: graphql returns the fixture; item-edit sets that card's Status in the fixture and logs the call
@@ -119,7 +120,7 @@ printf -- '---\nrigor: lean\n---\n' >"$SB/home/profile.md"
 (cd "$SB/repo" && "$H/collect.sh" --no-cost --no-attention "$SB/repo") >"$SB/off.json" 2>/dev/null
 ck "collect: no factory config → no factory key, gh not called for it" 'jq -e "has(\"factory\") | not" "$SB/off.json" >/dev/null && [ "$(grep -c graphql "$FIX.log")" = 8 ]'
 
-command -v node >/dev/null || { echo "  ~ node missing: factory render checks skipped"; [ $fail = 0 ] && echo PASS; exit $fail; }
+command -v node >/dev/null || { echo "  ~ node missing: factory render checks skipped"; [ $fail = 0 ] && echo "factory: $pass passed"; exit $fail; }
 cat >"$SB/run.js" <<'JS'
 const fs = require('fs'), html = fs.readFileSync(process.argv[2], 'utf8');
 const data = html.match(/<script id="board-data"[^>]*>([\s\S]*?)<\/script>/)[1].replace(/<\\\//g, '</');
@@ -137,4 +138,4 @@ jq '.factory.columns |= map(if .name == "Blocked" then .cards += [{ref: "o/r#20"
 ck "Needs you lists the open Blocked card, not a closed one" 'node -e "const o=JSON.parse(require(\"fs\").readFileSync(process.argv[1]));process.exit(/o\/r#3/.test(o.needs)&&!/o\/r#20/.test(o.needs)?0:1)" "$SB/on.out"'
 "$H/render.sh" "$SB/off.json" "$SB/off.html" >/dev/null && node "$SB/run.js" "$SB/off.html" >"$SB/off.out"
 ck "no factory config: no factory markup" '! grep -qiF "factory" "$SB/off.out"'
-[ $fail = 0 ] && echo PASS || exit 1
+[ $fail = 0 ] && echo "factory: $pass passed" || exit 1
