@@ -35,7 +35,7 @@
                   { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/host.sh\"", "timeout": 5 }]
       },
       {
-        "matcher": "Read|Grep|Glob|Bash",
+        "matcher": "Read|Grep|Glob",
         "hooks": [{ "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/delegate-nudge.sh\"", "timeout": 5 }]
       },
       {

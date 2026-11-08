@@ -2,7 +2,7 @@
 id: budget.delegate
 title: Delegate once a session is long
 owns: plugins/flow-stack/hooks/delegate-nudge.sh plugins/flow-stack/hooks/hooks.json .claude/skills/verify-flow-stack/scripts/delegate.nudge.sh
-entries: hook PostToolUse Read|Grep|Glob|Bash | profile budget: delegate_after_turns:|delegate_after_tokens:| config hooks.delegate
+entries: hook PostToolUse Read|Grep|Glob | profile budget: delegate_after_turns:|delegate_after_tokens:| config hooks.delegate
 scenario: bash .claude/skills/verify-flow-stack/scripts/delegate.nudge.sh
 status: unverified
 verified:
@@ -24,3 +24,7 @@ Once the main thread is long (human turn ≥ `budget:delegate_after_turns`, defa
 
 ## Proof
 - output contains `hookSpecificOutput.additionalContext` naming `flow-agent`, and nothing at turn 3 or for a subagent.
+
+## Gotchas
+- The turn count is over the whole transcript (monotonic), while the read run and context come from the last 3000 lines. Prompts with origin.kind human/person or turnOrigin sdk count; tool_result lines do not.
+- Bash is not matched: a Bash call would reset the read run and never nudge.
