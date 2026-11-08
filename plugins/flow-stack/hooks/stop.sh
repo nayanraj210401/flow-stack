@@ -57,32 +57,32 @@ events="$(tail -n 3000 "$transcript" | jq -nrR --argjson roots "$roots" --arg ch
     and ((.message.content? // "") | type == "string")
     and (.isMeta? != true)
     and ((.message.content // "") | test("<(agent-message|task-notification|system-reminder)[[:space:]>]|^(Delegated task node:|Update on pull request #)") | not);
-  # n is a per-window edit count (stable across calls for a given edit, since calls only append),
-  # and lastE is the n of the most recent E, so the same edit can be ignored on the next pass.
+  # lastE is the tool_use id of the most recent E (stable however far the transcript scrolls), so the
+  # same edit can be ignored on the next pass; n only seeds a fallback key for an id-less call.
   reduce (inputs | fromjson?) as $line
-    ({checks: {}, s: "", n: 0, lastE: 0};
+    ({checks: {}, s: "", n: 0, lastE: ""};
      if ($line | prompt) then .s = "" | .checks = {}
      else
        reduce ($line.message.content? // [] | if type == "array" then .[] else empty end) as $c (.;
          if $c.type == "tool_use" and ($c.name | test("^(Edit|Write|MultiEdit|NotebookEdit)$"))
-            and (($c.input.file_path // $c.input.notebook_path // "") | scratch | not) then .s += "E" | .n += 1 | .lastE = .n
+            and (($c.input.file_path // $c.input.notebook_path // "") | scratch | not) then .s += "E" | .n += 1 | .lastE = ($c.id // "n\(.n)")
          elif $c.type == "tool_use" and $c.name == "Bash" then
            (if ($c.input.command // "" | test($check_re)) then .checks[$c.id // ""] = true else . end)
-           | if ($c.input.command // "" | shell_write) then .s += "E" | .n += 1 | .lastE = .n else . end
+           | if ($c.input.command // "" | shell_write) then .s += "E" | .n += 1 | .lastE = ($c.id // "n\(.n)") else . end
          elif $c.type == "tool_result" and .checks[$c.tool_use_id // ""] and $c.is_error != true and ($c.content | verdict) then .s += "P"
          else . end)
      end) | [.s, .lastE] | @tsv' 2>/dev/null || true)"
 IFS=$'\t' read -r events lastE <<<"$events" || true
-lastE="${lastE:-0}"
+lastE="${lastE:-none}"
 last_msg="$(tail -n 200 "$transcript" | jq -nrR '
   [inputs | fromjson? | select(.type == "assistant")] | last | .message.content // []
   | map(select(.type == "text") | .text) | join("\n")' 2>/dev/null || true)"
 
 claims='\b(done|fixed|works|working now|all (tests|checks) pass(ing)?|passes|complete[d]?|ready to (merge|ship|review))\b'
 if [[ "$events" =~ E[^P]*$ ]] && grep -Eiq "$claims" <<<"$last_msg" && ! grep -q '~ assumed' <<<"$last_msg"; then
-  # Block at most once per edit: remember which edit (its per-window index) was sent back for.
+  # Block at most once per edit: remember which edit (its tool_use id) was sent back for.
   blocked_state="${FLOW_STATE_DIR:-$FLOW_HOME}/stop-blocked/$(printf '%s' "$transcript" | git hash-object --stdin | cut -c1-16)"
-  if [ "$lastE" = "$(cat "$blocked_state" 2>/dev/null || echo 0)" ]; then
+  if [ "$lastE" = "$(cat "$blocked_state" 2>/dev/null || echo -)" ]; then
     notify_done; exit 0
   fi
   mkdir -p "$(dirname "$blocked_state")" && echo "$lastE" >"$blocked_state"

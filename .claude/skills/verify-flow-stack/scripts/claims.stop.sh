@@ -8,9 +8,10 @@ TR="$SB/transcript.jsonl"
 fresh() { : >"$TR"; rm -rf .flow/tasks/*/stop-blocked "$FLOW_STACK_HOME/stop-blocked"; }
 prompt() { jq -nc --arg t "$1" '{type:"user", message:{role:"user", content:$t}}' >>"$TR"; }
 relay()  { jq -nc --arg t "$1" '{type:"user", message:{role:"user", content:$t}, isMeta:true}' >>"$TR"; }
-edit() { jq -nc --arg f "$1" '{type:"assistant", message:{content:[{type:"tool_use", name:"Edit", input:{file_path:$f}}]}}' >>"$TR"; }
-shell() { jq -nc --arg c "$1" '{type:"assistant", message:{content:[{type:"tool_use", name:"Bash", input:{command:$c}}]}}' >>"$TR"; }
 N=0
+edit() { N=$((N + 1)); jq -nc --arg f "$1" --arg id "e$N" '{type:"assistant", message:{content:[{type:"tool_use", id:$id, name:"Edit", input:{file_path:$f}}]}}' >>"$TR"; }
+shell() { N=$((N + 1)); jq -nc --arg c "$1" --arg id "s$N" '{type:"assistant", message:{content:[{type:"tool_use", id:$id, name:"Bash", input:{command:$c}}]}}' >>"$TR"; }
+rawrelay() { jq -nc --arg t "$1" '{type:"user", message:{role:"user", content:$t}}' >>"$TR"; }
 ran() { # ran "<command>" "<output>": a Bash call and its result, paired by id
   N=$((N + 1))
   jq -nc --arg c "$1" --arg id "t$N" '{type:"assistant", message:{content:[{type:"tool_use", id:$id, name:"Bash", input:{command:$c}}]}}' >>"$TR"
@@ -153,17 +154,29 @@ relay "Another Claude session sent a message:
 say "PR #199 is ready to merge."
 expect stop.sh "$(stop)" block "a relayed message is not a human prompt, so the edit still counts"
 fresh; edit "$PWD/src/calc.sh"
-prompt "not the edit's turn, but a token like system-reminder appears in a later relay"
+prompt "not the edit's turn: a relay follows, then a human prompt"
 relay "Update on pull request #199: checks pass"
 prompt "ship it"
 say "Done."
 expect stop.sh "$(stop)" allow "a fresh human prompt after the edit clears the window"
+for m in "Another session sent a message:
+<agent-message>hand-back body</agent-message>" "Update on pull request #199: checks pass" "<task-notification>job done</task-notification>" "<system-reminder>note</system-reminder>" "Delegated task node: n1"; do
+  fresh; edit "$PWD/src/calc.sh"; rawrelay "$m"; say "Done."
+  expect stop.sh "$(stop)" block "a non-meta relay line is not a human prompt: $(printf %s "$m" | head -1)"
+done
 fresh; prompt "make it merge-ready"; edit "$PWD/src/calc.sh"; say "Done."
 expect stop.sh "$(stop)" block "an edit made in this turn still blocks"
 echo "-- block once per edit"
 fresh; edit "$PWD/src/calc.sh"; say "Done, tests pass."
 expect stop.sh "$(stop)" block "first reply without a check is sent back"
 expect stop.sh "$(stop)" allow "the same edit is not sent back twice"
+edit "$PWD/src/other.sh"; say "Done, tests pass."
+expect stop.sh "$(stop)" block "a new edit (new tool_use id) is sent back again"
+fresh; edit "$PWD/src/calc.sh"; say "Done, tests pass."
+expect stop.sh "$(stop)" block "long transcript: first edit sent back"
+for i in $(seq 1 3100); do printf '{"type":"system"}\n' >>"$TR"; done
+edit "$PWD/src/other.sh"; say "Done, tests pass."
+expect stop.sh "$(stop)" block "long transcript: the first edit scrolled out, a new edit is still sent back"
 
 echo "-- outside a task"
 "$S/flow/scripts/task.sh" close >/dev/null 2>&1 || rm -f .flow/ACTIVE
