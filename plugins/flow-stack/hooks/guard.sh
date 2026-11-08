@@ -54,9 +54,9 @@ while IFS= read -r seg; do
   rest="$(sed -E "s/^$gopts[[:space:]]+push//" <<<"$seg")"
   # Judge each word on its own: quotes stripped, long options by git's unique prefix.
   set -f; set -- $rest; set +f
-  del="" mainref="" delref=""
+  del="" delref=""
   for w in "$@"; do
-    w="${w//[\"\']/}"
+    w="${w//[\"\'\\]/}"
     case "$w" in
       --*) [ "${#w}" -ge 4 ] && [[ "--mirror" == "$w"* ]] && wipe_push=1
            [ "${#w}" -ge 4 ] && [[ "--delete" == "$w"* ]] && del=1 ;;
@@ -105,7 +105,7 @@ if has '(^|[;&|(])[[:space:]]*(cd|pushd)[[:space:]]|\.flow/tasks/'; then
       continue
     fi
     for w in "$@"; do
-      w="${w//[\"\']/}"; [[ "$w" =~ ^[0-9\&]*[\<\>]+(.*) ]] && w="${BASH_REMATCH[1]}"
+      w="${w//[\"\'\\]/}"; [[ "$w" =~ ^[0-9\&]*[\<\>]+(.*) ]] && w="${BASH_REMATCH[1]}"
       case "$w" in ""|-*|*\$*) continue ;; esac
       [ -n "$cded" ] || [[ "$w" == *.flow/tasks/* ]] || continue
       case "$w" in /*) p="$(flow_norm "$w")" ;; *) p="$(flow_norm "$dir/$w")" ;; esac

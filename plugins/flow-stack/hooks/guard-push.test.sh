@@ -32,6 +32,8 @@ check ask   'git push -qd origin main'
 check ask   'git push -ud origin main'
 check ask   'git push --del origin main'
 check ask   'git push --mirr'
+check ask   'git push origin \:main'
+check ask   'git push --delete origin ma\in'
 check ask   "git push origin ':main'"
 check ask   'git push origin ":main"'
 check ask   'git push origin :heads/main'
