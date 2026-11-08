@@ -15,12 +15,12 @@ tr="$(flow_field .transcript_path)"; [ -f "$tr" ] || exit 0
 # human = a typed prompt: not a tool result, meta/compact line, slash-command or task-notification echo, or an interrupt marker (mirrors board/attention.sh)
 DEFS='def body: if (.message.content? | type) == "string" then .message.content
           else [.message.content[]? | select(type == "object" and .type == "text") | .text] | join("\n") end;
-def noise: test("^\\s*<(command-name|local-command|task-notification|system-reminder|bash-stdout|bash-stderr)") or test("^\\[Request interrupted");
+def noise: test("^\\s*<(command-message|command-name|local-command|task-notification|system-reminder|bash-stdout|bash-stderr)") or test("^\\[Request interrupted");
 def human: .type == "user" and (.isMeta | not) and (.isCompactSummary | not)
   and ((.message.content? | type) != "array" or any(.message.content[]; type == "object" and .type == "text"))
   and (((.origin.kind? // .turnOrigin? // "human") | . == "human" or . == "person" or . == "sdk"))
   and (body | test("\\S")) and (body | noise | not);'
-turns="$(grep -F '"type":"user"' "$tr" 2>/dev/null | grep -v tool_result | jq -nR "$DEFS"'reduce (inputs | fromjson?) as $l (0; if ($l | human) then . + 1 else . end)' 2>/dev/null || true)"
+turns="$(grep -F '"type":"user"' "$tr" 2>/dev/null | grep -v '"type":"tool_result"' | jq -nR "$DEFS"'reduce (inputs | fromjson?) as $l (0; if ($l | human) then . + 1 else . end)' 2>/dev/null || true)"
 s="$(tail -n 3000 "$tr" | jq -nrR "$DEFS"'
   reduce (inputs | fromjson?) as $l ({ctx:0, reads:0};
     if ($l | human) then .reads = 0
@@ -44,6 +44,7 @@ sid="$(flow_field .session_id)"
 [ -n "$sid" ] || exit 0
 state="$FLOW_HOME/delegate/${sid//\//_}"
 last="$(cat "$state" 2>/dev/null || true)"
+case $last in *[!0-9]*) last=;; esac
 if [ -n "$last" ]; then
   [ $((turns - last)) -lt 3 ] && exit 0
 fi

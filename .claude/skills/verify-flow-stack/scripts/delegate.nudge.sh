@@ -63,8 +63,9 @@ hook delegate-nudge.sh "$(ptool TR)"
 echo "-- slash-command, meta, compact, notification and interrupt lines are not turns"
 : >"$TR"; hu one; as; hu two; as
 uc() { jq -nc --argjson m "$1" '{type:"user", message:{role:"user",content:$m.c}} + $m.x' >>"$TR"; }
-for i in 1 2 3 4; do
+for i in 1 2 3 4 5 6; do
   uc '{"c":"<command-name>/clear</command-name>","x":{}}'
+  uc '{"c":"<command-message>flow</command-message>\n<command-name>/flow-stack:flow</command-name>\n<command-args>go</command-args>","x":{}}'
   uc '{"c":"<local-command-stdout>ok</local-command-stdout>","x":{}}'
   uc '{"c":"<task-notification>done</task-notification>","x":{}}'
   uc '{"c":"<system-reminder>x</system-reminder>","x":{}}'
@@ -74,7 +75,18 @@ for i in 1 2 3 4; do
 done
 reads
 hook delegate-nudge.sh "$(ptool NOISE)"
-[ -z "$OUT" ] && ok "2 real turns + 28 noise lines → quiet" || bad "noise counted as turns: $OUT"
+[ -z "$OUT" ] && ok "2 real turns + 48 noise lines → quiet" || bad "noise counted as turns: $OUT"
+
+echo "-- a prompt that mentions tool_result still counts as a turn"
+: >"$TR"; for i in 1 2 3 4 5 6; do hu "turn $i"; as; done; hu 'fix the "type":"tool_result" parser'; as; reads
+hook delegate-nudge.sh "$(ptool TRP)"
+[ -n "$OUT" ] && ok "prompt text containing tool_result → counted (7th turn)" || bad "prompt mentioning tool_result dropped"
+
+echo "-- a non-numeric state file fails open"
+: >"$TR"; for i in 1 2 3 4 5 6 7 8; do hu "turn $i"; as; done; reads
+mkdir -p "$FLOW_STACK_HOME/delegate"; echo "3x 4" >"$FLOW_STACK_HOME/delegate/BADSTATE"
+hook delegate-nudge.sh "$(ptool BADSTATE)"
+[ -n "$OUT" ] && ok "garbage state → nudges, no crash" || bad "garbage state blocked the nudge"
 
 echo "-- Grep/Glob count toward the run; a non-read tool resets it"
 : >"$TR"; for i in 1 2 3 4 5 6 7 8; do hu "turn $i"; as; done
