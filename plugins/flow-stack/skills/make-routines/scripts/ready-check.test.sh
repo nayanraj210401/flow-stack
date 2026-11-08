@@ -61,11 +61,12 @@ jq -e '.name == "flow/ready" and .conclusion == "success" and (.output.summary |
 rm .flow/ready.tsv "$SB/posted"; bash -eo pipefail -c "$(step $W/flow-self-heal.yml)" && [ ! -f "$SB/posted" ] && ok "no ledger: nothing posted" || bad "posted without a ledger"
 
 # -- routine contracts
+grep -q 'CONFLICTING' "$H/../templates/self-heal.md" && grep -q 'never force-push, never rebase' "$H/../templates/self-heal.md" && ok "self-heal reworks a merge conflict by merging, not rebasing" || bad "no conflict rework"
 grep -q 'APP_TOKEN: ${{ steps.claude.outputs.github_token }}' $W/flow-self-heal.yml && grep -q 'GH_TOKEN="${APP_TOKEN:-$GH_TOKEN}" gh pr ready' $W/flow-self-heal.yml && ok "undraft uses the App token so review fires" || bad "undraft uses github.token"
 grep -q 'first line is exactly `Verdict: ship`' "$H/../templates/review.md" && grep -q 'Verdict: fix' "$H/../templates/self-heal.md" && ok "review states, self-heal reads the Verdict: first line" || bad "verdict contract drifted"
 grep -q 'More than 3 means three rework rounds' "$H/../templates/self-heal.md" && grep -q 'add `needs-human`' "$H/../templates/self-heal.md" && ok "rework capped at 3 rounds, then needs-human" || bad "self-heal has no rework cap"
 grep -q 'never push to any other PR' "$H/../templates/self-heal.md" && ok "rework only on PRs self-heal opened" || bad "no own-PR rule"
-grep -q 'Rework comes from people' "$H/../templates/self-heal.md" && ! grep -q 'rework' "$H/../templates/review.md" && ok "review starts no rework; people and auto-merge do" || bad "review claims to start rework"
+grep -q 'comes from people' "$H/../templates/self-heal.md" && ! grep -q 'rework' "$H/../templates/review.md" && ok "review starts no rework; people and auto-merge do" || bad "review claims to start rework"
 grep -q 'A `self-heal` PR goes back to its routine instead of being blocked' "$am" && ok "auto-merge sends a non-ship self-heal PR to rework" || bad "auto-merge has no rework path"
 grep -q 'last `labeled` event for `auto-merge`' "$am" && ok "auto-merge: a human auto-merge label stays the default path" || bad "auto-merge lost its human label path"
 # an unlabelled self-heal merge (1b) rests on an issue link the agent wrote, so it is opt-in, bound to the branch, and
