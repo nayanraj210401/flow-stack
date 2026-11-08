@@ -9,7 +9,7 @@ verified:
 ---
 # Scripts and test suites are quiet on pass
 
-flow-stack's own test suites and scripts used to print every passing assertion (`✓ …`) back as tool output, and every byte stayed in context; bash results totalled 8.4M characters in 14 days. Now a passing run prints one summary line (`<suite>: N passed`), detail only on failure, and `ready.sh` / `routines.sh check` print a short summary by default with the full detail behind `-v`. The `flow-evidence: PASS` and `ready for review: <sha> stamped` last-line contracts are unchanged.
+flow-stack's own test suites and scripts used to print every passing assertion (`✓ …`) back as tool output, and every byte stayed in context; bash results totalled 8.4M characters in 14 days. Now a passing run prints one short summary line (usually `<suite>: N passed`; the exact wording varies by suite), detail only on failure, and `ready.sh` / `routines.sh check` print a short summary by default with the full detail behind `-v`. The `flow-evidence: PASS` and `ready for review: <sha> stamped` last-line contracts are unchanged.
 
 ## Sub-features
 - scripts.quiet.suite · a passing `*.test.sh` prints ≤ 3 lines (the summary); a failing run still shows each `✗`
