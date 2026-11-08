@@ -24,3 +24,7 @@ The handoff threshold used to be a percentage of the window, which never fires o
 
 ## Proof
 - output contains `hookSpecificOutput.additionalContext` with "handoff", and nothing on the repeat call.
+
+## Gotchas
+- Usage is read from the last assistant request in the transcript; unknown/missing usage stays quiet.
+- The nudge is once per crossing, not a hard stop. The skill's 80%-of-window backstop still applies.
