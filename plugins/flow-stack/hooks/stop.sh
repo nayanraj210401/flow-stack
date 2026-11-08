@@ -53,11 +53,13 @@ events="$(tail -n 3000 "$transcript" | jq -nrR --argjson roots "$roots" --arg ch
     | test("^flow-evidence: PASS|^ready for review: [0-9a-f]+ stamped");
   # Only edits since the last human prompt count; hand-backs, task notifications, relays, and
   # meta lines (isMeta, tool_result lists) are not human prompts.
+  def ptext: (.message.content? // "") | if type == "string" then .
+    elif type == "array" and all(.[]; type == "object" and .type != "tool_result") then [.[] | select(.type == "text") | .text // ""] | join("\n")
+    else null end;
   def prompt: .type == "user"
-    and ((.message.content? // "") | type == "string")
     and (.isMeta? != true)
     and (.isCompactSummary? != true)
-    and ((.message.content // "") | test("<(agent-message|task-notification|system-reminder)[[:space:]>]|^[[:space:]]*<(local-command|bash-stdout|bash-stderr)|^(Delegated task node:|Update on pull request #)") | not);
+    and (ptext | . != null and test("\\S") and (test("<(agent-message|task-notification|system-reminder)[[:space:]>]|^[[:space:]]*<(local-command|bash-stdout|bash-stderr)|^(Delegated task node:|Update on pull request #)") | not));
   # lastE is the tool_use id of the most recent E (stable however far the transcript scrolls), so the
   # same edit can be ignored on the next pass; n only seeds a fallback key for an id-less call.
   reduce (inputs | fromjson?) as $line
