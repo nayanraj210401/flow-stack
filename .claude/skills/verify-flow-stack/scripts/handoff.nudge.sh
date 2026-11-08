@@ -61,6 +61,12 @@ hook handoff-nudge.sh "$(up S6)"
 hook handoff-nudge.sh "$(up S6)"
 jq -e '.hookSpecificOutput.additionalContext' <<<"$OUT" >/dev/null 2>&1 && ok "bad threshold falls back to the default" || bad "no nudge: $OUT"
 
+echo "-- a zero threshold falls back to the default instead of nudging at any size"
+printf -- '---\nbudget:\n  handoff_at_tokens: 0\n---\n' >"$FLOW_STACK_HOME/profile.md"
+: >"$TR"; usage 100000
+hook handoff-nudge.sh "$(up S10)"
+[ -z "$OUT" ] && ok "threshold 0 + small ctx → quiet" || bad "nudged on threshold 0: $OUT"
+
 echo "-- hooks.handoff:false and a missing transcript are quiet"
 printf '{"hooks":{"handoff":false}}\n' >"$FLOW_STACK_HOME/config.json"
 hook handoff-nudge.sh "$(up S8)"
