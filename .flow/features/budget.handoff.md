@@ -24,3 +24,7 @@ The handoff threshold used to be a percentage of the window, which never fires o
 
 ## Proof
 - output contains `hookSpecificOutput.additionalContext` with "handoff", and nothing on the repeat call.
+
+## Gotchas
+- Sidechain (sub-agent), `<synthetic>` and zero-usage assistant lines are skipped: they would hide a real crossing or re-arm the flag.
+- A non-numeric `handoff_at_tokens` (e.g. `150k`) falls back to 150000.

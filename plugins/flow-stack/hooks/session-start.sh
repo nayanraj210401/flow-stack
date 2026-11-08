@@ -11,6 +11,7 @@ source_kind="$(flow_field .source)"
 # records a crashed session never cleared at its end.
 rm -rf "$FLOW_HOME/leads"
 find "$FLOW_HOME/hosts" -type f -mtime +3 -delete 2>/dev/null || true
+find "$FLOW_HOME/handoff" -type f -mtime +7 -delete 2>/dev/null || true
 
 router="$(profile_section Toolchain 2>/dev/null | sed -n 's/^- router:[[:space:]]*\([^ ·]*\).*/\1/p' | head -n1 || true)"
 
