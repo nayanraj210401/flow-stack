@@ -23,4 +23,4 @@ done
 out="$("$T" tdd 'S.' red 2>&1)" && bad "tdd 'S.' accepted" || { grep -q 'no slice' <<<"$out" && ok "tdd 'S.' rejected" || bad "tdd 'S.' failed for another reason: $out"; }
 "$T" slice S2 doing >/dev/null 2>&1 && grep -A1 '^## S2' "$F" | grep -q 'status: doing' && ok "a real id still works" || bad "S2 doing failed"
 [ "$FAILS" = 0 ] || { echo "$FAILS failed"; exit 1; }
-echo "$PASSES passed"
+echo "task-slice-id: $PASSES passed"

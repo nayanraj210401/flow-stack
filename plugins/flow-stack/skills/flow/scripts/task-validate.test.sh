@@ -21,4 +21,4 @@ grep -q 'usd=.5 ctx_pct=20 human_min=30' .flow/tasks/real/ESTIMATE && ok "estima
 mkdir -p .flow/playbooks && echo x >.flow/playbooks/custom.md
 "$T" new mine custom >/dev/null 2>&1 && ok "new accepts a repo playbook" || bad "new rejected .flow/playbooks/custom.md"
 [ "$FAILS" = 0 ] || { echo "$FAILS failed"; exit 1; }
-echo "$PASSES passed"
+echo "task-validate: $PASSES passed"

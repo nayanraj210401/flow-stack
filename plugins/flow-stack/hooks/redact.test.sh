@@ -80,4 +80,4 @@ keeps 'ls -u foo'
 keeps 'git commit -m "Add basic validation for users"'
 keeps 'docker run -u 1000:1000 img'
 
-[ "$FAILS" -eq 0 ] && echo "PASS ($PASSES passed)" || { echo "FAIL: $FAILS"; exit 1; }
+[ "$FAILS" -eq 0 ] && echo "redact: $PASSES passed" || { echo "FAIL: $FAILS"; exit 1; }

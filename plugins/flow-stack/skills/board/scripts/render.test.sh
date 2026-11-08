@@ -10,7 +10,7 @@ printf '{"repos":[{"name":"fill {{BOARD_JSON}} placeholder </script>"}]}\n' >"$S
 want='<script id="board-data" type="application/json">{"repos":[{"name":"fill {{BOARD_JSON}} placeholder <\/script>"}]}</script>'
 ck "data containing {{BOARD_JSON}} renders verbatim, </ escaped" '"$H/render.sh" "$SB/b.json" "$SB/out.html" >/dev/null 2>&1 && grep -qF "$want" "$SB/out.html"'
 
-command -v node >/dev/null || { echo "  ~ node missing: attention render checks skipped"; [ $fail = 0 ] && echo "$pass passed"; exit $fail; }
+command -v node >/dev/null || { echo "  ~ node missing: attention render checks skipped"; [ $fail = 0 ] && echo "render: $pass passed"; exit $fail; }
 cat >"$SB/run.js" <<'JS'
 const fs = require('fs'), html = fs.readFileSync(process.argv[2], 'utf8');
 const data = html.match(/<script id="board-data"[^>]*>([\s\S]*?)<\/script>/)[1].replace(/<\\\//g, '</');
@@ -43,4 +43,4 @@ ck "no attention: sessions listed, no minutes shown" 'grep -qF "2 sessions" "$SB
 ck "warning text in tile and Needs you, escaped, crit pill" 'grep -qF "🔴 over budget" "$SB/new.out" && grep -qF "🟡 3 sessions" "$SB/new.out" && ! grep -qF "<i>Fix" "$SB/new.out" && grep -q "p-crit" "$SB/new.out"'
 ck "task card lists sessions, sid8 when untitled" 'grep -qF "2 sessions" "$SB/new.out" && grep -qF "99887766" "$SB/new.out" && ! grep -qF "<b>x" "$SB/new.out"'
 ck "old board: no attention markup, no sessions, no JS error" '[ -s "$SB/old.out" ] && ! grep -qF "sessions" "$SB/old.out" && node -e "const o=JSON.parse(require(\"fs\").readFileSync(process.argv[1]));process.exit(o.tile===\"\"&&!/attention/.test(o.needs)?0:1)" "$SB/old.out"'
-[ $fail = 0 ] && echo "$pass passed" || exit 1
+[ $fail = 0 ] && echo "render: $pass passed" || exit 1

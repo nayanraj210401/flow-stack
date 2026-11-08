@@ -11,5 +11,5 @@ git add -A && git commit -qm init
 out="$("$H/collect.sh" --no-cost --no-prs "$SB/r" 2>/dev/null | jq -r '.repos[0].quality.dims[]|select(.id=="tests" or .id=="markers")|.detail' 2>/dev/null)"
 want="1 test files for 2 source files
 1 TODO/FIXME/HACK/XXX in 3 lines"
-if [ "$out" = "$want" ]; then pass=$((pass+1)); echo "$pass passed"
+if [ "$out" = "$want" ]; then pass=$((pass+1)); echo "collect-quality: $pass passed"
 else echo "  ✗ quality: want [$want] got [$out]"; exit 1; fi

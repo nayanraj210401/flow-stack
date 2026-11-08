@@ -25,4 +25,4 @@ case "$out" in
   *) bad "no trail → output has no '## git' section" ;;
 esac
 
-[ "$FAILS" -eq 0 ] && echo "PASS ($PASSES passed)" || { echo "FAIL: $FAILS"; exit 1; }
+[ "$FAILS" -eq 0 ] && echo "trace-stats: $PASSES passed" || { echo "FAIL: $FAILS"; exit 1; }

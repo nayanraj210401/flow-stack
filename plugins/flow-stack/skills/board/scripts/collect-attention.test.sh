@@ -34,4 +34,4 @@ chk no_prefs_warning "$(jq -c '.prefs.warnings' <<<"$j")" '[]'
 n="$("$H/collect.sh" --no-cost --no-prs --no-attention "$SB/r" 2>/dev/null)"
 chk no_attention "$(jq -c '[.attention, (.repos[0].tasks[0].sessions|map([.title,.calls,has("min")]))]' <<<"$n")" '[null,[["",1,false],["",2,false]]]'
 bash "$H/collect-quality.test.sh" >/dev/null 2>&1 && pass=$((pass+1)) || { echo "  ✗ quality test"; fail=1; }
-[ "$fail" = 0 ] && echo "$pass passed" || exit 1
+[ "$fail" = 0 ] && echo "collect-attention: $pass passed" || exit 1

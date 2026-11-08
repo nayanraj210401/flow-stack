@@ -21,4 +21,4 @@ check e2/ "pkg/package.json "
 check e2 "pkg/package.json "
 check "$SB/.hid" "sub/package.json "
 
-[ "$FAILS" -eq 0 ] && echo "PASS ($PASSES passed)" || { echo "FAIL: $FAILS"; exit 1; }
+[ "$FAILS" -eq 0 ] && echo "ecosystem: $PASSES passed" || { echo "FAIL: $FAILS"; exit 1; }

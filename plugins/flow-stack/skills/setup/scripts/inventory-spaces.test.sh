@@ -20,4 +20,4 @@ chk .repo_skills '["repo one"]'
 chk .user_agents '["my agent"]'
 chk .user_commands '["do it"]'
 [ "$FAILS" = 0 ] || { echo "$FAILS failed"; exit 1; }
-echo "$PASSES passed"
+echo "inventory-spaces: $PASSES passed"

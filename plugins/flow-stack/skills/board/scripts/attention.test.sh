@@ -66,4 +66,4 @@ done
 bad="$(jq -cR 'fromjson? // "BAD"' <<<"$busy" | grep -c '^"BAD"$')"
 n="$(jq -cR 'fromjson? | select(.kind == "prompt" and (.sid | startswith("abcdef")))' <<<"$busy" | wc -l | tr -d ' ')"
 [ "$bad" = 0 ] && [ "$n" = $((40 * 1200)) ] && pass=$((pass+1)) || { echo "  ✗ busy: $bad unparseable lines, $n of $((40 * 1200)) prompts"; fail=1; }
-[ "$fail" = 0 ] && echo "$pass passed" || exit 1
+[ "$fail" = 0 ] && echo "attention: $pass passed" || exit 1

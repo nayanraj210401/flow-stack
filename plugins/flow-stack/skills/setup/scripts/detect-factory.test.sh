@@ -91,4 +91,4 @@ out="$("$D")"
 want verify ok 'committed verify driver'
 want factory ok
 [ "$FAILS" = 0 ] || { echo "$FAILS failed"; exit 1; }
-echo "$PASSES passed"
+echo "detect-factory: $PASSES passed"

@@ -340,4 +340,4 @@ check "the re-run of acme/api#5 failed" 'grep -q "^✗ acme/api#5 · the agent f
 pushed="$(git -C "$SB/remotes/acme/api.git" rev-parse feat-x)"; out="$("$S" push acme/api#5 2>&1)"; rc=$?
 check "push finds nothing prepared; the branch is untouched" '[ $rc != 0 ] && grep -q "nothing prepared" <<<"$out" && [ "$(git -C "$SB/remotes/acme/api.git" rev-parse feat-x)" = "$pushed" ]'
 
-[ $fail = 0 ] && echo "PASS ($PASSES passed)" || { echo FAIL; exit 1; }
+[ $fail = 0 ] && echo "shift: $PASSES passed" || { echo "shift: $fail failed"; exit 1; }

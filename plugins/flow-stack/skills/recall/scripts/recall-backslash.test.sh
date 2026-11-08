@@ -25,4 +25,4 @@ out="$("$R" grep 'temp\\new')"
 out="$("$R" sessions)"
 grep -qF "first: $msg" <<<"$out" && ok "sessions shows the prompt as written" || bad "sessions: $out"
 [ "$FAILS" = 0 ] || { echo "$FAILS failed"; exit 1; }
-echo "$PASSES passed"
+echo "recall-backslash: $PASSES passed"

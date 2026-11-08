@@ -62,4 +62,4 @@ case "$out" in "repo	org/api	"*) ok "a repo name with a slash still routes" ;; *
 "$T" route "add rate limits" >/dev/null
 [ ! -e "$SB/api/.flow" ] && ok "routing creates no task" || bad "route touched $SB/api/.flow"
 [ "$FAILS" = 0 ] || { echo "$FAILS failed"; exit 1; }
-echo "$PASSES passed"
+echo "task-route: $PASSES passed"

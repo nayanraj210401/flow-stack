@@ -20,4 +20,4 @@ jq -e '.sid=="s2" and .kind=="elicitation_dialog"' <<<"$(sed -n 2p "$W" 2>/dev/n
 rm -rf "$W"; mkdir "$W"   # unwritable target: must fail open
 send '{"notification_type":"permission_prompt","session_id":"s4"}'; rc=$?
 [ "$rc" = 0 ] || { echo "  ✗ failed write changed exit to $rc"; fail=1; }
-[ "$fail" = 0 ] && { pass=$((pass+1)); echo "$pass passed"; } || exit 1
+[ "$fail" = 0 ] && echo "notify-waits: ok" || exit 1

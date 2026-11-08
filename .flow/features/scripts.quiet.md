@@ -3,7 +3,7 @@ id: scripts.quiet
 title: Scripts and test suites are quiet on pass
 owns: plugins/flow-stack/hooks/*.test.sh plugins/flow-stack/skills/**/*.test.sh plugins/flow-stack/skills/review/scripts/ready.sh plugins/flow-stack/skills/make-routines/scripts/routines.sh
 entries: cli bash <any>.test.sh | cli ready.sh [-v] | cli routines.sh check [-v]
-scenario: [ "$(bash plugins/flow-stack/hooks/redact.test.sh 2>&1 | wc -l)" -le 3 ]
+scenario: bash .claude/skills/verify-flow-stack/scripts/scripts.quiet.sh
 status: unverified
 verified:
 ---
@@ -20,7 +20,7 @@ flow-stack's own test suites and scripts used to print every passing assertion (
 - Run any `*.test.sh`; run `ready.sh -v` for the full bar; run `routines.sh check -v` for per-routine detail.
 
 ## Driving it
-Every script test in `.github/workflows/test.yml` runs on push/PR; a passing run now emits one line. `redact.test.sh` is a representative quick suite.
+Every script test in `.github/workflows/test.yml` runs on push/PR; a passing run now emits one line. `.claude/skills/verify-flow-stack/scripts/scripts.quiet.sh` runs `redact.test.sh` (passes quiet, exit 0), then a copy with `redact()` broken (shows `✗`, exits non-zero).
 
 ## Proof
 - a passing run of each suite prints ≤ 3 lines and exits 0; a failing suite shows its `✗` lines and a non-zero exit.
