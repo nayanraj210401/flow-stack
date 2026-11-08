@@ -4,7 +4,8 @@
 set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)"; PLUGIN="$(cd "$H/.." && pwd)"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 
 SB="$(mktemp -d "${TMPDIR:-/tmp}/dotdot.XXXXXX")"; SB="$(cd "$SB" && pwd -P)"
@@ -29,20 +30,20 @@ want() {
   if [ "$d" = "$2" ]; then ok "$3 → $2"; else bad "$3 → got $d, want $2"; fi
 }
 
-echo "-- dot segments cannot leave the fence"
+# -- dot segments cannot leave the fence
 want "$PWD/src/../docs/a.md" deny "src/../docs/a.md"
 want "src/../docs/a.md" deny "relative src/../docs/a.md"
 want "src/../../outside.txt" deny "climbing above the root"
 want "$PWD/tests/../src/../README.md" deny "tests/../src/../README.md"
-echo "-- dot segments cannot skip the seal"
+# -- dot segments cannot skip the seal
 want "$PWD/src/../tests/test_mul.sh" ask "src/../tests/test_mul.sh"
 want "tests/./test_mul.sh" ask "tests/./test_mul.sh"
-echo "-- plain forms are unchanged"
+# -- plain forms are unchanged
 want "$PWD/src/calc.sh" allow "src/calc.sh"
 want "./src/calc.sh" allow "./src/calc.sh"
 want "$PWD/src/./calc.sh" allow "src/./calc.sh"
 want "$PWD/tests/../src/calc.sh" allow "tests/../src/calc.sh (resolves inside src/**)"
 want "$PWD/tests/test_mul.sh" ask "tests/test_mul.sh"
 
-[ "$FAILS" -eq 0 ] && { echo "== dotdot-path · PASS"; exit 0; }
+[ "$FAILS" -eq 0 ] && { echo "== dotdot-path · PASS ($PASSES passed)"; exit 0; }
 echo "== dotdot-path · FAIL ($FAILS)"; exit 1

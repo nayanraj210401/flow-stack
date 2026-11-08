@@ -4,7 +4,8 @@
 set -uo pipefail
 D="$(cd "$(dirname "$0")" && pwd)"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 
 SB="$(mktemp -d "${TMPDIR:-/tmp}/diffstat.XXXXXX")"; trap 'rm -rf "$SB"' EXIT
@@ -17,4 +18,4 @@ grep -q '^added=5 ' <<<"$out" && ok "added=5 (3 + 2, binary 0)" || bad "wrong to
 grep -q '+3 .*nonl.txt' <<<"$out" && ok "unterminated last line counted" || bad "nonl.txt: $out"
 grep -q '+0 .*bin.dat' <<<"$out" && ok "binary counts 0" || bad "bin.dat: $out"
 grep -q "empty.txt" <<<"$out" && ok "empty file still listed" || bad "empty.txt dropped: $out"
-[ "$FAILS" = 0 ]
+[ "$FAILS" -eq 0 ] && echo "diffstat: $PASSES passed" || { echo "diffstat: $FAILS failed"; exit 1; }

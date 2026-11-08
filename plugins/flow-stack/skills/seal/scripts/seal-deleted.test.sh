@@ -3,7 +3,8 @@
 set -uo pipefail
 S="$(cd "$(dirname "$0")" && pwd)/seal.sh"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 SB="$(mktemp -d "${TMPDIR:-/tmp}/seal-deleted.XXXXXX")"; SB="$(cd "$SB" && pwd -P)"
 trap 'rm -rf "$SB"' EXIT
@@ -21,4 +22,4 @@ case "$out" in *"sealed: tests/b.sh"*) bad "announced the deleted file" ;; *) ok
 grep -Eq '^[0-9a-f]{64}  ' .flow/tasks/x/SEALS && ok "the seal has a hash" || bad "hashless seal"
 "$S" verify | grep -q 'seals intact (1 files)' && ok "verify counts 1 file" || bad "verify count wrong"
 [ "$FAILS" = 0 ] || { echo "== seal-deleted · FAIL ($FAILS)"; exit 1; }
-echo "== seal-deleted · PASS"
+echo "== seal-deleted · PASS ($PASSES passed)"
