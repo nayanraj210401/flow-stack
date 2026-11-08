@@ -91,6 +91,15 @@ has "$OUT" "### Handoff (HANDOFF.auto.md)" && ok "handoff re-injected after comp
 hook session-start.sh "$(ss startup)"
 has "$OUT" "### Handoff" && bad "handoff injected on plain startup" || ok "no handoff on plain startup"
 
+echo "-- compact still resets the anchor when session-start is toggled off"
+hook anchor.sh "$(up_s S1 next)"; hook anchor.sh "$(up_s S1 next)"
+[ -z "$OUT" ] || bad "setup: anchor not settled: $OUT"
+jq '.hooks["session-start"]=false' .flow/config.json >c && mv c .flow/config.json
+hook session-start.sh "$(jq -nc --arg cwd "$PWD" '{cwd:$cwd, session_id:"S1", hook_event_name:"SessionStart", source:"compact"}')"
+[ "$RC" = 0 ] && [ -z "$OUT" ] && ok "session-start off: silent on compact" || bad "session-start off printed or crashed (rc $RC): $OUT"
+hook anchor.sh "$(up_s S1 next)"
+has "$OUT" "[flow anchor · demo] goal:" && ok "compact with session-start off still re-anchors" || bad "anchor state survived compact with session-start off: $OUT"
+
 echo "-- toggles"
 jq '.hooks["session-start"]=false | .hooks.anchor=false' .flow/config.json >c && mv c .flow/config.json
 hook session-start.sh "$(ss)"; [ -z "$OUT" ] && ok "session-start off → silent" || bad "still printed"

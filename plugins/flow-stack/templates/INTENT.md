@@ -1,7 +1,7 @@
 # Intent · {{slug}}
 
 ## Goal
-<!-- One sentence: the outcome, from the user's point of view. The anchor hook injects this line on every prompt. -->
+<!-- One sentence: the outcome, from the user's point of view. The anchor hook injects this line once per session, when it changes, and every 10th prompt. -->
 
 ## Why now
 <!-- The problem this solves and who feels it. -->

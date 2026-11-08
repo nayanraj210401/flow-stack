@@ -3,21 +3,22 @@
 # entry, and the active task anchor. After compaction, re-inject the handoff.
 . "$(dirname "$0")/lib.sh"
 flow_init session-start
-flow_enabled session-start || exit 0
-
 source_kind="$(flow_field .source)"
+
+# Compaction drops the injected anchor and banner from context: forget what this session was told, so the
+# next prompt re-injects both. Runs before the toggle: the anchor hook has its own switch.
+if [ "$source_kind" = compact ]; then
+  sid="$(flow_field .session_id)"
+  [ -n "$sid" ] && rm -f "$FLOW_HOME/anchor/${sid//\//_}".*
+fi
+
+flow_enabled session-start || exit 0
 
 # Housekeeping: the pre-ownership lead registry (gone since tasks have owners), and sidebar push
 # records a crashed session never cleared at its end.
 rm -rf "$FLOW_HOME/leads"
 find "$FLOW_HOME/hosts" -type f -mtime +3 -delete 2>/dev/null || true
 find "$FLOW_HOME/anchor" -type f -mtime +7 -delete 2>/dev/null || true
-# Compaction drops the injected anchor and banner from context: forget what this session was told, so the next prompt re-injects both.
-if [ "$source_kind" = compact ]; then
-  sid="$(flow_field .session_id)"
-  [ -n "$sid" ] && rm -f "$FLOW_HOME/anchor/${sid//\//_}".*
-fi
-
 router="$(profile_section Toolchain 2>/dev/null | sed -n 's/^- router:[[:space:]]*\([^ ·]*\).*/\1/p' | head -n1 || true)"
 
 echo '# flow-stack'
