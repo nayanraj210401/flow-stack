@@ -5,7 +5,7 @@ owns: .claude-plugin/marketplace.json plugins/flow-stack/.claude-plugin/plugin.j
 entries: cli /plugin marketplace add ~/Project/flow-stack | cli /plugin install flow-stack@flow-stack | cli claude plugin validate
 scenario: bash .claude/skills/verify-flow-stack/scripts/plugin.install.sh
 status: verified
-verified: 2026-10-29 90da7be
+verified: 2026-11-08 7f9f1ae
 ---
 # Install the plugin
 
