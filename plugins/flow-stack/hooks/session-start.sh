@@ -5,9 +5,9 @@
 flow_init session-start
 source_kind="$(flow_field .source)"
 
-# Compaction drops the injected anchor and banner from context: forget what this session was told, so the
+# Compaction and /clear drop the injected anchor and banner from context: forget what this session was told, so the
 # next prompt re-injects both. Runs before the toggle: the anchor hook has its own switch.
-if [ "$source_kind" = compact ]; then
+if [ "$source_kind" = compact ] || [ "$source_kind" = clear ]; then
   sid="$(flow_field .session_id)"
   [ -n "$sid" ] && rm -f "$FLOW_HOME/anchor/${sid//\//_}".*
 fi
