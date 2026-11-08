@@ -42,6 +42,12 @@ jq -e '.hookSpecificOutput.additionalContext' <<<"$OUT" >/dev/null 2>&1 && ok "s
 jq -nc '{type:"assistant", message:{model:"<synthetic>", usage:{input_tokens:0}}}' >>"$TR"
 hook handoff-nudge.sh "$(up S4)"
 [ -z "$OUT" ] && ok "synthetic zero line does not re-arm" || bad "re-nudged after synthetic: $OUT"
+usage 160000
+hook handoff-nudge.sh "$(up S4)"
+[ -z "$OUT" ] && ok "next real over-threshold line after a synthetic one is not a new crossing" || bad "re-nudged after synthetic: $OUT"
+jq -nc '{type:"assistant", message:{usage:{input_tokens:0}}}' >>"$TR"
+hook handoff-nudge.sh "$(up S4)"
+[ -z "$OUT" ] && ok "plain zero-usage line is ignored too" || bad "re-nudged after zero-usage line: $OUT"
 : >"$TR"; usage 100000; jq -nc '{type:"assistant", isSidechain:true, message:{usage:{input_tokens:200000}}}' >>"$TR"
 hook handoff-nudge.sh "$(up S5)"
 [ -z "$OUT" ] && ok "large sidechain line does not nudge a small main session" || bad "sidechain nudged: $OUT"
