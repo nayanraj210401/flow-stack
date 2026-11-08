@@ -5,10 +5,13 @@
 . "$(dirname "$0")/lib.sh"; sandbox claims.stop
 toy_task demo "mul multiplies" "no division"
 TR="$SB/transcript.jsonl"
-fresh() { : >"$TR"; }
-edit() { jq -nc --arg f "$1" '{type:"assistant", message:{content:[{type:"tool_use", name:"Edit", input:{file_path:$f}}]}}' >>"$TR"; }
-shell() { jq -nc --arg c "$1" '{type:"assistant", message:{content:[{type:"tool_use", name:"Bash", input:{command:$c}}]}}' >>"$TR"; }
+fresh() { : >"$TR"; rm -rf .flow/tasks/*/stop-blocked "$FLOW_STACK_HOME/stop-blocked"; }
+prompt() { jq -nc --arg t "$1" '{type:"user", message:{role:"user", content:$t}}' >>"$TR"; }
+relay()  { jq -nc --arg t "$1" '{type:"user", message:{role:"user", content:$t}, isMeta:true}' >>"$TR"; }
 N=0
+edit() { N=$((N + 1)); jq -nc --arg f "$1" --arg id "e$N" '{type:"assistant", message:{content:[{type:"tool_use", id:$id, name:"Edit", input:{file_path:$f}}]}}' >>"$TR"; }
+shell() { N=$((N + 1)); jq -nc --arg c "$1" --arg id "s$N" '{type:"assistant", message:{content:[{type:"tool_use", id:$id, name:"Bash", input:{command:$c}}]}}' >>"$TR"; }
+rawrelay() { jq -nc --arg t "$1" '{type:"user", message:{role:"user", content:$t}}' >>"$TR"; }
 ran() { # ran "<command>" "<output>": a Bash call and its result, paired by id
   N=$((N + 1))
   jq -nc --arg c "$1" --arg id "t$N" '{type:"assistant", message:{content:[{type:"tool_use", id:$id, name:"Bash", input:{command:$c}}]}}' >>"$TR"
@@ -139,6 +142,72 @@ expect stop.sh "$(stop)" block "in a task, the reason names the checks that coun
 has "$OUT" "evidence.sh C<n>" && has "$OUT" "ready.sh" && ! has "$OUT" "smoke" && ok "in-task reason: C/S, features, ready.sh; no smoke" || bad "in-task reason: $OUT"
 fresh; shell "git status >/dev/null 2>&1 && ls 2>&1 | head; echo x >> .flow/tasks/demo/notes.md"; say "Done."
 expect stop.sh "$(stop)" allow "Bash with only null, fd, and .flow redirects"
+
+echo "-- the current turn only (the human prompt is the window)"
+fresh; edit "$PWD/src/calc.sh"
+prompt "make it merge-ready"
+say "PR #199 is ready to merge, both checks pass."
+expect stop.sh "$(stop)" allow "an old edit before a human prompt is not in scope"
+fresh; edit "$PWD/src/calc.sh"
+relay "Another Claude session sent a message:
+<agent-message>hand-back body</agent-message>"
+say "PR #199 is ready to merge."
+expect stop.sh "$(stop)" block "a relayed message is not a human prompt, so the edit still counts"
+fresh; edit "$PWD/src/calc.sh"
+prompt "not the edit's turn: a relay follows, then a human prompt"
+relay "Update on pull request #199: checks pass"
+prompt "ship it"
+say "Done."
+expect stop.sh "$(stop)" allow "a fresh human prompt after the edit clears the window"
+for m in "Another session sent a message:
+<agent-message>hand-back body</agent-message>" "Update on pull request #199: checks pass" "<task-notification>job done</task-notification>" "<system-reminder>note</system-reminder>" "Delegated task node: n1"; do
+  fresh; edit "$PWD/src/calc.sh"; rawrelay "$m"; say "Done."
+  expect stop.sh "$(stop)" block "a non-meta relay line is not a human prompt: $(printf %s "$m" | head -1)"
+done
+fresh; edit "$PWD/src/calc.sh"
+jq -nc '{type:"user", isCompactSummary:true, message:{role:"user", content:"This session is being continued from a previous conversation. Summary: ..."}}' >>"$TR"
+say "Done."
+expect stop.sh "$(stop)" block "auto-compaction mid-turn (compact summary) is not a human prompt"
+for k in task-notification system; do
+  fresh; edit "$PWD/src/calc.sh"
+  jq -nc --arg k "$k" '{type:"user", origin:{kind:$k}, message:{role:"user", content:"background job finished"}}' >>"$TR"
+  say "Done."
+  expect stop.sh "$(stop)" block "a user line with origin.kind $k is not a human prompt"
+done
+fresh; edit "$PWD/src/calc.sh"
+jq -nc '{type:"user", origin:{kind:"human"}, message:{role:"user", content:"ship it"}}' >>"$TR"
+say "Done."
+expect stop.sh "$(stop)" allow "origin.kind human is a human prompt"
+fresh; edit "$PWD/src/calc.sh"; rawrelay "<bash-stdout>ok</bash-stdout>"; say "Done."
+expect stop.sh "$(stop)" block "bash-stdout output is not a human prompt"
+fresh; edit "$PWD/src/calc.sh"; rawrelay "<bash-stderr>warn</bash-stderr>"; say "Done."
+expect stop.sh "$(stop)" block "bash-stderr output is not a human prompt"
+fresh; edit "$PWD/src/calc.sh"
+jq -nc '{type:"user", message:{role:"user", content:[{type:"text", text:"ship the fix"}]}}' >>"$TR"
+say "PR is ready to merge."
+expect stop.sh "$(stop)" allow "a human prompt stored as a text-block array clears the window"
+fresh; edit "$PWD/src/calc.sh"
+jq -nc '{type:"user", message:{role:"user", content:[{type:"text", text:"<system-reminder>x</system-reminder>"}]}}' >>"$TR"
+say "Done."
+expect stop.sh "$(stop)" block "a relay stored as a text-block array is not a human prompt"
+fresh; edit "$PWD/src/calc.sh"; rawrelay "<local-command-stdout>ok</local-command-stdout>"; say "Done."
+expect stop.sh "$(stop)" block "local-command output is not a human prompt"
+fresh; jq -nc --arg f "$PWD/src/calc.sh" '{type:"assistant", message:{content:[{type:"tool_use", id:"toolu_01XE", name:"Edit", input:{file_path:$f}}]}}' >>"$TR"
+prompt "what is the status?"; say "Done, nothing to change."
+expect stop.sh "$(stop)" allow "a turn with no edit after an old edit whose id has an uppercase E"
+fresh; prompt "make it merge-ready"; edit "$PWD/src/calc.sh"; say "Done."
+expect stop.sh "$(stop)" block "an edit made in this turn still blocks"
+echo "-- block once per edit"
+fresh; edit "$PWD/src/calc.sh"; say "Done, tests pass."
+expect stop.sh "$(stop)" block "first reply without a check is sent back"
+expect stop.sh "$(stop)" allow "the same edit is not sent back twice"
+edit "$PWD/src/other.sh"; say "Done, tests pass."
+expect stop.sh "$(stop)" block "a new edit (new tool_use id) is sent back again"
+fresh; edit "$PWD/src/calc.sh"; say "Done, tests pass."
+expect stop.sh "$(stop)" block "long transcript: first edit sent back"
+for i in $(seq 1 3100); do printf '{"type":"system"}\n' >>"$TR"; done
+edit "$PWD/src/other.sh"; say "Done, tests pass."
+expect stop.sh "$(stop)" block "long transcript: the first edit scrolled out, a new edit is still sent back"
 
 echo "-- outside a task"
 "$S/flow/scripts/task.sh" close >/dev/null 2>&1 || rm -f .flow/ACTIVE

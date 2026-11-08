@@ -14,6 +14,7 @@ mkdir -p "$FLOW_STACK_HOME" "$SB/repo" && cd "$SB/repo" && git init -q
 # transcript: one Bash call, then a reply claiming success
 run() { # run <command> → block|allow
   local t="$SB/t.jsonl"
+  rm -rf "$FLOW_STACK_HOME/stop-blocked"   # each case is a fresh transcript: reset the block-once state
   jq -nc --arg c "$1" '{type:"assistant",message:{content:[{type:"tool_use",id:"t1",name:"Bash",input:{command:$c}}]}}' >"$t"
   jq -nc '{type:"user",message:{content:[{type:"tool_result",tool_use_id:"t1",content:"ok"}]}}' >>"$t"
   jq -nc '{type:"assistant",message:{content:[{type:"text",text:"PR #12 is ready to merge."}]}}' >>"$t"

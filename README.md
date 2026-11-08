@@ -362,7 +362,7 @@ Check your own spend with `/flow-stack:budget` (uses ccusage) and the estimate-v
 | **slice gate** | `status: done` can only be set by `task.sh slice <id> done`, which requires red first, green after the last edit, probe TEETH, and the line budget. |
 | **circuit** (PostToolUse) | The same failing check 3 times → stop, attack the premise, `challenge`, and ask you. |
 | **trail** (PostToolUse) | Every tool call goes to `trail.jsonl` with secrets redacted. |
-| **claims** (Stop) | "Done", "works", or "fixed" with no passing evidence since the last edit → sent back once to verify or say `~ assumed`. |
+| **claims** (Stop) | "Done", "works", or "fixed" with no passing evidence since the last edit this turn → sent back once per edit to verify or say `~ assumed`. |
 | **anchor** (UserPromptSubmit) | A 3-line goal and slice reminder on every prompt while a task is active. |
 | **session-start / pre-compact / notify** | Profile and toolchain context; a handoff snapshot before compaction; a notification when the agent is blocked on you. |
 
