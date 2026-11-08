@@ -66,8 +66,8 @@ set_schedule() { # set_schedule <name> <cron> <tz or "">
 
 # ready.sh's stamp lives in .flow/ready.tsv on a runner that is thrown away. The self-heal routine carries it to the
 # open self-heal PR whose head it stamped, as a flow/ready check run, then marks that draft ready. Events made with
-# github.token start no workflows, so the undraft uses the Claude App token the agent step pushed with (when the action
-# exposes it): ready_for_review then starts the review routine, whose verdict self-heal reads for its next rework round.
+# github.token start no workflows, so that undraft starts none; review runs on a self-heal draft instead (its trigger
+# gate lets self-heal/* heads through), so the verdict self-heal reads for its next rework round doesn't wait on it.
 # The check says "this run's ready.sh passed on this SHA", not "an independent reviewer passed it": the guard keeps the
 # agent's tools off the ledger, but code the agent runs in the same job could still write it. So nothing merges on it.
 stamp_step() { # stamp_step <the label self-heal puts on its PRs>
@@ -77,7 +77,6 @@ stamp_step() { # stamp_step <the label self-heal puts on its PRs>
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
-          APP_TOKEN: ${{ steps.claude.outputs.github_token }}
         run: |
           t=.flow/ready.tsv; [ -f "$t" ] || exit 0
           gh pr list --state open --label @PR_LABEL@ --json number,headRefOid,headRefName,isCrossRepository,isDraft,author \
@@ -88,7 +87,7 @@ stamp_step() { # stamp_step <the label self-heal puts on its PRs>
               jq -Rs --arg sha "$sha" '{name: "flow/ready", head_sha: $sha, status: "completed", conclusion: "success",
                 output: {title: "ready.sh stamped this commit", summary: ("```\n" + . + "```")}}' |
               gh api "repos/$GITHUB_REPOSITORY/check-runs" --input - >/dev/null || { echo "::warning::flow/ready not posted on #$n"; continue; }
-            [ "$draft" != true ] || GH_TOKEN="${APP_TOKEN:-$GH_TOKEN}" gh pr ready "$n" </dev/null || echo "::warning::#$n stays a draft"
+            [ "$draft" != true ] || gh pr ready "$n" </dev/null || echo "::warning::#$n stays a draft"
             echo "flow/ready on #$n at ${sha:0:7}" >>"$GITHUB_STEP_SUMMARY"
           done
 EOF
@@ -115,7 +114,7 @@ render_one() { # render_one <name>: the workflow on stdout
     pull_request)
       on='  pull_request:'$'\n''    types: [opened, synchronize, ready_for_review]'
       # drafts aren't ready, fork PRs get no secrets, and Dependabot runs get only Dependabot's secrets
-      iff="    if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'"
+      iff="    if: (github.event.pull_request.draft == false || startsWith(github.event.pull_request.head.ref, 'self-heal/')) && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'"
       group='-${{ github.event.pull_request.number }}' cancel=true
       ctx=' The pull request is #${{ github.event.pull_request.number }}.' ;;
     mention)
