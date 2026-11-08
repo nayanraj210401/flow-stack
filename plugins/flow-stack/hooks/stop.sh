@@ -56,7 +56,8 @@ events="$(tail -n 3000 "$transcript" | jq -nrR --argjson roots "$roots" --arg ch
   def prompt: .type == "user"
     and ((.message.content? // "") | type == "string")
     and (.isMeta? != true)
-    and ((.message.content // "") | test("<(agent-message|task-notification|system-reminder)[[:space:]>]|^(Delegated task node:|Update on pull request #)") | not);
+    and (.isCompactSummary? != true)
+    and ((.message.content // "") | test("<(agent-message|task-notification|system-reminder)[[:space:]>]|^[[:space:]]*<(local-command|bash-stdout|bash-stderr)|^(Delegated task node:|Update on pull request #)") | not);
   # lastE is the tool_use id of the most recent E (stable however far the transcript scrolls), so the
   # same edit can be ignored on the next pass; n only seeds a fallback key for an id-less call.
   reduce (inputs | fromjson?) as $line
