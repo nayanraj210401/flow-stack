@@ -5,7 +5,7 @@ owns: plugins/flow-stack/hooks/delegate-nudge.sh plugins/flow-stack/hooks/delega
 entries: hook PostToolUse Read|Grep|Glob | profile budget: delegate_after_turns:|delegate_after_tokens: | config hooks.delegate
 scenario: bash .claude/skills/verify-flow-stack/scripts/delegate.nudge.sh
 status: verified
-verified: 2026-11-08 3649aa0
+verified: 2026-11-08 7f9f1ae
 ---
 # Delegate once a session is long
 
