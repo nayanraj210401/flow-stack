@@ -364,7 +364,7 @@ Check your own spend with `/flow-stack:budget` (uses ccusage) and the estimate-v
 | **trail** (PostToolUse) | Every tool call goes to `trail.jsonl` with secrets redacted. |
 | **claims** (Stop) | "Done", "works", or "fixed" with no passing evidence since the last edit → sent back once to verify or say `~ assumed`. |
 | **anchor** (UserPromptSubmit) | A 3-line goal and slice reminder on every prompt while a task is active. |
-| **delegate nudge** (PostToolUse Read, Grep, Glob) | A long session (turn >= `budget: delegate_after_turns`, default 7, or context >= `delegate_after_tokens`, default 120K) that starts a run of 4 reads gets one line: hand the bulk reading to a subagent. Quiet for subagents and short sessions; `hooks.delegate: false` turns it off. |
+| **delegate nudge** (PostToolUse Read, Grep, Glob) | A long session (turn >= `budget: delegate_after_turns`, default 7, or context >= `delegate_after_tokens`, default 120000) that starts a run of 4 reads gets one line: hand the bulk reading to a subagent. Quiet for subagents and short sessions; `hooks.delegate: false` turns it off. |
 | **session-start / pre-compact / notify** | Profile and toolchain context; a handoff snapshot before compaction; a notification when the agent is blocked on you. |
 
 Hooks fail open: if `jq` is missing or a script errors, the action is allowed and a warning goes to `~/.flow-stack/hooks.log`. Turn any hook off in `.flow/config.json` (repo) or `~/.flow-stack/config.json` (global): `{"hooks": {"fence": false}}`.

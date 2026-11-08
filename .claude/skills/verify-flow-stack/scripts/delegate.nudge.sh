@@ -9,6 +9,7 @@ hu() { jq -nc --arg t "$1" '{type:"user", message:{role:"user",content:$t}, orig
 as() { jq -nc '{type:"assistant", message:{content:[{type:"text",text:"ok"}]}}' >>"$TR"; }
 rd() { jq -nc --arg f "$1" '{type:"assistant", message:{content:[{type:"tool_use", name:"Read", input:{file_path:$f}}]}}' >>"$TR"; }
 reads() { rd src/a.sh; rd src/b.sh; rd src/c.sh; rd src/d.sh; }
+nz() { jq -e .hookSpecificOutput.additionalContext <<<"$OUT" >/dev/null 2>&1; }
 ptool() { jq -nc --arg sid "$1" --arg tp "$TR" '{session_id:$sid, transcript_path:$tp, cwd:"'"$PWD"'", hook_event_name:"PostToolUse", tool_name:"Read"}'; }
 
 echo "-- a short session with a read run stays quiet"
@@ -29,10 +30,10 @@ echo "-- a subagent's reads never nudge the main thread (fresh session: only the
 hook delegate-nudge.sh "$(jq -nc --arg tp "$TR" '{agent_id:"a1", session_id:"SUB", transcript_path:$tp, cwd:"'"$PWD"'", hook_event_name:"PostToolUse", tool_name:"Read"}')"
 [ -z "$OUT" ] && ok "subagent read → quiet" || bad "subagent nudged: $OUT"
 hook delegate-nudge.sh "$(ptool SUB)"
-[ -n "$OUT" ] && ok "same session, no agent_id → nudges (so the guard is what silenced it)" || bad "fresh session did not nudge"
+nz && ok "same session, no agent_id → nudges (so the guard is what silenced it)" || bad "fresh session did not nudge"
 mkdir -p "$SB/ng"; cp "$H"/*.sh "$SB/ng/"; sed -i.bak '/flow_field .agent_id/d' "$SB/ng/delegate-nudge.sh"
 OUT="$(jq -nc --arg tp "$TR" '{agent_id:"a1", session_id:"SUB2", transcript_path:$tp, cwd:"'"$PWD"'", hook_event_name:"PostToolUse"}' | bash "$SB/ng/delegate-nudge.sh" 2>/dev/null)" || true
-[ -n "$OUT" ] && ok "TEETH: guard deleted → subagent nudged" || bad "guard has no teeth"
+nz && ok "TEETH: guard deleted → subagent nudged" || bad "guard has no teeth"
 
 echo "-- re-nudge only after >=3 more human turns"
 hu t9; as; hu t10; as; reads
@@ -40,22 +41,22 @@ hook delegate-nudge.sh "$(ptool S)"
 [ -z "$OUT" ] && ok "2 turns after the nudge → quiet" || bad "re-nudged early: $OUT"
 hu t11; as; reads
 hook delegate-nudge.sh "$(ptool S)"
-[ -n "$OUT" ] && ok "3 turns after the nudge → nudges again" || bad "no re-nudge"
+nz && ok "3 turns after the nudge → nudges again" || bad "no re-nudge"
 
 echo "-- scroll-out: old prompts leaving the 3000-line window cannot silence it"
 : >"$TR"; for i in 1 2 3 4 5 6 7 8; do hu "turn $i"; as; done
 for i in $(seq 1 3100); do as; done
 hu t9; as; reads
 hook delegate-nudge.sh "$(ptool SCROLL)"
-[ -n "$OUT" ] && ok "8+ turns, most scrolled out → nudges" || bad "scroll-out silenced it"
+nz && ok "8+ turns, most scrolled out → nudges" || bad "scroll-out silenced it"
 
 echo "-- sdk and person origins count as turns"
 : >"$TR"; for i in 1 2 3 4 5 6 7 8; do jq -nc '{type:"user", message:{role:"user",content:"p"}, turnOrigin:"sdk"}' >>"$TR"; as; done; reads
 hook delegate-nudge.sh "$(ptool SDK)"
-[ -n "$OUT" ] && ok "turnOrigin sdk → counted" || bad "sdk turns ignored"
+nz && ok "turnOrigin sdk → counted" || bad "sdk turns ignored"
 : >"$TR"; for i in 1 2 3 4 5 6 7 8; do jq -nc '{type:"user", message:{role:"user",content:"p"}, origin:{kind:"person"}}' >>"$TR"; as; done; reads
 hook delegate-nudge.sh "$(ptool PERSON)"
-[ -n "$OUT" ] && ok "origin person → counted" || bad "person turns ignored"
+nz && ok "origin person → counted" || bad "person turns ignored"
 : >"$TR"; for i in 1 2 3 4 5 6 7 8; do jq -nc '{type:"user", message:{role:"user",content:[{type:"tool_result",content:"x"}]}}' >>"$TR"; as; done; reads
 hook delegate-nudge.sh "$(ptool TR)"
 [ -z "$OUT" ] && ok "tool_result lines are not turns" || bad "tool results counted: $OUT"
@@ -77,23 +78,49 @@ reads
 hook delegate-nudge.sh "$(ptool NOISE)"
 [ -z "$OUT" ] && ok "2 real turns + 48 noise lines → quiet" || bad "noise counted as turns: $OUT"
 
+echo "-- sidechain lines are neither turns nor reads; relayed-session messages are not turns"
+: >"$TR"; hu one; as
+for i in 1 2 3 4 5 6; do jq -nc '{type:"user", isSidechain:true, message:{role:"user",content:"agent prompt"}, origin:{kind:"human"}}' >>"$TR"; done
+jq -nc '{type:"user", message:{role:"user",content:"Another Claude session sent a message: hi"}}' >>"$TR"
+for i in 1 2 3 4 5 6; do jq -nc '{type:"user", message:{role:"user",content:"Another Claude session sent a message: hi"}}' >>"$TR"; done
+reads
+hook delegate-nudge.sh "$(ptool SIDE)"
+[ -z "$OUT" ] && ok "sidechain prompts + relayed messages → not turns → quiet" || bad "counted: $OUT"
+: >"$TR"; for i in 1 2 3 4 5 6 7 8; do hu "turn $i"; as; done
+for i in 1 2 3 4; do jq -nc '{type:"assistant", isSidechain:true, message:{content:[{type:"tool_use", name:"Read", input:{file_path:"x"}}]}}' >>"$TR"; done
+hook delegate-nudge.sh "$(ptool SIDER)"
+[ -z "$OUT" ] && ok "sidechain reads don't build a run → quiet" || bad "sidechain reads counted: $OUT"
+
+echo "-- threshold values must be digits: 120K falls back to the default"
+printf -- '---\nbudget:\n  delegate_after_turns: soon\n  delegate_after_tokens: 120K\n---\n' >"$FLOW_STACK_HOME/profile.md"
+: >"$TR"; for i in 1 2 3 4 5 6 7 8; do hu "turn $i"; as; done; reads
+hook delegate-nudge.sh "$(ptool BADNUM)"
+nz && ok "non-numeric turns → default 7 → nudges at turn 8" || bad "bad threshold broke the hook: $OUT"
+: >"$TR"; hu one; as
+for f in a b c d; do
+  jq -nc '{type:"assistant", message:{content:[{type:"tool_use", name:"Read", input:{file_path:"x"}}], usage:{input_tokens:130000}}}' >>"$TR"
+done
+hook delegate-nudge.sh "$(ptool BADTOK)"
+nz && ok "120K tokens → default 120000 → context trigger still works" || bad "120K silenced the token trigger: $OUT"
+rm -f "$FLOW_STACK_HOME/profile.md"
+
 echo "-- a prompt that mentions tool_result still counts as a turn"
 : >"$TR"; for i in 1 2 3 4 5 6; do hu "turn $i"; as; done; hu 'fix the "type":"tool_result" parser'; as; reads
 hook delegate-nudge.sh "$(ptool TRP)"
-[ -n "$OUT" ] && ok "prompt text containing tool_result → counted (7th turn)" || bad "prompt mentioning tool_result dropped"
+nz && ok "prompt text containing tool_result → counted (7th turn)" || bad "prompt mentioning tool_result dropped"
 
 echo "-- a non-numeric state file fails open"
 : >"$TR"; for i in 1 2 3 4 5 6 7 8; do hu "turn $i"; as; done; reads
 mkdir -p "$FLOW_STACK_HOME/delegate"; echo "3x 4" >"$FLOW_STACK_HOME/delegate/BADSTATE"
 hook delegate-nudge.sh "$(ptool BADSTATE)"
-[ -n "$OUT" ] && ok "garbage state → nudges, no crash" || bad "garbage state blocked the nudge"
+nz && ok "garbage state → nudges, no crash" || bad "garbage state blocked the nudge"
 
 echo "-- Grep/Glob count toward the run; a non-read tool resets it"
 : >"$TR"; for i in 1 2 3 4 5 6 7 8; do hu "turn $i"; as; done
 rd a; jq -nc '{type:"assistant", message:{content:[{type:"tool_use", name:"Grep", input:{pattern:"x"}}]}}' >>"$TR"
 jq -nc '{type:"assistant", message:{content:[{type:"tool_use", name:"Glob", input:{pattern:"*"}}]}}' >>"$TR"; rd b
 hook delegate-nudge.sh "$(ptool G)"
-[ -n "$OUT" ] && ok "Read+Grep+Glob+Read → nudge" || bad "Grep/Glob not counted"
+nz && ok "Read+Grep+Glob+Read → nudge" || bad "Grep/Glob not counted"
 : >"$TR"; for i in 1 2 3 4 5 6 7 8; do hu "turn $i"; as; done
 rd a; rd b; rd c; jq -nc '{type:"assistant", message:{content:[{type:"tool_use", name:"Edit", input:{}}]}}' >>"$TR"; rd d
 hook delegate-nudge.sh "$(ptool E)"
@@ -114,7 +141,7 @@ hook delegate-nudge.sh "$(ptool S2)"
 printf -- '---\nbudget:\n  delegate_after_turns: 2\n---\n' >"$FLOW_STACK_HOME/profile.md"
 : >"$TR"; hu one; as; hu two; as; hu three; as; reads
 hook delegate-nudge.sh "$(ptool S3)"
-[ -n "$OUT" ] && ok "delegate_after_turns 2 → nudges at turn 3" || bad "lowered threshold ignored"
+nz && ok "delegate_after_turns 2 → nudges at turn 3" || bad "lowered threshold ignored"
 printf -- '---\nbudget:\n  delegate_after_turns: 100\n  delegate_after_tokens: 20000\n---\n' >"$FLOW_STACK_HOME/profile.md"
 : >"$TR"; hu one; as; hu two; as; hu three; as
 for f in a b c d; do

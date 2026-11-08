@@ -16,7 +16,7 @@ run() {
 }
 want() { # want <nudge|quiet> <label> <output>
   if [ "$1" = nudge ]; then
-    [ -n "$3" ] || { echo "  ✗ $2"; fail=1; }
+    jq -e .hookSpecificOutput.additionalContext <<<"$3" >/dev/null 2>&1 || { echo "  ✗ $2"; fail=1; }
   else
     [ -z "$3" ] || { echo "  ✗ $2: $3"; fail=1; }
   fi

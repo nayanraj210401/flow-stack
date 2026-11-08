@@ -15,8 +15,8 @@ tr="$(flow_field .transcript_path)"; [ -f "$tr" ] || exit 0
 # human = a typed prompt: not a tool result, meta/compact line, slash-command or task-notification echo, or an interrupt marker (mirrors board/attention.sh)
 DEFS='def body: if (.message.content? | type) == "string" then .message.content
           else [.message.content[]? | select(type == "object" and .type == "text") | .text] | join("\n") end;
-def noise: test("^\\s*<(command-message|command-name|local-command|task-notification|system-reminder|bash-stdout|bash-stderr)") or test("^\\[Request interrupted");
-def human: .type == "user" and (.isMeta | not) and (.isCompactSummary | not)
+def noise: test("^\\s*<(command-message|command-name|local-command|task-notification|system-reminder|bash-stdout|bash-stderr)") or test("^Another Claude session sent a message|^\\[Request interrupted");
+def human: .type == "user" and (.isSidechain | not) and (.isMeta | not) and (.isCompactSummary | not)
   and ((.message.content? | type) != "array" or any(.message.content[]; type == "object" and .type == "text"))
   and (((.origin.kind? // .turnOrigin? // "human") | . == "human" or . == "person" or . == "sdk"))
   and (body | test("\\S")) and (body | noise | not);'
@@ -24,7 +24,7 @@ turns="$(grep -F '"type":"user"' "$tr" 2>/dev/null | grep -v '"type":"tool_resul
 s="$(tail -n 3000 "$tr" | jq -nrR "$DEFS"'
   reduce (inputs | fromjson?) as $l ({ctx:0, reads:0};
     if ($l | human) then .reads = 0
-    elif $l.type == "assistant" then
+    elif $l.type == "assistant" and ($l.isSidechain | not) then
       .ctx = ((($l.message.usage? // {}) | (.input_tokens // 0) + (.cache_creation_input_tokens // 0) + (.cache_read_input_tokens // 0)))
       | reduce ($l.message.content? // [] | if type == "array" then .[] else empty end) as $c (.;
           if $c.type == "tool_use" then
@@ -36,6 +36,8 @@ turns="${turns:-0}"
 
 after_turns="$(profile_fm delegate_after_turns)"; after_turns="${after_turns:-7}"
 after_tokens="$(profile_fm delegate_after_tokens)"; after_tokens="${after_tokens:-120000}"
+case $after_turns in ""|*[!0-9]*) after_turns=7;; esac
+case $after_tokens in ""|*[!0-9]*) after_tokens=120000;; esac
 
 [ "${turns:-0}" -ge "$after_turns" ] || [ "${ctx:-0}" -ge "$after_tokens" ] || exit 0
 [ "${reads:-0}" -ge 4 ] || exit 0

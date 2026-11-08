@@ -1,7 +1,7 @@
 ---
 id: budget.delegate
 title: Delegate once a session is long
-owns: plugins/flow-stack/hooks/delegate-nudge.sh plugins/flow-stack/hooks/hooks.json .claude/skills/verify-flow-stack/scripts/delegate.nudge.sh
+owns: plugins/flow-stack/hooks/delegate-nudge.sh plugins/flow-stack/hooks/delegate-nudge.test.sh plugins/flow-stack/hooks/hooks.json .claude/skills/verify-flow-stack/scripts/delegate.nudge.sh
 entries: hook PostToolUse Read|Grep|Glob | profile budget: delegate_after_turns:|delegate_after_tokens: | config hooks.delegate
 scenario: bash .claude/skills/verify-flow-stack/scripts/delegate.nudge.sh
 status: verified
@@ -9,7 +9,7 @@ verified: 2026-11-08 3649aa0
 ---
 # Delegate once a session is long
 
-Once the main thread is long (human turn ≥ `budget:delegate_after_turns`, default 7, or context ≥ `budget:delegate_after_tokens`, default 120K, whichever first), a PostToolUse hook injects a one-line nudge to hand bulk reading off to a subagent. It fires at most once every few turns, only on the 4th-or-later read in a row, and never for a subagent's own reads. Fresh and short sessions stay quiet.
+Once the main thread is long (human turn ≥ `budget:delegate_after_turns`, default 7, or context ≥ `budget:delegate_after_tokens`, default 120000, whichever first), a PostToolUse hook injects a one-line nudge to hand bulk reading off to a subagent. It fires at most once every few turns, only on the 4th-or-later read in a row, and never for a subagent's own reads. Fresh and short sessions stay quiet.
 
 ## Sub-features
 - budget.delegate.trigger · the nudge needs turn ≥ delegate_after_turns or context ≥ delegate_after_tokens
