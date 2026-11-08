@@ -52,10 +52,20 @@ gopts='git([[:space:]]+(-[cC][[:space:]]+[^[:space:];&|]+|-[^[:space:];&|]+))*'
 force_push="" force_main="" wipe_push=""
 while IFS= read -r seg; do
   rest="$(sed -E "s/^$gopts[[:space:]]+push//" <<<"$seg")"
-  grep -Eq '(^|[[:space:]])--mirror([[:space:]]|$)' <<<"$rest" && wipe_push=1
-  grep -Eq '[[:space:]]:["'"'"']?(refs/heads/)?(main|master)["'"'"']?([[:space:]]|$)' <<<"$rest" && wipe_push=1
-  grep -Eq '(^|[[:space:]])(--delete|-d)([[:space:]]|$)' <<<"$rest" &&
-    grep -Eq '[[:space:]]["'"'"']?(refs/heads/)?(main|master)["'"'"']?([[:space:]]|$)' <<<"$rest" && wipe_push=1
+  # Judge each word on its own: quotes stripped, long options by git's unique prefix.
+  set -f; set -- $rest; set +f
+  del="" mainref="" delref=""
+  for w in "$@"; do
+    w="${w//[\"\']/}"
+    case "$w" in
+      --*) [ "${#w}" -ge 4 ] && [[ "--mirror" == "$w"* ]] && wipe_push=1
+           [ "${#w}" -ge 4 ] && [[ "--delete" == "$w"* ]] && del=1 ;;
+      -*) [[ "$w" == *d* ]] && del=1 ;;
+      :*) grep -Eq '^:(refs/)?(heads/)?(main|master)$' <<<"$w" && wipe_push=1 ;;
+      *) grep -Eq '^(refs/)?(heads/)?(main|master)$' <<<"$w" && delref=1 ;;
+    esac
+  done
+  [ -n "$del" ] && [ -n "$delref" ] && wipe_push=1
   grep -Eq '(^|[[:space:]])(--force|-[A-Za-z]*f[A-Za-z]*([[:space:]]|$))|(^|[[:space:]:])\+[^[:space:]]' <<<"$rest" || continue
   force_push=1
   grep -Eq '([[:space:]:+]["'"'"']?|refs/heads/)(main|master)["'"'"']?([[:space:]]|$)' <<<"$rest" && force_main=1

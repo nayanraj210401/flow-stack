@@ -16,7 +16,7 @@ cd "$SB" && git init -q .
 check() {
   local out got
   out="$(jq -nc --arg cwd "$PWD" --arg c "$2" \
-    '{cwd:$cwd, session_id:"s", hook_event_name:"PreToolUse", tool_name:"Bash", tool_input:{command:$c}}' | bash "$H/guard.sh" 2>/dev/null)"
+    '{cwd:$cwd, session_id:"s", hook_event_name:"PreToolUse", tool_name:"Bash", tool_input:{command:$c}}' | bash "$H/guard.sh" 2>/dev/null)" || { bad "$2 → guard crashed"; return; }
   got="allow"
   [ -z "$out" ] || got="$(jq -r '.hookSpecificOutput.permissionDecision // "allow"' <<<"$out")"
   if [ "$got" = "$1" ]; then ok "$2 → $1"; else bad "$2 → got $got, want $1"; fi
@@ -28,6 +28,16 @@ check ask   'git push --delete origin main'
 check ask   'git push origin --delete master'
 check ask   'git push -d origin main'
 check ask   'git push --mirror'
+check ask   'git push -qd origin main'
+check ask   'git push -ud origin main'
+check ask   'git push --del origin main'
+check ask   'git push --mirr'
+check ask   "git push origin ':main'"
+check ask   'git push origin ":main"'
+check ask   'git push origin :heads/main'
+check ask   'git push --delete origin heads/main'
+check allow 'git push -u origin feature'
+check allow 'git push --dry-run origin main'
 check deny  'git push --force origin main'
 check allow 'git push origin feature'
 check allow 'git push origin :feature'
