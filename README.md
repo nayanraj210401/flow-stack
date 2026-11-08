@@ -362,8 +362,7 @@ Check your own spend with `/flow-stack:budget` (uses ccusage) and the estimate-v
 | **slice gate** | `status: done` can only be set by `task.sh slice <id> done`, which requires red first, green after the last edit, probe TEETH, and the line budget. |
 | **circuit** (PostToolUse) | The same failing check 3 times → stop, attack the premise, `challenge`, and ask you. |
 | **trail** (PostToolUse) | Every tool call goes to `trail.jsonl` with secrets redacted. |
-| **claims** (Stop) | "Done", "works", or "fixed" with no passing evidence since the last edit this turn → sent back once per edit to verify or say `~ assumed`. |
-| **anchor** (UserPromptSubmit) | A 3-line goal and slice reminder while a task is active: once per session, again when it changes, and every 10th prompt. |
+| **handoff** (UserPromptSubmit) | Context past `budget:handoff_at_tokens` (default 150K) → one nudge to finish the slice and run `handoff`; re-arms when context drops back. |
 | **session-start / pre-compact / notify** | Profile and toolchain context; a handoff snapshot before compaction; a notification when the agent is blocked on you. |
 
 Hooks fail open: if `jq` is missing or a script errors, the action is allowed and a warning goes to `~/.flow-stack/hooks.log`. Turn any hook off in `.flow/config.json` (repo) or `~/.flow-stack/config.json` (global): `{"hooks": {"fence": false}}`.
