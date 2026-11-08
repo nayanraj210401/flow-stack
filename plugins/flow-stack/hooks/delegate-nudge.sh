@@ -12,9 +12,15 @@ tr="$(flow_field .transcript_path)"; [ -f "$tr" ] || exit 0
 # turns = human prompts over the whole file (monotonic: scroll-out can't shrink it); ctx and reads
 # come from the tail: ctx = the latest request's context, reads = the trailing run of Read/Grep/Glob
 # calls (reset by a human turn or a non-read tool call).
-DEFS='def human: .type == "user" and ((.origin.kind? // .turnOrigin? // "") as $o
-  | if $o == "" then ((.message.content? | type) == "string") else ($o == "human" or $o == "person" or $o == "sdk") end);'
-turns="$(grep -F '"type":"user"' "$tr" 2>/dev/null | jq -nR "$DEFS"'reduce (inputs | fromjson?) as $l (0; if ($l | human) then . + 1 else . end)' 2>/dev/null || true)"
+# human = a typed prompt: not a tool result, meta/compact line, slash-command or task-notification echo, or an interrupt marker (mirrors board/attention.sh)
+DEFS='def body: if (.message.content? | type) == "string" then .message.content
+          else [.message.content[]? | select(type == "object" and .type == "text") | .text] | join("\n") end;
+def noise: test("^\\s*<(command-name|local-command|task-notification|system-reminder|bash-stdout|bash-stderr)") or test("^\\[Request interrupted");
+def human: .type == "user" and (.isMeta | not) and (.isCompactSummary | not)
+  and ((.message.content? | type) != "array" or any(.message.content[]; type == "object" and .type == "text"))
+  and (((.origin.kind? // .turnOrigin? // "human") | . == "human" or . == "person" or . == "sdk"))
+  and (body | test("\\S")) and (body | noise | not);'
+turns="$(grep -F '"type":"user"' "$tr" 2>/dev/null | grep -v tool_result | jq -nR "$DEFS"'reduce (inputs | fromjson?) as $l (0; if ($l | human) then . + 1 else . end)' 2>/dev/null || true)"
 s="$(tail -n 3000 "$tr" | jq -nrR "$DEFS"'
   reduce (inputs | fromjson?) as $l ({ctx:0, reads:0};
     if ($l | human) then .reads = 0

@@ -60,6 +60,22 @@ hook delegate-nudge.sh "$(ptool PERSON)"
 hook delegate-nudge.sh "$(ptool TR)"
 [ -z "$OUT" ] && ok "tool_result lines are not turns" || bad "tool results counted: $OUT"
 
+echo "-- slash-command, meta, compact, notification and interrupt lines are not turns"
+: >"$TR"; hu one; as; hu two; as
+uc() { jq -nc --argjson m "$1" '{type:"user", message:{role:"user",content:$m.c}} + $m.x' >>"$TR"; }
+for i in 1 2 3 4; do
+  uc '{"c":"<command-name>/clear</command-name>","x":{}}'
+  uc '{"c":"<local-command-stdout>ok</local-command-stdout>","x":{}}'
+  uc '{"c":"<task-notification>done</task-notification>","x":{}}'
+  uc '{"c":"<system-reminder>x</system-reminder>","x":{}}'
+  uc '{"c":"[Request interrupted by user]","x":{}}'
+  uc '{"c":"hidden meta","x":{"isMeta":true}}'
+  uc '{"c":"summary","x":{"isCompactSummary":true}}'
+done
+reads
+hook delegate-nudge.sh "$(ptool NOISE)"
+[ -z "$OUT" ] && ok "2 real turns + 28 noise lines → quiet" || bad "noise counted as turns: $OUT"
+
 echo "-- Grep/Glob count toward the run; a non-read tool resets it"
 : >"$TR"; for i in 1 2 3 4 5 6 7 8; do hu "turn $i"; as; done
 rd a; jq -nc '{type:"assistant", message:{content:[{type:"tool_use", name:"Grep", input:{pattern:"x"}}]}}' >>"$TR"
