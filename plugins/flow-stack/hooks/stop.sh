@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Stop: the claims check, with or without a task. If the final message claims success
 # but no check passed (a tool result ending in `flow-evidence: PASS` or a ready stamp) after the
-# last code edit in this transcript, send the agent back once to either verify or mark
+# last code edit in this turn (since the last human prompt), send the agent back once per edit to either verify or mark
 # the claim as assumed. Shell writes count as edits; docs, .flow/ and temp files don't.
 # Then notify if configured.
 . "$(dirname "$0")/lib.sh"
@@ -61,7 +61,7 @@ events="$(tail -n 3000 "$transcript" | jq -nrR --argjson roots "$roots" --arg ch
   # same edit can be ignored on the next pass; n only seeds a fallback key for an id-less call.
   reduce (inputs | fromjson?) as $line
     ({checks: {}, s: "", n: 0, lastE: ""};
-     if ($line | prompt) then .s = "" | .checks = {}
+     if ($line | prompt) then .s = "" | .lastE = "" | .checks = {}
      else
        reduce ($line.message.content? // [] | if type == "array" then .[] else empty end) as $c (.;
          if $c.type == "tool_use" and ($c.name | test("^(Edit|Write|MultiEdit|NotebookEdit)$"))
@@ -71,7 +71,7 @@ events="$(tail -n 3000 "$transcript" | jq -nrR --argjson roots "$roots" --arg ch
            | if ($c.input.command // "" | shell_write) then .s += "E" | .n += 1 | .lastE = ($c.id // "n\(.n)") else . end
          elif $c.type == "tool_result" and .checks[$c.tool_use_id // ""] and $c.is_error != true and ($c.content | verdict) then .s += "P"
          else . end)
-     end) | [.s, .lastE] | @tsv' 2>/dev/null || true)"
+     end) | ["x" + .s, (if .lastE == "" then "-" else .lastE end)] | @tsv' 2>/dev/null || true)"
 IFS=$'\t' read -r events lastE <<<"$events" || true
 lastE="${lastE:-none}"
 last_msg="$(tail -n 200 "$transcript" | jq -nrR '

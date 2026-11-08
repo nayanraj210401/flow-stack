@@ -164,6 +164,9 @@ for m in "Another session sent a message:
   fresh; edit "$PWD/src/calc.sh"; rawrelay "$m"; say "Done."
   expect stop.sh "$(stop)" block "a non-meta relay line is not a human prompt: $(printf %s "$m" | head -1)"
 done
+fresh; jq -nc --arg f "$PWD/src/calc.sh" '{type:"assistant", message:{content:[{type:"tool_use", id:"toolu_01XE", name:"Edit", input:{file_path:$f}}]}}' >>"$TR"
+prompt "what is the status?"; say "Done, nothing to change."
+expect stop.sh "$(stop)" allow "a turn with no edit after an old edit whose id has an uppercase E"
 fresh; prompt "make it merge-ready"; edit "$PWD/src/calc.sh"; say "Done."
 expect stop.sh "$(stop)" block "an edit made in this turn still blocks"
 echo "-- block once per edit"
