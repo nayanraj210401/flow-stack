@@ -3,7 +3,8 @@
 set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"; D="$here/detect.sh"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 SB="$(mktemp -d "${TMPDIR:-/tmp}/detect-factory.XXXXXX")"; SB="$(cd "$SB" && pwd -P)"
 trap 'rm -rf "$SB"' EXIT
@@ -11,7 +12,7 @@ export CLAUDE_CONFIG_DIR="$SB/claude" FLOW_CLAUDE_JSON="$SB/claude.json" FLOW_ST
 mkdir -p "$SB/repo" "$SB/hm" && cd "$SB/repo" && git init -q && git config user.email t@t && git config user.name t
 want() { local p="${3:-}"; grep -qE "^$1 +$2( |$).*$p" <<<"$out" && ok "$1 $2 $p" || bad "$1: want $2 /$p/, got: $(grep -E "^$1 " <<<"$out")"; }
 
-echo "-- empty repo"
+# -- empty repo
 out="$("$D")"
 want FACTORY STATUS
 want monitor missing make-routines
@@ -37,26 +38,26 @@ if [ -n "${base:-}" ] && old="$(git -C "$here" show "$base:./detect.sh" 2>/dev/n
   else bad "existing rows changed vs main"; diff <(printf '%s\n' "$old_out") <(printf '%s\n' "$new_out") | sed 's/^/    /'; fi
 else echo "  - skip: no main to compare against (shallow clone)"; fi
 
-echo "-- driver and feature map on disk, not committed"
+# -- driver and feature map on disk, not committed
 mkdir -p .claude/skills/verify-toy .flow/features .github/routines
 printf -- '---\nid: a\nscenario: bash x.sh\n---\n' >.flow/features/a.md
 out="$("$D")"
 want verify missing 'make-verifier.*feature-map'
 want factory missing
 
-echo "-- a routine file that isn't committed doesn't run"
+# -- a routine file that isn't committed doesn't run
 mkdir -p .github/workflows && touch .github/routines/self-heal.md .github/workflows/flow-self-heal.yml
 out="$("$D")"
 want implement missing make-routines
 rm .github/routines/self-heal.md .github/workflows/flow-self-heal.yml
 
-echo "-- a committed mention routine serves implement"
+# -- a committed mention routine serves implement
 mkdir -p .github/workflows && touch .github/workflows/flow-mention.yml && git add .github/workflows/flow-mention.yml && git commit -qm mention
 out="$("$D")"
 want implement ok mention
 git rm -q .github/workflows/flow-mention.yml && git commit -qm unmention
 
-echo "-- committed driver + scenario, all routines"
+# -- committed driver + scenario, all routines
 touch .claude/skills/verify-toy/SKILL.md
 mkdir -p .github/workflows
 for r in self-create self-heal review auto-merge; do touch ".github/routines/$r.md" ".github/workflows/flow-$r.yml"; done
@@ -69,18 +70,18 @@ want review ok review
 want ship ok auto-merge
 want factory ok
 
-echo "-- a committed feature without a scenario does not count"
+# -- a committed feature without a scenario does not count
 printf -- '---\nid: a\nscenario: # later\n---\n' >.flow/features/a.md && git commit -qam noscen
 out="$("$D")"
 want verify missing feature-map
 
-echo "-- matches the gate: a quoted or body-only scenario doesn't count"
+# -- matches the gate: a quoted or body-only scenario doesn't count
 printf -- '---\nid: a\nscenario: ""\n---\nscenario: bash x.sh\n' >.flow/features/a.md && git commit -qam quoted
 out="$("$D")"
 want verify missing feature-map
 want factory missing
 
-echo "-- README is not a feature; a worktree is judged by its own commits"
+# -- README is not a feature; a worktree is judged by its own commits
 printf -- '---\nscenario: bash x.sh\n---\n' >.flow/features/README.md && git add -A && git commit -qm readme
 out="$("$D")"
 want verify missing feature-map
@@ -90,4 +91,4 @@ out="$("$D")"
 want verify ok 'committed verify driver'
 want factory ok
 [ "$FAILS" = 0 ] || { echo "$FAILS failed"; exit 1; }
-echo "all passed"
+echo "detect-factory: $PASSES passed"

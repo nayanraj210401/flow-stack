@@ -6,7 +6,8 @@
 set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 
 SB="$(mktemp -d "${TMPDIR:-/tmp}/mode-spoof.XXXXXX")"; SB="$(cd "$SB" && pwd -P)"
@@ -25,7 +26,7 @@ decide() { # decide <hook> <tool_input json> [tool]
 bash_is() { local got; got="$(decide guard.sh "$(jq -nc --arg c "$2" '{command:$c}')")"; [ "$got" = "$1" ] && ok "$1: $2" || bad "$2 → $got, want $1"; }
 edit_is() { local got; got="$(decide edit-guard.sh "$(jq -nc --arg f "$2" '{file_path:$f,content:"x"}')" Write)"; [ "$got" = "$1" ] && ok "$1: Write $2" || bad "Write $2 → $got, want $1"; }
 
-echo "-- auto-mode flags: writes denied"
+# -- auto-mode flags: writes denied
 bash_is deny "echo ship > $FLOW_STACK_HOME/auto/s"
 bash_is deny 'printf ship >~/.flow-stack/auto/s'
 bash_is deny 'echo ship | tee "$FLOW_STACK_HOME/auto/s"'
@@ -34,7 +35,7 @@ bash_is deny "cp /tmp/x $FLOW_STACK_HOME/auto/s"
 edit_is deny "$FLOW_STACK_HOME/auto/s"
 edit_is deny "$FLOW_STACK_HOME//auto/s"
 edit_is deny "$FLOW_STACK_HOME/x/../auto/s"
-echo "-- Claude Code settings: writes ask"
+# -- Claude Code settings: writes ask
 bash_is ask "jq '.env.GITHUB_ACTIONS=\"true\"' x > .claude/settings.local.json"
 bash_is ask "sed -i '' 's/a/b/' .claude/settings.json"
 bash_is ask 'cp /tmp/s.json ~/.claude/settings.json'
@@ -44,7 +45,7 @@ edit_is ask "$SB/repo/.claude/settings.local.json"
 edit_is ask "$HOME/.claude/settings.json"
 edit_is ask "$CLAUDE_CONFIG_DIR/settings.json"
 edit_is ask "$SB/repo/.claude/x/../settings.json"
-echo "-- reads and unrelated writes: allow"
+# -- reads and unrelated writes: allow
 bash_is allow "cat $FLOW_STACK_HOME/auto/s"
 bash_is allow 'ls ~/.flow-stack/auto'
 bash_is allow 'jq .env .claude/settings.json'
@@ -57,4 +58,4 @@ bash_is allow 'cd ~/.flow-stack && cat auto/s'
 edit_is allow "$SB/repo/notes.txt"
 edit_is allow "$SB/repo/.claude/agents/x.md"
 
-[ "$FAILS" = 0 ] && echo "mode-spoof.test.sh: pass" || { echo "mode-spoof.test.sh: $FAILS failed"; exit 1; }
+[ "$FAILS" -eq 0 ] && echo "mode-spoof: $PASSES passed" || { echo "mode-spoof: $FAILS failed"; exit 1; }

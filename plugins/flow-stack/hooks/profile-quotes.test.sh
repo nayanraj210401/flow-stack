@@ -4,7 +4,8 @@
 set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 SB="$(mktemp -d "${TMPDIR:-/tmp}/profile-quotes.XXXXXX")"; trap 'rm -rf "$SB"' EXIT
 export FLOW_STACK_HOME="$SB"
@@ -15,4 +16,4 @@ is rigor strict
 is review_gate yolo
 is notify_on '"all'
 is name 'a "b" c'
-[ "$FAILS" -eq 0 ] && echo "== profile-quotes · PASS" || { echo "== profile-quotes · FAIL ($FAILS)"; exit 1; }
+[ "$FAILS" -eq 0 ] && echo "== profile-quotes · PASS ($PASSES passed)" || { echo "== profile-quotes · FAIL ($FAILS)"; exit 1; }

@@ -3,7 +3,8 @@
 set -uo pipefail
 D="$(cd "$(dirname "$0")" && pwd)"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 SB="$(mktemp -d "${TMPDIR:-/tmp}/profile-check.XXXXXX")"
 trap 'rm -rf "$SB"' EXIT
@@ -38,4 +39,4 @@ perl -pi -e 's/^(  build_model:).*/$1 gpt/' "$P"; run
 [ "$rc" = 0 ] && ok "keys with no value list in the template stay free-form" || bad "free-form: rc=$rc $out"
 
 [ "$FAILS" = 0 ] || { echo "== profile-check · FAIL ($FAILS)"; exit 1; }
-echo "== profile-check · PASS"
+echo "== profile-check · PASS ($PASSES passed)"

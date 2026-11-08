@@ -9,10 +9,10 @@ verified:
 ---
 # Claims check and notifications
 
-If the agent's final message claims success without passing evidence since its last edit, it is sent back once. The human is notified when the agent needs them.
+If the agent's final message claims success without passing evidence since its last edit this turn, it is sent back once per edit. The human is notified when the agent needs them.
 
 ## Sub-features
-- claims.stop.block · "done/fixed/works/tests pass" with no PASS newer than the last Edit blocks once
+- claims.stop.block · "done/fixed/works/tests pass" with no PASS newer than the last Edit this turn blocks once per edit
 - claims.stop.pass · `~ assumed`, a fresh PASS, stop_hook_active, no claim, or `claims: false` let it stop
 - claims.stop.notify · profile `notify: ntfy:<topic>` posts the message; `osascript` shows a macOS notification; `off` sends nothing
 
