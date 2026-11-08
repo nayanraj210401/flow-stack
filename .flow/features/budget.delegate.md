@@ -4,8 +4,8 @@ title: Delegate once a session is long
 owns: plugins/flow-stack/hooks/delegate-nudge.sh plugins/flow-stack/hooks/hooks.json .claude/skills/verify-flow-stack/scripts/delegate.nudge.sh
 entries: hook PostToolUse Read|Grep|Glob | profile budget: delegate_after_turns:|delegate_after_tokens: | config hooks.delegate
 scenario: bash .claude/skills/verify-flow-stack/scripts/delegate.nudge.sh
-status: unverified
-verified:
+status: verified
+verified: 2026-11-08 3649aa0
 ---
 # Delegate once a session is long
 
