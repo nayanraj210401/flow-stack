@@ -59,19 +59,20 @@ events="$(tail -n 3000 "$transcript" | jq -nrR --argjson roots "$roots" --arg ch
   def prompt: .type == "user"
     and (.isMeta? != true)
     and (.isCompactSummary? != true)
+    and ((.origin.kind? // "human") == "human")
     and (ptext | . != null and test("\\S") and (test("<(agent-message|task-notification|system-reminder)[[:space:]>]|^[[:space:]]*<(local-command|bash-stdout|bash-stderr)|^(Delegated task node:|Update on pull request #)") | not));
   # lastE is the tool_use id of the most recent E (stable however far the transcript scrolls), so the
-  # same edit can be ignored on the next pass; n only seeds a fallback key for an id-less call.
+  # same edit can be ignored on the next pass; an id-less call (never seen in real transcripts) falls back to its own JSON.
   reduce (inputs | fromjson?) as $line
-    ({checks: {}, s: "", n: 0, lastE: ""};
+    ({checks: {}, s: "", lastE: ""};
      if ($line | prompt) then .s = "" | .lastE = "" | .checks = {}
      else
        reduce ($line.message.content? // [] | if type == "array" then .[] else empty end) as $c (.;
          if $c.type == "tool_use" and ($c.name | test("^(Edit|Write|MultiEdit|NotebookEdit)$"))
-            and (($c.input.file_path // $c.input.notebook_path // "") | scratch | not) then .s += "E" | .n += 1 | .lastE = ($c.id // "n\(.n)")
+            and (($c.input.file_path // $c.input.notebook_path // "") | scratch | not) then .s += "E" | .lastE = ($c.id // ($c | tojson))
          elif $c.type == "tool_use" and $c.name == "Bash" then
            (if ($c.input.command // "" | test($check_re)) then .checks[$c.id // ""] = true else . end)
-           | if ($c.input.command // "" | shell_write) then .s += "E" | .n += 1 | .lastE = ($c.id // "n\(.n)") else . end
+           | if ($c.input.command // "" | shell_write) then .s += "E" | .lastE = ($c.id // ($c | tojson)) else . end
          elif $c.type == "tool_result" and .checks[$c.tool_use_id // ""] and $c.is_error != true and ($c.content | verdict) then .s += "P"
          else . end)
      end) | ["x" + .s, (if .lastE == "" then "-" else .lastE end)] | @tsv' 2>/dev/null || true)"
