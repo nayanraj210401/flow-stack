@@ -308,7 +308,7 @@ flow-stack writes files and makes decisions, and that costs something. These are
 |---|---|---|
 | Skill list the model sees | ≈ 1.75k | every session (cached after the first turn) |
 | SessionStart context (profile, rules, taste, active task) | ≈ 0.3–0.5k | every session |
-| Intent anchor | ≈ 40 | every prompt, only while a task is active |
+| Intent anchor | ≈ 40 | when the anchor changes, then every 10th prompt, only while a task is active |
 | `flow` + a playbook + conventions | ≈ 3.6k | only when a non-trivial task starts |
 
 On small eval tasks, where fixed overhead dominates, a session with the plugin costs **1.43×** a plain session on average. That was **1.78×** before the optimizations below.
@@ -363,7 +363,7 @@ Check your own spend with `/flow-stack:budget` (uses ccusage) and the estimate-v
 | **circuit** (PostToolUse) | The same failing check 3 times → stop, attack the premise, `challenge`, and ask you. |
 | **trail** (PostToolUse) | Every tool call goes to `trail.jsonl` with secrets redacted. |
 | **claims** (Stop) | "Done", "works", or "fixed" with no passing evidence since the last edit → sent back once to verify or say `~ assumed`. |
-| **anchor** (UserPromptSubmit) | A 3-line goal and slice reminder on every prompt while a task is active. |
+| **anchor** (UserPromptSubmit) | A 3-line goal and slice reminder while a task is active: once per session, again when it changes, and every 10th prompt. |
 | **session-start / pre-compact / notify** | Profile and toolchain context; a handoff snapshot before compaction; a notification when the agent is blocked on you. |
 
 Hooks fail open: if `jq` is missing or a script errors, the action is allowed and a warning goes to `~/.flow-stack/hooks.log`. Turn any hook off in `.flow/config.json` (repo) or `~/.flow-stack/config.json` (global): `{"hooks": {"fence": false}}`.

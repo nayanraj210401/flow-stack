@@ -21,7 +21,7 @@ ANCHOR_EVERY=10   # re-inject the anchor at most every N human prompts when it h
 if flag="$(flow_auto_flag)"; then
   [ -n "$relayed" ] && { grep -Eq '^[[:space:]]*--no-auto([[:space:],.;:!?)]|$)' <<<"$prompt" && prompt="--no-auto" || prompt=""; }
   if grep -Eq '(^|[[:space:]])--no-auto([[:space:],.;:!?)]|$)' <<<"$prompt"; then
-    rm -f "$flag"; echo "[flow auto] off: the human is back; gates ask again."
+    rm -f "$flag"; [ -n "$(anchor_state_dir)" ] && rm -f "$(anchor_state_dir).auto"; echo "[flow auto] off: the human is back; gates ask again."
   elif grep -Eq '(^|[[:space:]])--gha([[:space:],.;:!?)]|$)' <<<"$prompt" && flow_on_runner; then
     mkdir -p "${flag%/*}"; echo gha >"$flag"; ship=1
   elif grep -Eq '(^|[[:space:]])--auto[[:space:]]+ship([[:space:],.;:!?)]|$)' <<<"$prompt"; then

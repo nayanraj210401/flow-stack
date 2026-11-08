@@ -11,6 +11,12 @@ source_kind="$(flow_field .source)"
 # records a crashed session never cleared at its end.
 rm -rf "$FLOW_HOME/leads"
 find "$FLOW_HOME/hosts" -type f -mtime +3 -delete 2>/dev/null || true
+find "$FLOW_HOME/anchor" -type f -mtime +7 -delete 2>/dev/null || true
+# Compaction drops the injected anchor and banner from context: forget what this session was told, so the next prompt re-injects both.
+if [ "$source_kind" = compact ]; then
+  sid="$(flow_field .session_id)"
+  [ -n "$sid" ] && rm -f "$FLOW_HOME/anchor/${sid//\//_}".*
+fi
 
 router="$(profile_section Toolchain 2>/dev/null | sed -n 's/^- router:[[:space:]]*\([^ ·]*\).*/\1/p' | head -n1 || true)"
 
@@ -93,7 +99,7 @@ if [ -n "$FLOW_TASK_DIR" ]; then
   fi
   [ -n "$slice" ] && printf 'Current slice: %s\n' "${slice#\#\# }"
   if [ -z "$(find "$FLOW_TASK_DIR" -type f ! -name trail.jsonl ! -name '.*' -mtime -3 2>/dev/null | head -n1)" ]; then
-    printf 'Stale: this task is untouched for more than 3 days. If this session is about something else, run task.sh close (or switch) first, or its goal anchors every prompt.\n'
+    printf 'Stale: this task is untouched for more than 3 days. If this session is about something else, run task.sh close (or switch) first, or its goal keeps anchoring this session.\n'
   fi
 
   if [ "$source_kind" = compact ] || [ "$source_kind" = resume ]; then

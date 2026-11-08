@@ -13,7 +13,7 @@ Typing `--auto` anywhere in a prompt tells the session nobody will answer. The a
 
 ## Sub-features
 - auto.mode.toggle · `--auto` (followed by space, punctuation, or end) sets the session flag; `--no-auto` clears it; quoted or glued forms don't trigger
-- auto.mode.anchor · while on, every prompt gets the `[flow auto]` instructions
+- auto.mode.anchor · while on, the first prompt of a session (and the first after compaction) gets the full `[flow auto]` instructions, later prompts a short `[flow auto]` tag
 - auto.mode.queue · every `ask` (repo gates, built-in escalations, seals) becomes a deny that says to queue in GATES.md
 - auto.mode.noask · AskUserQuestion is denied
 - auto.mode.outward · git push, gh pr create/merge/ready, gh release create, npm publish are queued even when nothing else gates them

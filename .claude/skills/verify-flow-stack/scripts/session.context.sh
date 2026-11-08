@@ -61,11 +61,27 @@ up_s() { jq -nc --arg cwd "$PWD" --arg s "$1" --arg p "$2" '{cwd:$cwd, session_i
 hook anchor.sh "$(up_s S1 next)"
 has "$OUT" "[flow anchor · demo] goal:" && ok "a new session anchors" || bad "first anchor: $OUT"
 hook anchor.sh "$(up_s S1 next)"
-[ -z "$OUT" ] && ok "an unchanged anchor isn't re-injected" || bad "re-anchored unchanged: $OUT"
+[ "$RC" = 0 ] && [ -z "$OUT" ] && ok "an unchanged anchor isn't re-injected (hook exit 0)" || bad "re-anchored unchanged or crashed (rc $RC): $OUT"
 hook anchor.sh "$(up_s S2 next)"
 has "$OUT" "[flow anchor · demo] goal:" && ok "a different session anchors its own once" || bad "second session anchor: $OUT"
 hook anchor.sh "$(up_s S3 "$(printf 'Another Claude session sent a message:\n<agent-message from="x">\n  updated the plan\n</agent-message>')")"
 [ -z "$OUT" ] && ok "a relayed prompt injects nothing" || bad "relay injected: $OUT"
+echo "-- refresh on change, every 10th prompt, compact reset"
+perl -pi -e 's/^status: doing/status: todo/' .flow/tasks/demo/SLICES.md
+hook anchor.sh "$(up_s S1 next)"
+[ "$RC" = 0 ] && has "$OUT" "[flow anchor · demo]" && ok "a changed anchor refreshes" || bad "no refresh on change (rc $RC): $OUT"
+perl -pi -e 's/^status: todo/status: doing/' .flow/tasks/demo/SLICES.md
+hook anchor.sh "$(up_s S1 next)"   # restored slice: another change, re-injects and restarts the count
+silent=1; for i in 1 2 3 4 5 6 7 8; do hook anchor.sh "$(up_s S1 next)"; [ -z "$OUT" ] || silent=""; done
+[ -n "$silent" ] && ok "prompts 1-8 after an injection stay silent" || bad "re-injected too early"
+hook anchor.sh "$(up_s S1 next)"; [ "$RC" = 0 ] && [ -z "$OUT" ] || bad "9th prompt: $OUT"
+hook anchor.sh "$(up_s S1 next)"
+has "$OUT" "[flow anchor · demo] goal:" && ok "the 10th unchanged prompt refreshes" || bad "no 10-prompt refresh: $OUT"
+hook session-start.sh "$(jq -nc --arg cwd "$PWD" '{cwd:$cwd, session_id:"S1", hook_event_name:"SessionStart", source:"compact"}')"
+[ "$RC" = 0 ] && ok "session-start on compact exits 0" || bad "session-start rc $RC"
+hook anchor.sh "$(up_s S1 next)"
+has "$OUT" "[flow anchor · demo] goal:" && ok "compaction resets the anchor: re-injected next prompt" || bad "no anchor after compact: $OUT"
+
 hook pre-compact.sh "$(jq -nc --arg cwd "$PWD" '{cwd:$cwd, hook_event_name:"PreCompact"}')"
 A=.flow/tasks/demo/HANDOFF.auto.md
 [ -f "$A" ] && grep -q '^## Resume' "$A" && grep -q '^- doing · S1' "$A" && ok "HANDOFF.auto.md snapshot" || bad "no/partial auto handoff"
