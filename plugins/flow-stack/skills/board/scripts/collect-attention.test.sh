@@ -21,7 +21,7 @@ done
 { for k in 10 310; do jq -nc --arg s $A --argjson t $((b + k)) '{ts:($t|todate),sid:$s,tool:"Bash",target:"x",err:false}'; done
   jq -nc --arg s $B --argjson t $((b + 370)) '{ts:($t|todate),sid:$s,tool:"Bash",target:"x",err:false}'; } >"$SB/r/.flow/tasks/t1/trail.jsonl"
 cd "$SB/r" && git init -q && git config user.email t@e.x && git config user.name t && git commit -qm init --allow-empty
-fail=0 pass=0; chk() { if [ "$2" = "$3" ]; then pass=$((pass+1)); else echo "  ✗ $1: want [$3] got [$2]"; fail=1; fi; }
+fail=0; chk() { if [ "$2" = "$3" ]; then pass=$((pass+1)); else echo "  ✗ $1: want [$3] got [$2]"; fail=1; fi; }
 j="$("$H/collect.sh" --no-cost --no-prs "$SB/r" 2>/dev/null)"
 chk sessions "$(jq -c '.repos[0].tasks[0].sessions|map([.title,.calls,.min,.blocked_min])' <<<"$j")" '[["Title 2",1,5,5],["Title 1",2,5,0]]'
 chk attention_min "$(jq -c '.repos[0].tasks[0].attention_min' <<<"$j")" 10

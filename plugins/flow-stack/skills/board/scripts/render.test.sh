@@ -5,7 +5,7 @@ set -uo pipefail
 pass=0
 H="$(cd "$(dirname "$0")" && pwd)"
 SB="$(mktemp -d "${TMPDIR:-/tmp}/render.XXXXXX")"; trap 'rm -rf "$SB"' EXIT
-fail=0 pass=0; ck() { if eval "$2"; then pass=$((pass+1)); else echo "  ✗ $1"; fail=1; fi; }
+fail=0; ck() { if eval "$2"; then pass=$((pass+1)); else echo "  ✗ $1"; fail=1; fi; }
 printf '{"repos":[{"name":"fill {{BOARD_JSON}} placeholder </script>"}]}\n' >"$SB/b.json"
 want='<script id="board-data" type="application/json">{"repos":[{"name":"fill {{BOARD_JSON}} placeholder <\/script>"}]}</script>'
 ck "data containing {{BOARD_JSON}} renders verbatim, </ escaped" '"$H/render.sh" "$SB/b.json" "$SB/out.html" >/dev/null 2>&1 && grep -qF "$want" "$SB/out.html"'

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ready.sh: the "ready for review" bar. Human review is the most expensive step in the loop,
 # so a PR reaches a human only after this passes for its exact HEAD.
-#   ready.sh [--base <ref>]                  run the bar; on pass, stamp HEAD in .flow/ready.tsv
+#   ready.sh [-v] [--base <ref>]                run the bar; on pass, stamp HEAD in .flow/ready.tsv
 #   ready.sh record <kind> <result> [note]   record a model-judged step for HEAD:
 #                                            review ship|fix-first|rethink · deslop done · tour done
 #                                            · <id> done for a repo `do` step (below)
@@ -70,7 +70,7 @@ case "${1:-}" in
     exit 0 ;;
 esac
 
-base=""; [ "${1:-}" = --base ] && base="${2:-}"
+base=""; prev=""; for a in "$@"; do [ "$prev" = --base ] && base="$a"; prev="$a"; done
 if [ "$(mode)" = yolo ]; then echo "review gate: yolo; nothing to check, PRs go straight to review"; exit 0; fi
 [ -n "$base" ] || base="$(merge_base)"
 head="$(sha)"; fails=0

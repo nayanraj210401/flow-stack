@@ -6,7 +6,7 @@ H="$(cd "$(dirname "$0")" && pwd)"
 SB="$(mktemp -d "${TMPDIR:-/tmp}/notify-waits.XXXXXX")"; trap 'rm -rf "$SB"' EXIT
 export FLOW_STACK_HOME="$SB/home" HOME="$SB/hm"; mkdir -p "$HOME" "$FLOW_STACK_HOME"
 printf -- '---\nnotify: off\n---\n' >"$FLOW_STACK_HOME/profile.md"
-W="$FLOW_STACK_HOME/waits.jsonl"; fail=0 pass=0
+W="$FLOW_STACK_HOME/waits.jsonl"; fail=0
 send() { printf '%s' "$1" | bash "$H/notify.sh"; }
 send '{"notification_type":"permission_prompt","session_id":"s1","message":"m"}'; rc1=$?
 send '{"notification_type":"elicitation_dialog","session_id":"s2"}'

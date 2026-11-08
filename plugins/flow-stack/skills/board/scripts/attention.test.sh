@@ -40,7 +40,7 @@ want='["prompt",60,60]
 ["prompt",60,60]
 ["permission",2,2]
 ["prompt",20,20]'
-fail=0 pass=0
+fail=0
 [ "$got" = "$want" ] && pass=$((pass+1)) || { echo "  ✗ events: want
 $want
 got

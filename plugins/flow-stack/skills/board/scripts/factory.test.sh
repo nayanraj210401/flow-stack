@@ -6,7 +6,7 @@ set -uo pipefail
 pass=0
 H="$(cd "$(dirname "$0")" && pwd)"
 SB="$(mktemp -d "${TMPDIR:-/tmp}/factory.XXXXXX")"; trap 'rm -rf "$SB"' EXIT
-fail=0 pass=0; ck() { if eval "$2"; then pass=$((pass+1)); else echo "  ✗ $1"; fail=1; fi; }
+fail=0; ck() { if eval "$2"; then pass=$((pass+1)); else echo "  ✗ $1"; fail=1; fi; }
 
 mkdir -p "$SB/bin" "$SB/home"
 # stub gh: graphql returns the fixture; item-edit sets that card's Status in the fixture and logs the call
