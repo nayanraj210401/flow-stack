@@ -5,7 +5,8 @@ set -uo pipefail
 D="$(cd "$(dirname "$0")" && pwd)"; PLUGIN="$(cd "$D/../../.." && pwd)"
 SEAL="$D/seal.sh"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 has() { grep -Fq -- "$2" <<<"$1"; }
 
@@ -22,7 +23,7 @@ toy_repo
 echo a >tests/foo.test.ts; echo b >tests/foo.test; echo c >tests/bar.test
 git add -A && git commit -qm files
 
-echo "-- sealing a prefix keeps the longer-named seal"
+# -- sealing a prefix keeps the longer-named seal
 "$SEAL" add tests/foo.test.ts >/dev/null; "$SEAL" add tests/foo.test >/dev/null
 l="$("$SEAL" list)"
 has "$l" "tests/foo.test.ts" && ok "foo.test.ts still sealed" || bad "foo.test.ts seal dropped: $l"
@@ -31,16 +32,16 @@ echo z >>tests/foo.test.ts
 v="$("$SEAL" verify)"; rc=$?
 { [ "$rc" != 0 ] && has "$v" "CHANGED  tests/foo.test.ts"; } && ok "edit to foo.test.ts is detected" || bad "edit undetected (rc=$rc): $v"
 
-echo "-- re-adding the same path replaces its line"
+# -- re-adding the same path replaces its line
 "$SEAL" add tests/bar.test >/dev/null; "$SEAL" add tests/bar.test >/dev/null
 n="$("$SEAL" list | grep -cx 'tests/bar.test')"
 [ "$n" = 1 ] && ok "one line for bar.test" || bad "bar.test has $n lines"
 
-echo "-- rm of the prefix keeps the longer-named seal"
+# -- rm of the prefix keeps the longer-named seal
 "$SEAL" rm tests/foo.test >/dev/null
 l="$("$SEAL" list)"
 [ "$(grep -cx 'tests/foo.test' <<<"$l")" = 0 ] && ok "foo.test removed" || bad "foo.test still sealed: $l"
 has "$l" "tests/foo.test.ts" && ok "foo.test.ts survives rm foo.test" || bad "rm dropped foo.test.ts: $l"
 
-[ "$FAILS" -eq 0 ] && { echo "== seal-prefix · PASS"; exit 0; }
+[ "$FAILS" -eq 0 ] && { echo "== seal-prefix · PASS ($PASSES passed)"; exit 0; }
 echo "== seal-prefix · FAIL ($FAILS)"; exit 1

@@ -5,7 +5,8 @@
 set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 
 SB="$(mktemp -d "${TMPDIR:-/tmp}/relay-auto.XXXXXX")"; trap 'rm -rf "$SB"' EXIT
@@ -29,4 +30,4 @@ send e "--no-auto I'm back"; is_auto e && bad "--no-auto ignored" || ok "--no-au
 send g "--auto"; send g "$(printf 'Delegated task node:x (#1) [completed]:\nthe anchor said (--auto; --no-auto ends it) earlier')"
 is_auto g && ok "a relay quoting the banner keeps auto on" || bad "a quoted --no-auto mid-line ended auto"
 
-[ "$FAILS" -eq 0 ] && echo "== relay-auto · PASS" || { echo "== relay-auto · FAIL ($FAILS)"; exit 1; }
+[ "$FAILS" -eq 0 ] && echo "== relay-auto · PASS ($PASSES passed)" || { echo "== relay-auto · FAIL ($FAILS)"; exit 1; }
