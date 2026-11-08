@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ready-check.test.sh: the ready stamp travels as a flow/ready check run. A routine that pushes posts it on the self-heal
-# PR head it stamped and marks that draft ready; a pull_request routine skips a head that has one. The steps are run
+# PR head it stamped and marks that draft ready; review still runs on a stamped head. The steps are run
 # from the rendered workflow against a fake gh.
 set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)"
@@ -39,7 +39,7 @@ export SB PATH="$SB/bin:$PATH" GITHUB_REPOSITORY=o/r GITHUB_STEP_SUMMARY="$SB/su
 
 # -- rendered workflows
 grep -q '^  checks: write$' $W/flow-self-heal.yml && [ -n "$(step $W/flow-self-heal.yml)" ] && ok "self-heal posts flow/ready (checks: write)" || bad "self-heal has no flow/ready step"
-grep -q "if: steps.stamp.outputs.skip != 'true'" $W/flow-review.yml && ok "review runs only without a passing flow/ready" || bad "review has no skip"
+! grep -q 'steps.stamp' $W/flow-review.yml && ok "review also runs on a stamped self-heal head" || bad "review still skips a stamped head"
 grep -q '^  checks: read$' $W/flow-self-create.yml && ! grep -q 'flow/ready' $W/flow-self-create.yml && ok "self-create: no flow/ready step, checks read" || bad "self-create grew a flow/ready step"
 grep -q '^  checks: read$' $W/flow-auto-merge.yml && ! grep -q 'flow/ready' $W/flow-auto-merge.yml && ok "auto-merge (contents, not self-heal): no flow/ready step, checks read" || bad "auto-merge posts flow/ready"
 ! grep -q '^$' $W/flow-self-create.yml && ok "an empty placeholder leaves no blank line" || bad "blank line in self-create"
@@ -60,19 +60,12 @@ jq -e '.name == "flow/ready" and .conclusion == "success" and (.output.summary |
 [ "$(grep -c '^gh pr ready' "$SB/calls")" = 1 ] && grep -q '^gh pr ready 5$' "$SB/calls" && ok "#5 marked ready, nothing else" || bad "calls: $(grep 'pr ready' "$SB/calls")"
 rm .flow/ready.tsv "$SB/posted"; bash -eo pipefail -c "$(step $W/flow-self-heal.yml)" && [ ! -f "$SB/posted" ] && ok "no ledger: nothing posted" || bad "posted without a ledger"
 
-# -- review: skip a stamped self-heal head, review a new or unknown one
-for c in stamped:true fresh: broken: named: other-app:; do
-  : >"$SB/out"; SHA="${c%%:*}" REF=self-heal/5-x bash -eo pipefail -c "$(step $W/flow-review.yml)" || bad "$c: step failed"
-  [ "$(sed -n 's/^skip=//p' "$SB/out")" = "${c#*:}" ] && ok "${c%%:*} head: skip='${c#*:}'" || bad "${c%%:*}: out '$(cat "$SB/out")'"
-done
-
-: >"$SB/out"; SHA=stamped REF=feature/x bash -eo pipefail -c "$(step $W/flow-review.yml)"
-[ ! -s "$SB/out" ] && ok "a stamped head off a self-heal branch is still reviewed" || bad "skipped a non-self-heal PR"
-
 # -- routine contracts
-grep -q 'More than 2 means two rework rounds' "$H/../templates/self-heal.md" && grep -q 'add `needs-human`' "$H/../templates/self-heal.md" && ok "rework capped at 2 rounds, then needs-human" || bad "self-heal has no rework cap"
+grep -q 'APP_TOKEN: ${{ steps.claude.outputs.github_token }}' $W/flow-self-heal.yml && grep -q 'GH_TOKEN="${APP_TOKEN:-$GH_TOKEN}" gh pr ready' $W/flow-self-heal.yml && ok "undraft uses the App token so review fires" || bad "undraft uses github.token"
+grep -q 'first line is exactly `Verdict: ship`' "$H/../templates/review.md" && grep -q 'Verdict: fix' "$H/../templates/self-heal.md" && ok "review states, self-heal reads the Verdict: first line" || bad "verdict contract drifted"
+grep -q 'More than 3 means three rework rounds' "$H/../templates/self-heal.md" && grep -q 'add `needs-human`' "$H/../templates/self-heal.md" && ok "rework capped at 3 rounds, then needs-human" || bad "self-heal has no rework cap"
 grep -q 'never push to any other PR' "$H/../templates/self-heal.md" && ok "rework only on PRs self-heal opened" || bad "no own-PR rule"
-grep -q 'their stamped heads skip it. Rework comes from people' "$H/../templates/self-heal.md" && ! grep -q 'rework' "$H/../templates/review.md" && ok "review starts no rework; people and auto-merge do" || bad "review claims to start rework"
+grep -q 'Rework comes from people' "$H/../templates/self-heal.md" && ! grep -q 'rework' "$H/../templates/review.md" && ok "review starts no rework; people and auto-merge do" || bad "review claims to start rework"
 grep -q 'A `self-heal` PR goes back to its routine instead of being blocked' "$am" && ok "auto-merge sends a non-ship self-heal PR to rework" || bad "auto-merge has no rework path"
 grep -q 'last `labeled` event for `auto-merge`' "$am" && ok "auto-merge: a human auto-merge label stays the default path" || bad "auto-merge lost its human label path"
 # an unlabelled self-heal merge (1b) rests on an issue link the agent wrote, so it is opt-in, bound to the branch, and
