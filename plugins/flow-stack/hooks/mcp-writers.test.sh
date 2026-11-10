@@ -4,7 +4,8 @@
 set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 
 SB="$(mktemp -d "${TMPDIR:-/tmp}/mcpwrite.XXXXXX")"; SB="$(cd "$SB" && pwd -P)"
@@ -22,7 +23,7 @@ printf 'sha\ttests/t.sh\n' >.flow/tasks/x/SEALS
 git add -A && git commit -qm i
 SL=.flow/tasks/x/SLICES.md
 
-echo "-- hooks.json routes MCP writers to edit-guard, not MCP readers"
+# -- hooks.json routes MCP writers to edit-guard, not MCP readers
 routed() { jq -r --arg t "$1" '[.hooks.PreToolUse[] | select(any(.hooks[].command; test("edit-guard"))) | .matcher] | any(.[]; . as $m | $t | test("^(" + $m + ")$"))' "$H/hooks.json"; }
 for t in mcp__serena__create_text_file mcp__serena__replace_content mcp__serena__replace_symbol_body mcp__serena__insert_after_symbol; do
   [ "$(routed "$t")" = true ] && ok "$t routed" || bad "$t not routed to edit-guard"
@@ -40,7 +41,7 @@ want() { # want <decision> <label> <serena tool> <tool_input>
   [ "$got" = "$1" ] && ok "$2 → $got" || bad "$2: got $got, want $1"
 }
 
-echo "-- edit-guard judges serena's relative_path"
+# -- edit-guard judges serena's relative_path
 want deny  "create_text_file outside the fence" create_text_file '{"relative_path":"docs/a.md","content":"x"}'
 want allow "create_text_file inside the fence" create_text_file '{"relative_path":"src/a.py","content":"x"}'
 want ask   "replace_symbol_body in a sealed test" replace_symbol_body '{"relative_path":"tests/t.sh","name_path":"f","body":"x"}'
@@ -49,4 +50,4 @@ want deny  "regex replace_content on SLICES.md" replace_content "{\"relative_pat
 want deny  "create_text_file with a done slice" create_text_file "$(jq -nc --arg p "$SL" --rawfile c "$SL" '{relative_path:$p, content:($c | sub("status: todo"; "status: done"))}')"
 want allow "literal replace_content of another field" replace_content "{\"relative_path\":\"$SL\",\"needle\":\"fence: src/**\\n\",\"repl\":\"fence: src/a\\n\",\"mode\":\"literal\"}"
 
-[ "$FAILS" = 0 ] && echo "== mcp-writers · PASS" || { echo "== mcp-writers · FAIL ($FAILS)"; exit 1; }
+[ "$FAILS" = 0 ] && echo "== mcp-writers · PASS ($PASSES passed)" || { echo "== mcp-writers · FAIL ($FAILS)"; exit 1; }

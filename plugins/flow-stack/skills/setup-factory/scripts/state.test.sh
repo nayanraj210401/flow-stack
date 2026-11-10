@@ -3,7 +3,8 @@
 set -uo pipefail
 D="$(cd "$(dirname "$0")" && pwd)/state.sh"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 want() { grep -Eq "^$1 +$2( |$)" <<<"$out" && ok "$1 $2" || bad "$1: want $2, got: $(grep "^$1 " <<<"$out")"; }
 
@@ -99,4 +100,4 @@ out="$(PATH="$SB/nogh" "$BASH" "$D")"; grep -q '^gh .*not installed' <<<"$out" &
 git remote set-url origin git@gitlab.com:acme/app.git; out="$(bash "$D")"
 want GITHUB none; grep -q '^secret' <<<"$out" && bad "gh rows printed without a GitHub remote" || ok "no gh rows without a GitHub remote"
 
-[ "$FAILS" -eq 0 ] && echo "state: PASS" || { echo "state: $FAILS failed"; exit 1; }
+[ "$FAILS" -eq 0 ] && echo "state: PASS ($PASSES passed)" || { echo "state: $FAILS failed"; exit 1; }

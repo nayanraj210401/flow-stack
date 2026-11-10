@@ -4,7 +4,8 @@
 set -uo pipefail
 D="$(cd "$(dirname "$0")" && pwd)"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 
 SB="$(mktemp -d "${TMPDIR:-/tmp}/diffstat.XXXXXX")"; trap 'rm -rf "$SB"' EXIT
@@ -22,4 +23,4 @@ out="$(bash "$D/diffstat.sh" 'src/*.sh')"
 grep -q '^added=2 ' <<<"$out" && ok "src/*.sh crosses / like the fence hook" || bad "fence glob: $out"
 out="$(bash "$D/diffstat.sh" 'src/**/*.sh')"
 grep -q '^added=2 ' <<<"$out" && ok "src/**/*.sh matches zero dirs" || bad "** glob: $out"
-[ "$FAILS" = 0 ]
+[ "$FAILS" -eq 0 ] && echo "diffstat: $PASSES passed" || { echo "diffstat: $FAILS failed"; exit 1; }

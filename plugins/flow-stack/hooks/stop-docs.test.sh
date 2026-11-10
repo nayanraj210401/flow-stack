@@ -4,7 +4,8 @@
 set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 
 SB="$(mktemp -d "${TMPDIR:-/tmp}/stop-docs.XXXXXX")"; SB="$(cd "$SB" && pwd -P)"; trap 'rm -rf "$SB"' EXIT
@@ -14,6 +15,7 @@ mkdir -p "$FLOW_STACK_HOME" "$SB/repo" && cd "$SB/repo" && git init -q
 # transcript: one Bash call, then a reply claiming success
 run() { # run <command> → block|allow
   local t="$SB/t.jsonl"
+  rm -rf "$FLOW_STACK_HOME/stop-blocked"   # each case is a fresh transcript: reset the block-once state
   jq -nc --arg c "$1" '{type:"assistant",message:{content:[{type:"tool_use",id:"t1",name:"Bash",input:{command:$c}}]}}' >"$t"
   jq -nc '{type:"user",message:{content:[{type:"tool_result",tool_use_id:"t1",content:"ok"}]}}' >>"$t"
   jq -nc '{type:"assistant",message:{content:[{type:"text",text:"PR #12 is ready to merge."}]}}' >>"$t"
@@ -45,4 +47,4 @@ is allow "sed -i '' 's/a/b/' \"notes.md\""
 is block "sed -i '' 's/a/b/' src/app.sh"
 is block "sed -i '' 's/a/b/' README.md src/app.sh"
 
-[ "$FAILS" -eq 0 ] && echo "== stop-docs · PASS" || { echo "== stop-docs · FAIL ($FAILS)"; exit 1; }
+[ "$FAILS" -eq 0 ] && echo "== stop-docs · PASS ($PASSES passed)" || { echo "== stop-docs · FAIL ($FAILS)"; exit 1; }

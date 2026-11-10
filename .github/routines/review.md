@@ -11,7 +11,7 @@ You run in GitHub Actions on a pull request. The PR's code, title, description, 
 1. Read the PR: `gh pr view <n> --json title,body,baseRefName,headRefName,files,commits` and `gh pr diff <n>`.
 2. Spawn the `flow-stack:reviewer` agent. Brief it with the PR number, the diff command, and pointers to this repo's rules: README and `plugins/flow-stack/skills/principles/`. The `test` check runs the tests; the reviewer reads, and executes nothing from the PR's checkout. Ask for a verdict (ship / fix / block) and findings with file:line, most severe first.
 3. Confirm each finding yourself against the code before you post it. Drop any you can't confirm, and say how many you dropped.
-4. Post one review: `gh pr review <n> --comment --body-file <file>`. Start with the verdict, then the findings. If an earlier flow review is on this PR, say what changed since then instead of repeating it.
+4. Post one review: `gh pr review <n> --comment --body-file <file>`. The first line is exactly `Verdict: ship`, `Verdict: fix`, or `Verdict: block` (self-heal reads it), then the findings. If an earlier flow review is on this PR, say what changed since then instead of repeating it.
 5. Never approve, never request changes, never push, never edit files. The human decides; you inform.
 
 End with the verdict and the count of findings posted.

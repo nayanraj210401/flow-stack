@@ -9,7 +9,7 @@ verified: 2026-10-29 90da7be
 ---
 # Session primer, anchor, and handoff
 
-Each session starts with the working rules, the user's profile, this repo's entry, and the active task; every prompt re-anchors the goal; compaction leaves a resumable snapshot.
+Each session starts with the working rules, the user's profile, this repo's entry, and the active task; the goal is anchored once per session, re-anchored when it changes and every 10th prompt, and after compaction; compaction leaves a resumable snapshot.
 
 ## Sub-features
 - session.context.primer · SessionStart prints the flow-stack rules; suggests setup when no profile exists
@@ -17,7 +17,7 @@ Each session starts with the working rules, the user's profile, this repo's entr
 - session.context.pointers · mentions .flow/map.md and the feature count when present
 - session.context.router · a Toolchain `router:` line replaces the flow routing rule
 - session.context.task · shows the active task goal and current slice
-- session.context.anchor · UserPromptSubmit prints goal, first non-goal, current slice
+- session.context.anchor · UserPromptSubmit prints goal, first non-goal, current slice: once per session, when it changes, every 10th prompt; never for relayed prompts
 - session.context.snapshot · PreCompact writes HANDOFF.auto.md; SessionStart on compact/resume re-injects the newer handoff
 - session.context.toggle · `session-start`/`anchor` false silence them
 

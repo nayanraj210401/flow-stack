@@ -7,7 +7,7 @@
 #   routines.sh schedule <name> "<m h d M w>" [--tz <zone>]
 #                                                     change a scheduled routine's cron (in its timezone) and re-render it
 #   routines.sh render                                .github/routines/*.md → .github/workflows/flow-<name>.yml
-#   routines.sh check                                 every routine's workflow matches a fresh render; no orphans
+#   routines.sh check [-v]                       every routine's workflow matches a fresh render; no orphans
 #   routines.sh safety [-z] [--ref <ref>] [path ...]  the paths (args, else stdin lines, or NUL-separated with -z) on
 #                                                     .github/routines/safety-paths.txt (at <ref> with --ref; the
 #                                                     repo's own list without one, the plugin default only if it has none): exit 1 on any, 2 on an error
@@ -17,6 +17,7 @@
 # flow_ref (pin the plugin to a tag or branch; empty = the default branch, fresh each run). The body is the prompt.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
+v=0; for a in "$@"; do { [ "$a" = -v ] || [ "$a" = --verbose ]; } && v=1; done
 tpl="$here/../templates"
 dir=.github/routines
 market=https://github.com/nayanraj210401/flow-stack.git
@@ -65,10 +66,10 @@ set_schedule() { # set_schedule <name> <cron> <tz or "">
 
 # ready.sh's stamp lives in .flow/ready.tsv on a runner that is thrown away. The self-heal routine carries it to the
 # open self-heal PR whose head it stamped, as a flow/ready check run, then marks that draft ready. Events made with
-# github.token start no workflows, so the review routine isn't triggered for a commit that was just reviewed.
+# github.token start no workflows, so that undraft starts none; review runs on a self-heal draft instead (its trigger
+# gate lets self-heal/* heads through), so the verdict self-heal reads for its next rework round doesn't wait on it.
 # The check says "this run's ready.sh passed on this SHA", not "an independent reviewer passed it": the guard keeps the
-# agent's tools off the ledger, but code the agent runs in the same job could still write it. So the check only lets
-# the review routine skip a self-heal head; nothing merges on it.
+# agent's tools off the ledger, but code the agent runs in the same job could still write it. So nothing merges on it.
 stamp_step() { # stamp_step <the label self-heal puts on its PRs>
   sed "s|@PR_LABEL@|$1|" <<'EOF'
       # ready.sh's stamp is on this runner's disk, which is thrown away: carry it to the self-heal PR it stamped
@@ -91,29 +92,9 @@ stamp_step() { # stamp_step <the label self-heal puts on its PRs>
           done
 EOF
 }
-# A pull_request routine skips a self-heal head that already has a passing flow/ready from this repo's Actions (the
-# title tells it from a job someone named flow/ready): it was reviewed when it was stamped. A new commit has no check, so it gets the full run. Any API error means run, not skip.
-skip_step() {
-  cat <<'EOF'
-      - name: flow/ready
-        id: stamp
-        env:
-          GH_TOKEN: ${{ github.token }}
-          SHA: ${{ github.event.pull_request.head.sha }}
-          REF: ${{ github.event.pull_request.head.ref }}
-        run: |
-          case "$REF" in self-heal/*) ;; *) exit 0 ;; esac
-          n="$(gh api "repos/$GITHUB_REPOSITORY/commits/$SHA/check-runs?check_name=flow/ready" \
-            --jq '[.check_runs[] | select(.app.slug == "github-actions" and .conclusion == "success" and .output.title == "ready.sh stamped this commit")] | length' 2>/dev/null || true)"
-          [ "${n:-0}" -gt 0 ] 2>/dev/null || exit 0
-          echo skip=true >>"$GITHUB_OUTPUT"
-          echo "### ${SHA:0:7} has a passing flow/ready check: it was reviewed when it was stamped" >>"$GITHUB_STEP_SUMMARY"
-EOF
-}
-
 render_one() { # render_one <name>: the workflow on stdout
   local f="$dir/$1.md" auth trigger cron tz timeout labels grants ref g s on="" iff="" group="" cancel=false ctx="" guard="" mode="--auto"
-  local skip="" run_if="" stamp=""
+  local stamp=""
   case "$(field "$f" auth oauth)" in
     oauth) auth='claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}' ;;
     api-key) auth='anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}' ;;
@@ -133,7 +114,7 @@ render_one() { # render_one <name>: the workflow on stdout
     pull_request)
       on='  pull_request:'$'\n''    types: [opened, synchronize, ready_for_review]'
       # drafts aren't ready, fork PRs get no secrets, and Dependabot runs get only Dependabot's secrets
-      iff="    if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'"
+      iff="    if: (github.event.pull_request.draft == false || startsWith(github.event.pull_request.head.ref, 'self-heal/')) && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'"
       group='-${{ github.event.pull_request.number }}' cancel=true
       ctx=' The pull request is #${{ github.event.pull_request.number }}.' ;;
     mention)
@@ -174,7 +155,6 @@ render_one() { # render_one <name>: the workflow on stdout
   # Only self-heal posts ready.sh's stamp as a flow/ready check run, which needs checks: write; the rest read it
   export R_PERM_checks=read
   if [ "$1" = self-heal ] && [[ " $grants " == *" contents "* ]]; then R_PERM_checks=write stamp="$(l="${labels%% *}"; stamp_step "${l:-self-heal}")"; fi
-  if [ "$trigger" = pull_request ]; then skip="$(skip_step)" run_if="        if: steps.stamp.outputs.skip != 'true'"; fi
   # Without github_token the action swaps in the Claude App's token, with every scope the App has. Only a
   # routine that pushes needs it (PRs opened with github.token don't trigger CI); the rest stay inside `grants`.
   local token='github_token: ${{ github.token }}' mkt="$market" clone=""
@@ -193,7 +173,7 @@ render_one() { # render_one <name>: the workflow on stdout
   # a placeholder alone on its line that renders empty (a step this routine has no use for) leaves no blank line
   R_NAME="$1" R_ON="$on" R_IF="$iff" R_GROUP="$group" R_CANCEL="$cancel" R_TIMEOUT="$timeout" R_LABELS="$labels" R_CREATE="$(field "$f" create_labels false)" \
   R_AUTH="$auth" R_TOKEN="$token" R_MARKET="$mkt" R_SETUP="${guard:+$guard${clone:+$'\n'}}$clone" R_MODE="$mode" R_CTX="$ctx" \
-  R_SKIP="$skip" R_RUN_IF="$run_if" R_STAMP="$stamp" \
+  R_STAMP="$stamp" \
     perl -pe '$w = /^\@[A-Za-z_]+\@$/; s/\@([A-Za-z_]+)\@/exists $ENV{"R_$1"} ? $ENV{"R_$1"} : die "unknown placeholder $1\n"/ge; $_ = "" if $w && $_ eq "\n"' "$tpl/workflow.yml"
 }
 
@@ -292,10 +272,12 @@ schedule() { # schedule <name> <cron> [--tz <zone>]: change an existing routine'
 }
 
 check() {
-  local n w ns bad=0; ns="$(names)" || exit 2
+  local n w ns bad=0 ok=0; ns="$(names)" || exit 2
   [ -f "$dir/profile.md" ] || { echo "✗ $dir/profile.md missing"; bad=1; }
   for n in $ns; do
-    if diff -q <(render_one "$n") ".github/workflows/flow-$n.yml" >/dev/null 2>&1; then echo "✓ $n"
+    if diff -q <(render_one "$n") ".github/workflows/flow-$n.yml" >/dev/null 2>&1; then
+      [ "$v" = 1 ] && echo "✓ $n"
+      ok=$((ok + 1))
     else echo "✗ $n: .github/workflows/flow-$n.yml differs from $dir/$n.md (routines.sh render)"; bad=1; fi
   done
   for w in .github/workflows/flow-*.yml; do
@@ -303,6 +285,7 @@ check() {
     n="${w##*/flow-}"; n="${n%.yml}"
     [ -f "$dir/$n.md" ] || { echo "✗ $w: its routine $dir/$n.md is gone (delete the workflow)"; bad=1; }
   done
+  [ "$bad" = 0 ] && echo "$ok routines in sync"
   return "$bad"
 }
 

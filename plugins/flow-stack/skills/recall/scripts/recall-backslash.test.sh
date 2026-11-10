@@ -3,7 +3,8 @@
 set -uo pipefail
 R="$(cd "$(dirname "$0")" && pwd)/recall.sh"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 SB="$(mktemp -d "${TMPDIR:-/tmp}/recall-backslash.XXXXXX")"; SB="$(cd "$SB" && pwd -P)"
 trap 'rm -rf "$SB"' EXIT
@@ -24,4 +25,4 @@ out="$("$R" grep 'temp\\new')"
 out="$("$R" sessions)"
 grep -qF "first: $msg" <<<"$out" && ok "sessions shows the prompt as written" || bad "sessions: $out"
 [ "$FAILS" = 0 ] || { echo "$FAILS failed"; exit 1; }
-echo "all passed"
+echo "recall-backslash: $PASSES passed"

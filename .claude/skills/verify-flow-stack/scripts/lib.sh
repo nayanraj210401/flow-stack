@@ -48,7 +48,7 @@ sees() { # sees "<label>" "<needle>" <cmd...>: the command's stdout+stderr conta
 }
 
 # hook <script> <json>: run a hook the way Claude Code does (JSON on stdin). OUT = its stdout.
-hook() { OUT="$(printf '%s' "$2" | "$H/$1" 2>>"$ART/stderr.log")" || true; }
+hook() { OUT="$(printf '%s' "$2" | "$H/$1" 2>>"$ART/stderr.log")" && RC=0 || RC=$?; }
 # pre <tool> <tool_input-json>: PreToolUse payload for this sandbox
 pre() { jq -nc --arg cwd "$PWD" --arg t "$1" --argjson i "$2" '{cwd:$cwd, hook_event_name:"PreToolUse", tool_name:$t, tool_input:$i}'; }
 # edit <path> [Edit|Write]: an Edit/Write PreToolUse payload for <path>

@@ -3,7 +3,8 @@
 set -uo pipefail
 T="$(cd "$(dirname "$0")" && pwd)/task.sh"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 SB="$(mktemp -d "${TMPDIR:-/tmp}/task-route.XXXXXX")"; SB="$(cd "$SB" && pwd -P)"
 trap 'rm -rf "$SB"' EXIT
@@ -61,4 +62,4 @@ case "$out" in "repo	org/api	"*) ok "a repo name with a slash still routes" ;; *
 "$T" route "add rate limits" >/dev/null
 [ ! -e "$SB/api/.flow" ] && ok "routing creates no task" || bad "route touched $SB/api/.flow"
 [ "$FAILS" = 0 ] || { echo "$FAILS failed"; exit 1; }
-echo "all passed"
+echo "task-route: $PASSES passed"

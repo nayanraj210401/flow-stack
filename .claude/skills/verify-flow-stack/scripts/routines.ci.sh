@@ -76,7 +76,7 @@ V=.github/workflows/flow-review.yml
 check "review workflow is valid YAML" ruby -ryaml -e 'YAML.load_file(ARGV[0])' "$V"
 [ "$(ruby -ryaml -e 'puts YAML.load_file(ARGV[0])[true]["pull_request"]["types"].join(",")' "$V")" = "opened,synchronize,ready_for_review" ] && ok "runs on pull_request events" || bad "pull_request trigger"
 grep -q "schedule:" "$V" && bad "review has a schedule" || ok "no schedule on a PR routine"
-grep -q "if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot\[bot\]'" "$V" && ok "skips drafts, fork PRs, and Dependabot" || bad "job condition: $(grep 'if:' "$V")"
+grep -q "if: (github.event.pull_request.draft == false || startsWith(github.event.pull_request.head.ref, 'self-heal/')) && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot\[bot\]'" "$V" && ok "skips drafts (but not self-heal drafts), fork PRs, and Dependabot" || bad "job condition: $(grep 'if:' "$V")"
 [ "$(perm "$V" contents)/$(perm "$V" pull-requests)/$(perm "$V" issues)" = read/write/read ] && ok "review can comment on PRs, not push" || bad "review perms"
 grep -q -- "--auto Run the routine in .github/routines/review.md. Follow it exactly. The pull request is #\${{ github.event.pull_request.number }}." "$V" && ok "review runs --auto (not ship) with the PR number" || bad "review prompt: $(grep -A1 prompt: "$V")"
 grep -q "flow-review-\${{ github.event.pull_request.number }}" "$V" && grep -q "cancel-in-progress: true" "$V" && ok "one run per PR; a new push cancels the old run" || bad "concurrency"

@@ -3,7 +3,8 @@
 set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)/post-tool.sh"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 SB="$(mktemp -d "${TMPDIR:-/tmp}/blind-sig.XXXXXX")"; SB="$(cd "$SB" && pwd -P)"
 trap 'rm -rf "$SB"' EXIT
@@ -21,4 +22,4 @@ for sig in blind1a2b3 blind4c5d6 blind7e8f9; do r="$(fire "flow-evidence: FAIL s
 for i in 1 2 3; do r="$(fire "flow-evidence: FAIL sig=blindaaaaa")"; done
 grep -q 'sig blindaaaaa' <<<"$r" && ok "three identical blind failures trip it, with the full sig" || bad "identical repeat did not trip: $r"
 [ "$FAILS" = 0 ] || { echo "== blind-sig · FAIL ($FAILS)"; exit 1; }
-echo "== blind-sig · PASS"
+echo "== blind-sig · PASS ($PASSES passed)"

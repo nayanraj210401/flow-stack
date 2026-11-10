@@ -6,10 +6,13 @@ set -uo pipefail
 D="$(cd "$(dirname "$0")" && pwd)"
 S="$D/routines.sh"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 
 SB="$(mktemp -d "${TMPDIR:-/tmp}/routines.XXXXXX")"; trap 'rm -rf "$SB"' EXIT
+Q="$(cd "$D/../../../../.." && bash "$S" check 2>&1)"; [ "$(printf '%s\n' "$Q" | wc -l | tr -d ' ')" = 1 ] && grep -qE '^[0-9]+ routines in sync' <<<"$Q" && ok "check is one summary line" || bad "check not quiet: $Q"
+V="$(cd "$D/../../../../.." && bash "$S" check -v 2>&1)"; [ "$(printf '%s\n' "$V" | wc -l | tr -d ' ')" -gt 1 ] && ok "check -v restores per-routine detail" || bad "check -v not verbose: $V"
 (cd "$D/../../../../.." && bash "$S" check >/dev/null) && ok "this repo's routines render byte-identical" || bad "routines.sh check fails at the repo root"
 
 cd "$SB" && git init -q
@@ -56,4 +59,4 @@ grep -q 'refused: someone has read access' summary && ok "refusal written to the
 guard write 7 o/r && ok "same-repo PR passes" || bad "same-repo PR refused"
 ! guard write 7 evil/r && ok "fork PR refused" || bad "fork PR passed"
 ! guard write 7 fail && ok "PR lookup failure refused" || bad "PR lookup failure passed"
-[ "$FAILS" = 0 ]
+[ "$FAILS" -eq 0 ] && echo "routines: $PASSES passed" || { echo "routines: $FAILS failed"; exit 1; }

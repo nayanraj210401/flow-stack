@@ -11,7 +11,8 @@
     "UserPromptSubmit": [
       {
         "hooks": [{ "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/anchor.sh\"", "timeout": 5 },
-                  { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/host.sh\"", "timeout": 5 }]
+                  { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/host.sh\"", "timeout": 5 },
+                  { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/handoff-nudge.sh\"", "timeout": 5 }]
       }
     ],
     "PreToolUse": [
@@ -33,6 +34,10 @@
       {
         "hooks": [{ "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/post-tool.sh\"", "timeout": 5 },
                   { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/host.sh\"", "timeout": 5 }]
+      },
+      {
+        "matcher": "Read|Grep|Glob",
+        "hooks": [{ "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/delegate-nudge.sh\"", "timeout": 5 }]
       },
       {
         "matcher": "Edit|Write|MultiEdit|NotebookEdit|mcp__.*__(create_text_file|replace_content|replace_regex|replace_symbol_body|insert_after_symbol|insert_before_symbol|rename_symbol|replace_lines|delete_lines|insert_at_line)",
