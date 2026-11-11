@@ -52,6 +52,8 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ github.token }}
+          # routines push as claude[bot] (self-heal branches); without this the action refuses any bot-started run
+          allowed_bots: claude
           plugin_marketplaces: https://github.com/nayanraj210401/flow-stack.git
           plugins: flow-stack@flow-stack
           prompt: |
