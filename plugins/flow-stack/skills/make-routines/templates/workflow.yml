@@ -52,6 +52,8 @@ jobs:
         with:
           @AUTH@
           @TOKEN@
+          # routines push as claude[bot] (self-heal branches); without this the action refuses any bot-started run
+          allowed_bots: claude
           plugin_marketplaces: @MARKET@
           plugins: flow-stack@flow-stack
           prompt: |
