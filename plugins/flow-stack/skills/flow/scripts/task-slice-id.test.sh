@@ -3,7 +3,8 @@
 set -uo pipefail
 T="$(cd "$(dirname "$0")" && pwd)/task.sh"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 SB="$(mktemp -d "${TMPDIR:-/tmp}/task-slice-id.XXXXXX")"; SB="$(cd "$SB" && pwd -P)"
 trap 'rm -rf "$SB"' EXIT
@@ -22,4 +23,4 @@ done
 out="$("$T" tdd 'S.' red 2>&1)" && bad "tdd 'S.' accepted" || { grep -q 'no slice' <<<"$out" && ok "tdd 'S.' rejected" || bad "tdd 'S.' failed for another reason: $out"; }
 "$T" slice S2 doing >/dev/null 2>&1 && grep -A1 '^## S2' "$F" | grep -q 'status: doing' && ok "a real id still works" || bad "S2 doing failed"
 [ "$FAILS" = 0 ] || { echo "$FAILS failed"; exit 1; }
-echo "all passed"
+echo "task-slice-id: $PASSES passed"

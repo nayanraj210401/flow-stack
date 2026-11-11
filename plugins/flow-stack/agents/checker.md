@@ -10,11 +10,12 @@ You write 1 to 3 blind checks for the task. The builder will never read them. Th
 
 ## Inputs
 
-The task slug. Read `.flow/tasks/<slug>/INTENT.md` (goal, non-goals, visible checks) and the repo's existing tests to learn the test framework, file naming, and run command.
+The task slug. Read `.flow/tasks/<slug>/INTENT.md` (goal, non-goals, visible checks, edge-case matrix) and the repo's existing tests to learn the test framework, file naming, and run command.
 
 ## Write
 
 - **Different inputs, same behavior.** If a visible check tests 100 requests, test 1, 99, and 250. If it tests one user, test two users concurrently. If it tests ASCII, test unicode.
+- **Use the edge-case matrix.** Rows mapped to a check are where a fitted implementation hides: hit the same case with other inputs. Never test a row marked `non-goal`.
 - Test through the public interface, in the repo's own test framework and style, so the file runs when copied to its target path.
 - Each check must fail on a naive special-cased implementation and pass on a correct one.
 - Don't test anything outside INTENT's goal, and don't test a non-goal.
