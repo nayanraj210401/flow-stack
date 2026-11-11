@@ -4,7 +4,8 @@
 set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 
 SB="$(mktemp -d "${TMPDIR:-/tmp}/pkgcheck.XXXXXX")"; SB="$(cd "$SB" && pwd -P)"
@@ -36,6 +37,11 @@ expect allow 'pip install dist/foo-1.0.tar.gz'
 expect allow 'pip install --target vendor left-pad'
 expect allow 'pip install -t vendor left-pad'
 expect allow 'npm install @scope/pkg'
+expect allow 'npm install foo.tgz'
+expect allow 'npm install foo.tar.gz left-pad'
+expect allow 'npm i foo.tar'
+expect allow 'pip install foo.tgz'
+expect deny  'npm install foo.tgz notreal-pkg'
 expect deny  'npm install notreal-pkg'
 expect deny  'npm install notreal-pkg > install.log'
 expect deny  'pip install -r reqs.txt notreal-pkg'
@@ -45,4 +51,4 @@ expect deny  'pnpm add -r notreal-pkg'
 expect deny  'npm install -t notreal-pkg'
 expect deny  'pip install -t vendor notreal-pkg'
 
-[ "$FAILS" -eq 0 ] && echo ok || { echo "$FAILS failed"; exit 1; }
+[ "$FAILS" -eq 0 ] && echo "pkgcheck-args: $PASSES passed" || { echo "pkgcheck-args: $FAILS failed"; exit 1; }

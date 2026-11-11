@@ -40,7 +40,7 @@ feedback() {
 case "$tool" in
   Bash)
     out="$(jq -r '(.tool_response | if type == "object" then (.stdout // "") + "\n" + (.stderr // "") else tostring end)' <<<"$FLOW_INPUT")"
-    line="$(grep -Eo 'flow-evidence: (PASS|FAIL)( sig=[0-9a-f]+)?' <<<"$out" | tail -n1 || true)"
+    line="$(grep -Eo 'flow-evidence: (PASS|FAIL)( sig=[0-9a-z]+)?' <<<"$out" | tail -n1 || true)"
     case "$line" in
       *PASS*)
         rm -f "$state"/fail-* "$state"/edits

@@ -13,7 +13,7 @@ Every tool call is already in `trail.jsonl` (PostToolUse hook, secrets redacted)
 2. Actual cost: `../budget/scripts/cost.sh session` when ccusage is available. Otherwise mark it `~ unknown`.
 3. Fill `.flow/tasks/<slug>/TRACE.md` from the template:
    - **Outcome** against INTENT's Goal, citing the acceptance evidence.
-   - **Estimate vs. actual**: from ESTIMATE and the cost data. Human minutes = gates answered × ~2 min + review estimate from `tour`, unless the human tells you the real number.
+   - **Estimate vs. actual**: from ESTIMATE and the cost data. Human minutes = the task's `attention_min` from `../board/scripts/collect.sh` (measured from transcripts: prompts, answers, questions, permission waits, 5 min cap each), unless the human tells you the real number. With no transcripts, fall back to gates answered × ~2 min + the `tour` review estimate, and say it is an estimate.
    - **Timeline** by phase, from trail timestamps.
    - **Decisions**, human ones first. These answer "who decided this?".
    - **Checks**: ✓/✗ per acceptance check. Blind checks: count only.

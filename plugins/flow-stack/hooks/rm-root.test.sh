@@ -4,7 +4,8 @@
 set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)"; PLUGIN="$(cd "$H/.." && pwd)"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 
 SB="$(mktemp -d "${TMPDIR:-/tmp}/rm-root.XXXXXX")"; SB="$(cd "$SB" && pwd -P)"
@@ -25,7 +26,7 @@ want() {
   if [ "$d" = "$1" ]; then ok "$2 → $1"; else bad "$2 → got $d, want $1"; fi
 }
 
-echo "-- root and home are never deleted"
+# -- root and home are never deleted
 want deny 'rm -rf /'
 want deny 'rm -r -f /'
 want deny 'rm -f -r /'
@@ -35,12 +36,12 @@ want deny 'rm -rf "${HOME}"'
 want deny 'rm -r -f ~/'
 want deny 'cd x && rm -rf --no-preserve-root /'
 
-echo "-- other targets keep their decision"
+# -- other targets keep their decision
 want allow 'rm -rf ./build'
 want allow 'rm -rf /tmp/x'
 want allow 'rm -r -f build/ dist/'
 want allow 'rm -f /'
 want ask   'rm -rf "$HOME/tmp/x"'
 
-[ "$FAILS" -eq 0 ] && { echo "== rm-root · PASS"; exit 0; }
+[ "$FAILS" -eq 0 ] && { echo "== rm-root · PASS ($PASSES passed)"; exit 0; }
 echo "== rm-root · FAIL ($FAILS)"; exit 1

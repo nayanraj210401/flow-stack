@@ -52,9 +52,10 @@ stale=false
 
 extra='{}'
 if [ -n "$full" ]; then
+  # (awk hands rows to read with US, not tab: tab is IFS whitespace, so an empty title would collapse)
   # per slice: "<id>\t<title>\t<status>\t<verdict of its newest evidence labelled <id> or <id>:…>"
-  slices="$(awk '/^## /{if(id!="")print id "\t" t "\t" s; id=$2; t=substr($0,4); sub(/^[^ ]+ · /,"",t); s=""} /^status:/{s=$2} END{if(id!="")print id "\t" t "\t" s}' "$d/SLICES.md" 2>/dev/null |
-    while IFS=$'\t' read -r id title status; do
+  slices="$(awk '/^## /{if(id!="")print id "\037" t "\037" s; id=$2; t=substr($0,4); sub(/^[^ ]+ · /,"",t); s=""} /^status:/{s=$2} END{if(id!="")print id "\037" t "\037" s}' "$d/SLICES.md" 2>/dev/null |
+    while IFS=$'\037' read -r id title status; do
       v="$(grep -E "^### [^ ]+ · $id(:[^ ]+)? · [A-Z]+ · exit=" "$st/EVIDENCE.md" 2>/dev/null | tail -n1 | awk -F' · ' '{print $3}')"
       printf '%s\t%s\t%s\t%s\n' "$id" "$title" "$status" "$v"
     done)"
@@ -81,11 +82,11 @@ clash="$([ -f "$st/.clash" ] && cut -f1 "$st/.clash" | sort -u | while read -r p
   done | jq -sc "$clean"' map(map_values(clean))')"
 jq -nc --argjson extra "$extra" --arg task "$FLOW_TASK" --arg where "$where" --arg slice "$slice" --arg owner "$owner" --argjson clash "${clash:-[]}" \
   --arg done "${done_n:-0}" --arg total "${total:-0}" --arg tdd "$tdd" \
-  --arg ts "${ev_ts:-}" --arg label "${ev_label:-}" --arg verdict "${ev_verdict:-}" --argjson stale "$stale" '
+  --arg ts "${ev_ts:-}" --arg ev_label "${ev_label:-}" --arg verdict "${ev_verdict:-}" --argjson stale "$stale" '
   # repo files are untrusted: no control characters (terminal escapes) reach the band or spinner
   def clean: gsub("[\u0001-\u001f\u007f-\u009f]"; "");
   {task: ($task | clean), where: $where, owner: $owner,
    slice: ($slice | if . == "" then null else {id: (split(" · ")[0] | clean), title: (split(" · ")[1:] | join(" · ") | clean)} end),
    done: ($done | tonumber), total: ($total | tonumber), tdd: ($tdd | clean),
-   evidence: (if $ts == "" then null else {label: ($label | clean), verdict: ($verdict | clean), ts: ($ts | clean)} end),
+   evidence: (if $ts == "" then null else {label: ($ev_label | clean), verdict: ($verdict | clean), ts: ($ts | clean)} end),
    stale: $stale} + (if $clash == [] then {} else {clash: $clash} end) + $extra'
