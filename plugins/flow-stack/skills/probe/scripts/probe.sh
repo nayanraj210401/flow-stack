@@ -98,7 +98,7 @@ while IFS=$'\t' read -r status f; do
     A) stash_copy "$f" && rm -f "$f" && reverted+=("A $f") ;;
     *) stash_copy "$f" && git show "HEAD:$f" >"$f" && reverted+=("M $f") ;;
   esac
-done < <(git diff --name-status --no-renames HEAD; git ls-files --others --exclude-standard | awk '{print "A\t" $0}')
+done < <(git -c core.quotepath=off diff --name-status --no-renames HEAD; git -c core.quotepath=off ls-files --others --exclude-standard | awk '{print "A\t" $0}')
 fi
 
 if [ "${#reverted[@]}" -eq 0 ]; then

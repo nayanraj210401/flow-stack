@@ -12,6 +12,7 @@ A skill that confidently describes a script that no longer exists sends the agen
 
 - `.claude/skills/*/SKILL.md` containing `generated-by: flow-stack:`.
 - `.flow/playbooks/*.md`, `.flow/gates.md`, `.flow/map.md`, `.flow/taste.md`.
+- `.github/routines/*.md` (from make-routines): `routines.sh check` is their self-test.
 - The personal skills listed in the profile, if the human asks.
 
 ## Check each one (run these in parallel, one subagent per skill for big repos)

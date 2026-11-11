@@ -3,8 +3,8 @@
 #
 #   FLOW_ROOT  this checkout's top level: files, fences, git diffs, running checks
 #   FLOW_MAIN  the main checkout; equals FLOW_ROOT unless this is a linked git worktree
-#   FLOW_DIR   $FLOW_MAIN/.flow, shared by every worktree (.flow/ is untracked, so a
-#              worktree has none of its own)
+#   FLOW_DIR   $FLOW_MAIN/.flow, shared by every worktree (tasks, trail and stamps are untracked; a
+#              tracked .flow/features/ is per checkout, and features.sh reads $FLOW_ROOT's copy)
 #   FLOW_ACTIVE the file naming the active task: $FLOW_DIR/ACTIVE, or a lead worktree's own
 #              <git-dir>/flow-active (a worktree with one is a lead of its own task, not a lane)
 #   FLOW_LANE  "" in the main checkout, in a lead worktree, and in a worktree with no pointer

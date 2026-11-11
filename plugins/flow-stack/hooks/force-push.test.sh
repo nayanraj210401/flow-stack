@@ -4,7 +4,8 @@
 set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 
 SB="$(mktemp -d "${TMPDIR:-/tmp}/force-push.XXXXXX")"; SB="$(cd "$SB" && pwd -P)"
@@ -25,7 +26,7 @@ expect() { # expect <want> <command>
   [ "$got" = "$1" ] && ok "$1: $2" || bad "$2 → $got, want $1"
 }
 
-echo "-- force-push to main/master: deny"
+# -- force-push to main/master: deny
 expect deny 'git push --force origin main'
 expect deny 'git push origin main --force'
 expect deny 'git -C . push --force origin main'
@@ -36,7 +37,7 @@ expect deny 'git push origin +main'
 expect deny 'git push origin HEAD:+main'
 expect deny 'git push origin HEAD:refs/heads/main -f'
 expect deny 'git push origin refs/heads/main --force'
-echo "-- force-push elsewhere: ask"
+# -- force-push elsewhere: ask
 expect ask 'git push -f origin feat/x'
 expect ask 'git -C . push -f origin feat/x'
 expect ask 'git -c k=v push -fu origin feat/x'
@@ -44,10 +45,10 @@ expect ask 'git push origin +feat/x'
 expect ask 'git push -f origin feature/main'
 expect ask 'git push --force origin HEAD:refs/heads/feature/main'
 expect ask 'git push --force-with-lease origin feat/x'
-echo "-- ordinary pushes: allow"
+# -- ordinary pushes: allow
 expect allow 'git push origin main'
 expect allow 'git push -u origin main'
 expect allow 'git push -u origin feat/maintenance'
 
-[ "$FAILS" -eq 0 ] && { echo "force-push: PASS"; exit 0; }
+[ "$FAILS" -eq 0 ] && { echo "force-push: PASS ($PASSES passed)"; exit 0; }
 echo "force-push: FAIL ($FAILS)"; exit 1

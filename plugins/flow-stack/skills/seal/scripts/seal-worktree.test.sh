@@ -5,7 +5,8 @@ set -uo pipefail
 D="$(cd "$(dirname "$0")" && pwd)"; PLUGIN="$(cd "$D/../../.." && pwd)"
 SEAL="$D/seal.sh"; T="$PLUGIN/skills/flow/scripts/task.sh"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 has() { grep -Fq -- "$2" <<<"$1"; }
 
@@ -27,20 +28,20 @@ echo 'echo new check' >tests/test_new.sh   # a test the slice adds: main has no 
 echo 'echo worktree' >>tests/test_add.sh  # main's copy differs from the worktree's
 "$SEAL" add tests/test_new.sh tests/test_add.sh >/dev/null
 
-echo "-- untouched seals verify intact in the lead worktree"
+# -- untouched seals verify intact in the lead worktree
 v="$("$SEAL" verify)"; rc=$?
 [ "$rc" = 0 ] && ok "seals intact" || bad "false alarm (rc=$rc): $v"
 
-echo "-- an edit in the worktree is detected"
+# -- an edit in the worktree is detected
 echo tamper >>tests/test_add.sh
 v="$("$SEAL" verify)"; rc=$?
 { [ "$rc" != 0 ] && has "$v" "CHANGED  tests/test_add.sh"; } && ok "edit detected" || bad "edit missed (rc=$rc): $v"
 
-echo "-- reseal records the worktree's hash"
+# -- reseal records the worktree's hash
 "$SEAL" reseal >/dev/null
 v="$("$SEAL" verify)"; rc=$?
 [ "$rc" = 0 ] && ok "intact after reseal" || bad "reseal hashed another file (rc=$rc): $v"
 [ "$(grep -c . "$S")" = 2 ] && ok "reseal kept both seals" || bad "reseal dropped a seal: $(cat "$S")"
 
-[ "$FAILS" -eq 0 ] && { echo "== seal-worktree · PASS"; exit 0; }
+[ "$FAILS" -eq 0 ] && { echo "== seal-worktree · PASS ($PASSES passed)"; exit 0; }
 echo "== seal-worktree · FAIL ($FAILS)"; exit 1
