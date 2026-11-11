@@ -1,5 +1,13 @@
 plugins/flow-stack/evals/results/
 .DS_Store
 .serena
-.claude/
-.flow/
+# Tracked so runners and fresh clones see them: the verify driver and the feature map
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/verify-flow-stack/
+.flow/*
+!.flow/features/
+.flow/features/lanes/
+*/**/.claude/
+*/**/.flow/
