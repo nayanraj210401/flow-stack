@@ -3,14 +3,23 @@
 # entry, and the active task anchor. After compaction, re-inject the handoff.
 . "$(dirname "$0")/lib.sh"
 flow_init session-start
-flow_enabled session-start || exit 0
-
 source_kind="$(flow_field .source)"
+
+# Compaction and /clear drop the injected anchor and banner from context: forget what this session was told, so the
+# next prompt re-injects both. Runs before the toggle: the anchor hook has its own switch.
+if [ "$source_kind" = compact ] || [ "$source_kind" = clear ]; then
+  sid="$(flow_field .session_id)"
+  [ -n "$sid" ] && rm -f "$FLOW_HOME/anchor/${sid//\//_}".*
+fi
+
+flow_enabled session-start || exit 0
 
 # Housekeeping: the pre-ownership lead registry (gone since tasks have owners), and sidebar push
 # records a crashed session never cleared at its end.
 rm -rf "$FLOW_HOME/leads"
 find "$FLOW_HOME/hosts" -type f -mtime +3 -delete 2>/dev/null || true
+find "$FLOW_HOME/anchor" -type f -mtime +7 -delete 2>/dev/null || true
+find "$FLOW_HOME/handoff" -type f -mtime +7 -delete 2>/dev/null || true
 
 router="$(profile_section Toolchain 2>/dev/null | sed -n 's/^- router:[[:space:]]*\([^ ·]*\).*/\1/p' | head -n1 || true)"
 
@@ -69,7 +78,12 @@ fi
 [ -f "$FLOW_DIR/lessons.md" ] && printf 'Lessons: .flow/lessons.md; skim before planning.\n'
 if [ -d "$FLOW_DIR/features" ]; then
   nfeat="$(ls "$FLOW_DIR"/features/*.md 2>/dev/null | grep -vc '/README\.md$' || true)"
-  nstale="$(grep -lE '^status: (stale|broken)' "$FLOW_DIR"/features/*.md 2>/dev/null | wc -l | tr -d ' ')"
+  # the latest stamp in verified.tsv wins over a feature file's own status line (features.sh state)
+  nstale="$(awk -v t="$FLOW_DIR/verified.tsv" 'BEGIN { while ((getline l < t) > 0) { split(l, a, "\t"); s[a[1]] = a[2] } }
+    FNR == 1 { fm = ($0 == "---"); next } fm && $0 == "---" { fm = 0 }
+    fm && /^(id|status):/ { k = $0; sub(/:.*/, "", k); v = $0; sub(/^[^:]*:[[:space:]]*/, "", v); m[FILENAME, k] = v; f[FILENAME] = 1 }
+    END { for (x in f) { v = ((m[x, "id"]) in s) ? s[m[x, "id"]] : m[x, "status"]; n += (v == "stale" || v == "broken") } print n + 0 }' \
+    "$FLOW_DIR"/features/*.md 2>/dev/null || echo 0)"
   printf 'Feature map: .flow/features/ (%s features%s). Before changing behavior, run %s impact.\n' "$nfeat" "$([ "$nstale" -gt 0 ] && printf ', %s stale or broken' "$nstale")" "$(cd "$(dirname "$0")/../skills/feature-map/scripts" && pwd)/features.sh"
 fi
 
@@ -88,7 +102,7 @@ if [ -n "$FLOW_TASK_DIR" ]; then
   fi
   [ -n "$slice" ] && printf 'Current slice: %s\n' "${slice#\#\# }"
   if [ -z "$(find "$FLOW_TASK_DIR" -type f ! -name trail.jsonl ! -name '.*' -mtime -3 2>/dev/null | head -n1)" ]; then
-    printf 'Stale: this task is untouched for more than 3 days. If this session is about something else, run task.sh close (or switch) first, or its goal anchors every prompt.\n'
+    printf 'Stale: this task is untouched for more than 3 days. If this session is about something else, run task.sh close (or switch) first, or its goal keeps anchoring this session.\n'
   fi
 
   if [ "$source_kind" = compact ] || [ "$source_kind" = resume ]; then

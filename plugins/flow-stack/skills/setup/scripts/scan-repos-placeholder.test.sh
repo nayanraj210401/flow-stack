@@ -10,4 +10,4 @@ out="$("$here/scan-repos.sh" "$t")"
 row() { awk -F'\t' -v d="$1" '$2 ~ "/"d"$" {print $3 "|" $4}' <<<"$out"; }
 [ "$(row ph)" = "node|-" ] || { echo "FAIL: placeholder reported as a test"; echo "$out"; exit 1; }
 [ "$(row real)" = "node|npm test" ] || { echo "FAIL: real test script lost"; echo "$out"; exit 1; }
-echo ok
+echo "scan-repos-placeholder: ok"

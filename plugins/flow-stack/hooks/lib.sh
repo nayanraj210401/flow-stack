@@ -173,7 +173,33 @@ flow_host() {
   elif [ -n "${CONDUCTOR_WORKSPACE_PATH:-}" ]; then echo conductor
   else echo none; fi
 }
-flow_auto_ship() { local f; f="$(flow_auto_flag)" && [ "$(cat "$f" 2>/dev/null)" = ship ]; }
+# flow_on_runner: this hook process runs on a GitHub-hosted Actions runner. Only the hook's own environment counts,
+# which no Bash call from the model can change. A human can export these on their own machine; the model cannot.
+# Self-hosted runners don't count: their disk may be someone's laptop.
+flow_on_runner() {
+  [ "${GITHUB_ACTIONS:-}" = true ] && [[ "${GITHUB_RUN_ID:-}" =~ ^[0-9]+$ ]] \
+    && [ "${RUNNER_ENVIRONMENT:-}" = github-hosted ] && [ -n "${RUNNER_TEMP:-}" ] && [ -d "$RUNNER_TEMP" ]
+}
+# --gha: the flag says gha AND this is a runner, checked at every decision, so a flag file written by hand off a runner does nothing.
+flow_auto_gha() { local f; f="$(flow_auto_flag)" && [ "$(cat "$f" 2>/dev/null)" = gha ] && flow_on_runner; }
+flow_auto_ship() { local f; f="$(flow_auto_flag)" || return 1; [ "$(cat "$f" 2>/dev/null)" = ship ] || flow_auto_gha; }
+# factory_ready [root]: the repo can prove its own changes, so unattended shipping may rest on more than the model's word.
+# Committed only (git ls-files, git grep HEAD): runners and cloud sessions see the clone, not this disk.
+# Prints what is missing and fails when anything is.
+factory_ready() {
+  local r="${1:-${FLOW_ROOT:-.}}" miss=""
+  [ -n "$(git -C "$r" ls-files -- ':(top).claude/skills/verify-*' ':(top).claude/skills/verify/*' ':(top)verify/*' 2>/dev/null | head -n1)" ] \
+    || miss="a committed verify driver (/flow-stack:make-verifier)"
+  # a feature file directly in .flow/features/ (not README.md) whose frontmatter has a non-empty scenario
+  local f map=""
+  while IFS= read -r f; do
+    case "$f" in README.md) continue ;; *.md) ;; *) continue ;; esac
+    git -C "$r" show "HEAD:.flow/features/$f" 2>/dev/null | awk 'NR == 1 && $0 == "---" { fm = 1; next } fm && $0 == "---" { exit }
+      fm && /^scenario:[[:space:]]*[^[:space:]#"'"'"']/ { found = 1; exit } END { exit !found }' && { map=1; break; }
+  done < <(git -C "$r" ls-tree --full-tree --name-only HEAD:.flow/features 2>/dev/null)
+  [ -n "$map" ] || miss="${miss:+$miss; }a committed feature map with a scenario (/flow-stack:feature-map)"
+  [ -z "$miss" ] || { echo "$miss"; return 1; }
+}
 FLOW_AUTO_QUEUE="Add it to .flow/tasks/<slug>/GATES.md (question, options, recommendation), keep going on work it doesn't block, and list GATES.md first in the handoff."
 
 pre_decide() {
@@ -226,7 +252,9 @@ profile_fm() {
       line = $0; sub(/^[[:space:]]+/, "", line)
       if (index(line, k ":") == 1) {
         v = substr(line, length(k) + 2); sub(/#.*/, "", v)
-        gsub(/^[[:space:]]+|[[:space:]]+$/, "", v); print v; exit
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
+        if (v ~ /^".*"$/ || v ~ /^\047.*\047$/) v = substr(v, 2, length(v) - 2)
+        print v; exit
       }
     }'
 }
