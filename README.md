@@ -8,6 +8,7 @@ It is built from skills, bash + jq hooks, and existing tools. There is no new ru
 - [Architecture](#architecture)
 - [How you use it day to day](#how-you-use-it-day-to-day)
 - [When to use what](#when-to-use-what)
+- [Software factory mode](#software-factory-mode)
 - [Skill catalog](#skill-catalog)
 - [What it costs, and how it keeps cost down](#what-it-costs-and-how-it-keeps-cost-down)
 - [Guardrails (hooks)](#guardrails-hooks)
@@ -126,10 +127,74 @@ Type a skill yourself when you want a specific thing: `/flow-stack:challenge`, `
 | Many independent slices | `/flow-stack:delegate` | parallel worktree workers, capped by your review budget |
 | Audit what the agent did | `/flow-stack:trace` | TRACE.md: timeline, who decided what, evidence, cost |
 | End of day | `/flow-stack:wrap` | shipped, waiting on you, and your first step tomorrow |
-| See everything at once | `/flow-stack:board` | one private artifact link, refreshed in place: what needs you, tasks, features, decisions, debt, spend; your layout, theme, and custom panels persist in the profile's `# Board` section |
+| See everything at once | `/flow-stack:board` | one private artifact link, refreshed in place: what needs you, tasks (with the Claude sessions behind each), features, decisions, debt, spend, and your attention (measured from transcripts, with a warning when parallel sessions split it); your layout, theme, and custom panels persist in the profile's `# Board` section |
 | After a frustrating session | `/flow-stack:reflect` | proposed taste and lesson updates you approve |
 | New repo | `/flow-stack:setup` → `/flow-stack:feature-map` → `/flow-stack:make-verifier` | a driver that proves this app works the way a user uses it |
 | Installed a new plugin or hook | `/flow-stack:setup adapt` | flow-stack re-fits itself around your toolchain |
+| Run flow-stack with nobody at the keyboard | `/flow-stack:setup-factory` (or `/flow-stack:make-routines` for routines alone) | GitHub Actions routines: see [Software factory mode](#software-factory-mode) |
+
+## Software factory mode
+
+The same flow can run without you: requests come in, flow turns each one into a verified PR, and you review the spec, the code, and the product. The hooks still hold. An unattended run gets the guard, the fences, and the ready gate, because each GitHub Actions job installs the plugin.
+
+Use it when the repo can prove its own changes. **Factory-ready** means a *committed* verify driver (`.claude/skills/verify-*/` or `verify/`) and a *committed* feature map with at least one scenario. A runner sees only the clone, so files on your disk don't count. `/flow-stack:setup` reports it as the `factory` row. Without it, `make-routines` refuses `self-heal` (and `auto-merge`, once copied in).
+
+**Start here:** `/flow-stack:setup-factory`. It explains the factory, reads the repo and your machine, and asks where it should run (this laptop, a server or VPS, GitHub Actions, cloud sessions), what it should do, up to what risk it builds alone (`risk:high` never gets code), and how far it goes. It tunes your profile, makes the repo factory-ready, and sets up the routines or the shift. Repo changes end in one draft PR; a machine-only setup stays local, with no PR.
+
+```mermaid
+flowchart LR
+  subgraph In[Requests in]
+    I1[issue labelled heal-ok]
+    I2["@claude comment"]
+    I3[self-create: bugs it reproduced]
+  end
+  In --> F["flow --auto<br/>intent → slices → verify → review"]
+  F --> G{{"ready.sh stamp<br/>(review, deslop, tour, impacted scenarios)"}}
+  G --> PR[draft PR]
+  PR --> H1([you review the code])
+  H1 --> M["merge (you, or auto-merge<br/>on a PR you labelled, or opt-in low risk)"]
+  M --> H2([you review the product])
+```
+
+| Routine | Trigger | What it does |
+|---|---|---|
+| `review` | every non-draft PR | posts a fresh-context review; never approves or blocks |
+| `self-create` | nightly | files issues only for bugs it reproduced by running the code |
+| `self-heal` | nightly | turns maintainer-labelled issues into proven draft PRs, at most 3 a run |
+| `mention` | `@claude` comment from someone with write access | runs the request through flow; draft PRs or a comment saying why it stopped |
+| `triage` | every 4 hours | labels new issues by type, readiness, size and risk; a change to the safety machinery is risk:high and is never built unattended |
+| `ideate` | weekly | files at most one `proposal`, with 2 independent cited sources; self-heal builds it only after you label it both `accept` and `heal-ok` |
+| `auto-merge` | schedule | merges PRs a maintainer labelled, and with `auto_merge: low-risk` self-heal PRs of a human-approved `risk:low` `size:S` issue, after tests and a security review; never touches the safety machinery (repo-local today, see [factory.md](plugins/flow-stack/skills/flow/references/factory.md)) |
+
+**How much runs without you** is set per routine, not guessed. A routine without `contents` in `grants` runs as `--auto` and the hooks deny every push and PR. With `contents` it runs as `--auto ship`, which can push its own branch and open a PR only after `ready.sh` stamps HEAD. In a session, pair mode is unchanged.
+
+**Operating it:**
+
+- **Pause everything:** `gh variable set FLOW_FACTORY --body off`. `gh variable delete FLOW_FACTORY` resumes.
+- **One writer at a time:** scheduled routines that push (self-heal, auto-merge) share one concurrency group. `mention` runs per comment.
+- **Usage limits:** a run that hits a Claude usage limit ends green with "Stopped by a Claude usage limit" rather than a failed verdict.
+- **Your labels:** routines never create or edit labels unless the routine says `create_labels: true`. Map the catalog's names to yours in `.github/routines/labels.tsv` before `add`.
+- **A live board:** name a GitHub Project in your profile (`factory:` then `  project: <owner>/<n>`) and `/flow-stack:board` adds a Factory panel; `board/scripts/factory.sh apply` moves each card to the column its issue or PR state implies. It reads label names through `labels.tsv`, and never moves a card into Ready (that one is yours).
+- **Several repos:** list them in your profile's `# Repos` with a `what:` line, and `task.sh route "<request>"` picks the repo, the workspace, or asks one question.
+- **Your own overnight shift:** `make-routines add shift --local` runs on your laptop (launchd or cron, while it is on). It prepares pending reviews for PRs waiting on you, local fixes for feedback on your PRs, and proven commits for issues assigned to you, then writes a morning digest. Reviews stay pending (only you see them), and the shift script itself never pushes or opens anything: that is `shift.sh push` or `shift.sh open`, which you run. It is not a sandbox: list only repos whose code you trust.
+
+### Cloud sessions (Claude Code on the web, Slack)
+
+Cloud sessions don't install plugins on their own, even ones your repo's `.claude/settings.json` enables. Install flow-stack in the environment's setup script:
+
+1. On claude.ai/code, open the environment's settings and give it **Trusted** network access (the install clones from GitHub).
+2. Set its **setup script** to:
+   ```bash
+   claude plugin marketplace add https://github.com/nayanraj210401/flow-stack.git
+   claude plugin install flow-stack@flow-stack
+   ```
+3. Commit a feature map (`.flow/features/`). `.flow/` is otherwise gitignored, and flow's ready gate stays off in a clone without it.
+4. Optional: set `FLOW_STACK_HOME` in the repo's `.claude/settings.json` `env` key to point the hooks at a committed profile.
+5. Start a session and check that the plugin loaded: the first reply carries the `## Profile` block, and `/flow-stack:` completes.
+
+What's been tested (#194): the install command works in a cloud shell, and `env` from `.claude/settings.json` reaches the hooks. Still unconfirmed: whether a plugin installed by the setup script loads at launch. If step 5 fails, comment on #194. One known limit: cloud sessions have no GitHub GraphQL, so `gh pr create` and `gh pr ready` fail there (`HTTP 403`). A cloud session can build and stamp a branch, but use a routine or your laptop to open the PR.
+
+`/flow-stack:setup-factory` walks all of this in order. Setup steps (secret, GitHub App, branch protection) are in [make-routines](plugins/flow-stack/skills/make-routines/SKILL.md). The stage-by-stage map, with what is planned and its issue, is [factory.md](plugins/flow-stack/skills/flow/references/factory.md).
 
 ## Skill catalog
 
@@ -218,6 +283,8 @@ Type a skill yourself when you want a specific thing: `/flow-stack:challenge`, `
 | `make-runner` | Generates `.claude/skills/run-<repo>/` with verified install, start, seed, reset, and stop commands. |
 | `make-playbook` | Generates `.flow/playbooks/<name>.md` from past traces, for workflows this repo repeats. |
 | `make-gates` | Generates `.flow/gates.md`: this repo's irreversible commands as deny/ask rules the guard hook enforces. |
+| `setup-factory` | Sets up a software factory on any host: this laptop, a server or VPS, GitHub Actions, or cloud sessions. It explains the factory, reads the repo's and machine's state (loop stages, host, profile, shift, plus secret, branch rules, labels and kill switch on GitHub), and interviews you: where it runs, what it does, up to what risk it builds alone, how far it goes, risky paths, solo or team. It tunes your profile, fixes verify first, hands the picks to `make-routines` and the shift, and ends in a draft PR for repo changes or local changes only for a machine setup. |
+| `make-routines` | Generates GitHub Actions routines picked from a catalog: `review` (the reviewer agent on every PR), `self-create` (files reproducible bugs), `self-heal` (proven draft PRs), `mention` (`@claude` comments run through flow, ending in a draft PR), `triage` (type, readiness, size and risk labels on new issues), `ideate` (one evidence-cited `proposal` issue a week, built only after a human `accept`), or your own. Cloud routines can't load plugins; Actions installs flow-stack on every run, pinnable with `flow_ref`. Asks before opening a PR with the workflows. `add shift --local` renders the shift: overnight on your laptop it prepares pending reviews, fixes for feedback on your PRs, and commits for issues assigned to you, plus a morning digest; you release each one. |
 | `make-skill` | Generates any other repo or personal skill, with a self-test. |
 | `tend` | Re-runs every generated skill's self-test and flags drift against the code. |
 
@@ -241,7 +308,7 @@ flow-stack writes files and makes decisions, and that costs something. These are
 |---|---|---|
 | Skill list the model sees | ≈ 1.75k | every session (cached after the first turn) |
 | SessionStart context (profile, rules, taste, active task) | ≈ 0.3–0.5k | every session |
-| Intent anchor | ≈ 40 | every prompt, only while a task is active |
+| Intent anchor | ≈ 40 | when the anchor changes, then every 10th prompt, only while a task is active |
 | `flow` + a playbook + conventions | ≈ 3.6k | only when a non-trivial task starts |
 
 On small eval tasks, where fixed overhead dominates, a session with the plugin costs **1.43×** a plain session on average. That was **1.78×** before the optimizations below.
@@ -264,7 +331,7 @@ A rework loop or a wrong approach usually costs more than the overhead. Judge it
 ### How cost is kept down
 
 1. **Bookkeeping is bash, not the model.** Evidence, seals, probes, blind-check runs, the audit trail, the auto handoff, diffstat, and the slice-done proofs are shell scripts and hooks. They cost zero model tokens, which is why no rigor level turns them off.
-2. **Small always-on footprint.** The 18 principles are one skill with on-demand files. The nine skills you invoke yourself (setup, forge, wrap…) are hidden from the model's list. Descriptions are kept to their trigger phrases. Together these cut the always-on listing from about 4.8k to about 1.6k tokens.
+2. **Small always-on footprint.** The 18 principles are one skill with on-demand files. The eleven skills you invoke yourself (setup, forge, wrap…) are hidden from the model's list. Descriptions are kept to their trigger phrases. Together these cut the always-on listing from about 4.8k to about 1.6k tokens.
 3. **Ceremony scales with the task.** Questions and one-line edits skip the task folder entirely. For real tasks, `rigor` in your profile decides what runs:
 
    | Step | lean | standard (default) | strict |
@@ -295,8 +362,10 @@ Check your own spend with `/flow-stack:budget` (uses ccusage) and the estimate-v
 | **slice gate** | `status: done` can only be set by `task.sh slice <id> done`, which requires red first, green after the last edit, probe TEETH, and the line budget. |
 | **circuit** (PostToolUse) | The same failing check 3 times → stop, attack the premise, `challenge`, and ask you. |
 | **trail** (PostToolUse) | Every tool call goes to `trail.jsonl` with secrets redacted. |
-| **claims** (Stop) | "Done", "works", or "fixed" with no passing evidence since the last edit → sent back once to verify or say `~ assumed`. |
-| **anchor** (UserPromptSubmit) | A 3-line goal and slice reminder on every prompt while a task is active. |
+| **handoff** (UserPromptSubmit) | Context past `budget:handoff_at_tokens` (default 150K) → one nudge to finish the slice and run `handoff`; re-arms when context drops back. |
+| **claims** (Stop) | "Done", "works", or "fixed" with no passing evidence since the last edit this turn → sent back once per edit to verify or say `~ assumed`. |
+| **anchor** (UserPromptSubmit) | A 3-line goal and slice reminder while a task is active: once per session, again when it changes, and every 10th prompt. |
+| **delegate nudge** (PostToolUse Read, Grep, Glob) | A long session (turn >= `budget: delegate_after_turns`, default 7, or context >= `delegate_after_tokens`, default 120000) that starts a run of 4 reads gets one line: hand the bulk reading to a subagent. Quiet for subagents and short sessions; `hooks.delegate: false` turns it off. |
 | **session-start / pre-compact / notify** | Profile and toolchain context; a handoff snapshot before compaction; a notification when the agent is blocked on you. |
 
 Hooks fail open: if `jq` is missing or a script errors, the action is allowed and a warning goes to `~/.flow-stack/hooks.log`. Turn any hook off in `.flow/config.json` (repo) or `~/.flow-stack/config.json` (global): `{"hooks": {"fence": false}}`.
@@ -525,6 +594,7 @@ Generic skills have **slots**. Forge skills generate what fills them. Resolution
 | Build, run, reset | `make-runner` | `.claude/skills/run-<repo>/` |
 | Repo workflows | `make-playbook` | `.flow/playbooks/*.md` |
 | Irreversible actions | `make-gates` | `.flow/gates.md` |
+| Routines on GitHub Actions | `make-routines` | `.github/routines/*.md` → `.github/workflows/flow-*.yml` |
 | Anything else | `make-skill` | `.claude/skills/<name>/` |
 
 Every generated skill has a `## Self-test` and a `source-commit`. `tend` re-runs the self-tests and flags drift.

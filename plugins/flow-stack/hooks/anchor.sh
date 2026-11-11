@@ -6,25 +6,74 @@ flow_init anchor
 flow_enabled anchor || exit 0
 
 # --auto / --no-auto anywhere in a prompt switch this session's auto mode. Only the human's own
-# prompts count: agent hand-backs and task notifications arrive as prompts too.
+# prompts count: agent hand-backs, task notifications, system reminders and T3 Code relays
+# (delegate reports, PR-watch updates) arrive as prompts too.
+# Inside a relayed prompt only --no-auto at the start of a line counts: turning auto off is the safe direction,
+# and a report that quotes the "--auto; --no-auto ends it" banner mid-line must not end auto mode.
 prompt="$(flow_field .prompt)"
-grep -Eq '<(agent-message|task-notification)[[:space:]>]' <<<"$prompt" && prompt=""
+relayed=""
+grep -Eq '<(agent-message|task-notification|system-reminder)[[:space:]>]|^(Delegated task node:|Update on pull request #)' <<<"$prompt" && relayed=1
+# per-session anchor state: the hash of the last injected anchor, a prompt counter, and which
+# auto-mode banner was already shown in full this session. Keyed by session id, so a fresh
+# session re-anchors ("" when no session id: behave as before).
+anchor_state_dir() { local s; s="$(flow_field .session_id)"; [ -n "$s" ] && printf '%s/anchor/%s' "$FLOW_HOME" "${s//\//_}"; return 0; }
+ANCHOR_EVERY=10   # re-inject the anchor at most every N human prompts when it hasn't changed
 if flag="$(flow_auto_flag)"; then
+  [ -n "$relayed" ] && { grep -Eq '^[[:space:]]*--no-auto([[:space:],.;:!?)]|$)' <<<"$prompt" && prompt="--no-auto" || prompt=""; }
   if grep -Eq '(^|[[:space:]])--no-auto([[:space:],.;:!?)]|$)' <<<"$prompt"; then
-    rm -f "$flag"; echo "[flow auto] off: the human is back; gates ask again."
+    rm -f "$flag"; [ -n "$(anchor_state_dir)" ] && rm -f "$(anchor_state_dir).auto"; echo "[flow auto] off: the human is back; gates ask again."
+  elif grep -Eq '(^|[[:space:]])--gha([[:space:],.;:!?)]|$)' <<<"$prompt" && flow_on_runner; then
+    mkdir -p "${flag%/*}"; echo gha >"$flag"; ship=1
   elif grep -Eq '(^|[[:space:]])--auto[[:space:]]+ship([[:space:],.;:!?)]|$)' <<<"$prompt"; then
-    mkdir -p "${flag%/*}"; echo ship >"$flag"
+    mkdir -p "${flag%/*}"; echo ship >"$flag"; ship=1
   elif grep -Eq '(^|[[:space:]])--auto([[:space:],.;:!?)]|$)' <<<"$prompt"; then
     mkdir -p "${flag%/*}"; : >"$flag"
     find "${flag%/*}" -type f -mtime +7 -delete 2>/dev/null || true
   fi
-  if flow_auto_ship; then
-    echo "[flow auto ship] the human is away and granted shipping (--auto ship; --no-auto ends it). Never wait on them: run flow's Autonomous mode. Pushing the current branch (not main) by name, gh pr create/ready (body via --body-file or --fill), and gh pr merge of the current branch's PR proceed only once review/scripts/ready.sh has stamped the current HEAD; anything else irreversible (deploy, publish, .flow/gates.md) is queued in GATES.md. Notify and hand off at the end."
+  if grep -Eq '(^|[[:space:]])--gha([[:space:],.;:!?)]|$)' <<<"$prompt" && ! flow_on_runner; then
+    [ -f "$flag" ] || { mkdir -p "${flag%/*}"; : >"$flag"; }
+    echo "[flow gha] REFUSED: --gha works only on a GitHub-hosted Actions runner, and this is not one. Running as the other flags in the prompt say (plain --auto if none)."
+  fi
+  if [ -n "${ship:-}" ] && ! miss="$(factory_ready)"; then
+    if [ "$(profile_fm factory_ready)" = enforce ]; then
+      : >"$flag"; echo "[flow] factory not ready, so this session runs as plain --auto: nothing is pushed or opened. Missing: $miss."
+    else
+      echo "[flow] factory not ready: missing $miss. Shipping still allowed (warn only; factory_ready: enforce in the profile makes this plain --auto)."
+    fi
+  fi
+  if flow_auto_gha; then
+    mode=gha
+  elif flow_auto_ship; then
+    mode=ship
   elif [ -f "$flag" ]; then
-    echo "[flow auto] the human is away (--auto; --no-auto ends it). Never wait on them: run flow's Autonomous mode. Reversible gates, including intent and seal approval: take your recommended option and log it with task.sh decide agent. Irreversible actions (push, PR, merge, deploy, publish, .flow/gates.md) never happen: queue them in GATES.md. The hooks catch push, PR, publish, and gates.md; a deploy script is on you. Notify and hand off at the end."
+    mode=auto
+  else
+    mode=""
+  fi
+  if [ -n "$mode" ]; then
+    state="$(anchor_state_dir)"
+    [ -n "$state" ] && shown="$(cat "$state.auto" 2>/dev/null || true)" || shown=""
+    if [ -n "$state" ] && [ "$shown" = "$mode" ]; then
+      # full banner already shown for this mode: a short tag keeps the context lean
+      case "$mode" in
+        gha)  echo "[flow auto gha]" ;;
+        ship) echo "[flow auto ship]" ;;
+        auto) echo "[flow auto]" ;;
+      esac
+    else
+      [ -n "$state" ] && { mkdir -p "$(dirname "$state")"; echo "$mode" >"$state.auto"; }
+      case "$mode" in
+        gha)  echo "[flow auto gha] a GitHub Actions run: nobody can answer a gate and the disk is thrown away, so the owner authorized this routine to finish its work (--gha). Same as --auto ship (push the current branch, not main, by name; gh pr create/ready; gh pr merge of the current branch's PR), plus gh release create <tag>, all only once review/scripts/ready.sh has stamped the current HEAD. Still never: force-push, the default branch, other refs or PRs, publish, deploy, SQL, gates.md. Whatever you queue in GATES.md is shown in the run summary. Run flow's Autonomous mode." ;;
+        ship) echo "[flow auto ship] the human is away and granted shipping (--auto ship; --no-auto ends it). Never wait on them: run flow's Autonomous mode. Pushing the current branch (not main) by name, gh pr create/ready (body via --body-file or --fill), and gh pr merge of the current branch's PR proceed only once review/scripts/ready.sh has stamped the current HEAD; anything else irreversible (deploy, publish, .flow/gates.md) is queued in GATES.md. Notify and hand off at the end." ;;
+        auto) echo "[flow auto] the human is away (--auto; --no-auto ends it). Never wait on them: run flow's Autonomous mode. Reversible gates, including intent and seal approval: take your recommended option and log it with task.sh decide agent. Irreversible actions (push, PR, merge, deploy, publish, .flow/gates.md) never happen: queue them in GATES.md. The hooks catch push, PR, publish, and gates.md; a deploy script is on you. Notify and hand off at the end." ;;
+      esac
+    fi
   fi
 fi
 
+# A relayed prompt (agent hand-back, task notification, relay, T3 relay) is not the human
+# thinking about the goal again, so nothing is re-injected for it.
+[ -n "$relayed" ] && exit 0
 [ -n "$FLOW_TASK_DIR" ] && [ -f "$FLOW_TASK_DIR/INTENT.md" ] || exit 0
 
 section_first() {
@@ -34,6 +83,25 @@ section_first() {
 goal="$(section_first Goal)"
 nongoal="$(section_first Non-goals)"
 slice="$(awk '/^## /{h=$0} /^status: doing/{print h; exit}' "$FLOW_TASK_DIR/SLICES.md" 2>/dev/null || true)"
+
+# Inject only when the anchor changed since the last injection, or every ANCHOR_EVERY human
+# prompts; a stale, unchanged anchor is not re-added to the context on every prompt.
+state="$(anchor_state_dir)"
+if [ -n "$state" ]; then
+  mkdir -p "$(dirname "$state")"
+  h="$(printf '%s\n%s\n%s\n%s' "$FLOW_TASK" "${goal:-?}" "${nongoal:-}" "${slice:-}" | git hash-object --stdin)"
+  if [ "$h" = "$(cat "$state.hash" 2>/dev/null || true)" ]; then
+    n="$(( $(cat "$state.count" 2>/dev/null || echo 0) + 1 ))"
+    if [ "$n" -lt "$ANCHOR_EVERY" ]; then
+      echo "$n" >"$state.count"
+      exit 0
+    fi
+    echo 0 >"$state.count"
+  else
+    echo "$h" >"$state.hash"
+    echo 0 >"$state.count"
+  fi
+fi
 
 printf '[flow anchor · %s] goal: %s\n' "$FLOW_TASK" "${goal:-?}"
 [ -n "$nongoal" ] && printf '[flow anchor] not doing: %s\n' "${nongoal#- }"
