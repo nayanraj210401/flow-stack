@@ -112,6 +112,22 @@ if { has '\.flow/tasks/[^/[:space:]]+/blind' || [ -n "$blind_glob" ] ||
   pre_decide deny "flow guard: blind checks are held out from the builder. Run them only via verify's scripts/blind-run.sh."
 fi
 
+# 2b. Modes are the human's: a write to the auto-mode flags, or to Claude Code settings (whose env block
+# could fake a GitHub runner for --gha), would let the model grant itself a mode. The path must follow a
+# write verb (a whole word, or a redirect) in the same segment, so reading these files stays allowed.
+# Interpreter one-liners (python -c, node -e) are a known gap; --gha still re-checks the runner itself.
+cfg="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"; c2="${cmd//"$FLOW_HOME"/FLOW_HOME}"; c2="${c2//"$cfg"/CLAUDE_CONFIG_DIR}"
+wr='(>|(^|[[:space:];&|(])(tee|cp|mv|ln|install|dd|truncate|rm|sponge|sed[[:space:]]+-[A-Za-z]*i|perl[[:space:]]+-[A-Za-z]*i)([[:space:]]|$))[^;&|]*'
+home='(\.flow-stack|FLOW_STACK_HOME\}?|FLOW_HOME\}?)'; conf='(\.claude|CLAUDE_CONFIG_DIR\}?)'
+end='([/"'\''[:space:]]|$)'; sett='settings[^/[:space:]"'\'']*\.json'
+cdin() { grep -Eq -- "(^|[;&|(][[:space:]]*)cd[[:space:]]+[^;&|]*$1" <<<"$c2"; }
+if grep -Eq -- "$wr$home/auto$end" <<<"$c2" || { cdin "$home" && grep -Eq -- "$wr[\"']?(\./)?auto$end" <<<"$c2"; }; then
+  pre_decide deny "flow guard: \$FLOW_STACK_HOME/auto/ holds the session's mode (--auto, ship, --gha). Only the human's prompt sets it."
+fi
+if grep -Eq -- "$wr$conf/$sett" <<<"$c2" || { cdin "$conf" && grep -Eq -- "$wr[\"']?(\./)?$sett" <<<"$c2"; }; then
+  pre_decide ask "flow guard: writing Claude Code settings can change permissions, hooks, or env (an env block can fake a GitHub runner for --gha), so the human approves."
+fi
+
 # 3. Writes to sealed checks via the shell.
 if [ -n "$FLOW_TASK_DIR" ] && [ -f "$FLOW_TASK_DIR/SEALS" ]; then
   if has 'seal\.sh[[:space:]]+(reseal|rm)'; then
@@ -209,26 +225,129 @@ if has 'status:[[:space:]]*done' && ! has 'task\.sh' &&
   pre_decide deny "flow gate: mark a slice done with task.sh slice <id> done (proof-gated), not by rewriting SLICES.md."
 fi
 
+# 3b. The ready ledger is ready.sh's alone: a stamp written by hand would skip the bar (and, in a routine, post a
+#     flow/ready check). A write that names it asks: a redirect or tee into it, in-place sed/perl, or a file verb or
+#     interpreter word in the same command. Reading it (cat, tail, grep, 2>/dev/null) is fine.
+if has 'ready\.tsv' && { has '(>>?|tee([[:space:]]+-a)?)[[:space:]]*[^[:space:];&|<>]*ready\.tsv' \
+   || has '(^|[^[:alnum:]_.-])((sed|perl)[[:space:]]+(-[[:alnum:]]*i|--in-place)|(mv|rm|cp|truncate|dd|ln|install|python[0-9.]*|node|ruby)([[:space:]]|$))'; }; then
+  pre_decide ask "flow ready: .flow/ready.tsv is ready.sh's ledger, and a stamp written by hand would skip the bar. Record steps with ready.sh record; ready.sh writes the stamp."
+fi
+
 # 3c. Ready for review: in a flow-stack repo, a non-draft PR or `gh pr ready` needs ready.sh's stamp for HEAD.
 #     Only a real invocation counts: heredoc bodies are dropped, and gh must start a command:
-#     line start, ; && || | (, if/then/!, VAR=x prefixes, or behind a wrapper (eval, sh/bash/zsh/dash, command, env, time,
-#     nohup, xargs, sudo, exec) with any flags of its own. Quoted strings are dropped before the draft flag is
-#     looked for, so a title saying "-d" isn't a draft. Case-insensitive: case-insensitive
+#     line start, ; && || | ( {, if/then/!, VAR=x prefixes, or behind a wrapper (eval, sh/bash/zsh/dash/ksh, command, env,
+#     time, timeout, nice, nohup, xargs, sudo, exec) with any flags of its own. Case-insensitive: case-insensitive
 #     filesystems run GH as gh. A commit message that mentions it mid-sentence passes.
 code="$(awk -v q="'" '
-  hd != "" { if ($0 == hd) hd = ""; next }
+  hd != "" { t = $0; if (dash) sub(/^\t+/, "", t); if (t == hd) { hd = ""; body = "" } else body = body $0 "\n"; next }
   { print
-    if (match($0, "<<-?[ \t]*[\"" q "]?[A-Za-z_][A-Za-z0-9_]*")) {
-      hd = substr($0, RSTART, RLENGTH); sub("<<-?[ \t]*[\"" q "]?", "", hd) } }' <<<"$cmd")"
-lead='(^|[;&|(]|(^|[;&|([:space:]])(eval|command|env|time|nohup|xargs|sudo|exec|(ba|z|da)?sh)([[:space:]][^;&|]*)?[[:space:]])'
-lead="$lead"'[[:space:]]*((if|then|elif|else|do|while|until|!)[[:space:]]+|[A-Za-z_][A-Za-z0-9_]*=([^[:space:]]*|"[^"]*"|'"'"'[^'"'"']*'"'"')[[:space:]]+)*["'"'"']?'
+    # <<<word is a here-string, not a heredoc; <<- lets the terminator be tab-indented. A heredoc that never
+    # ends was no heredoc (a <<WORD in quotes, a comment or $((1<<X))), so its lines are code after all.
+    # a << inside quotes or a comment starts nothing: match on the line with those blanked
+    u = $0
+    # unquote a quoted delimiter (<<'EOF') first, so the blanking below keeps it
+    while (match(u, "<<-?[ \t]*[\"" q "][A-Za-z_][A-Za-z0-9_]*[\"" q "]")) { m = substr(u, RSTART, RLENGTH); gsub("[\"" q "]", "", m); u = substr(u, 1, RSTART - 1) m substr(u, RSTART + RLENGTH) }
+    v = ""; sq = dq = 0
+    # blank quoted text quote-aware: a backslash is literal in single quotes and escapes elsewhere
+    for (x = 1; x <= length(u); x++) { c = substr(u, x, 1)
+      if (sq) { if (c == q) sq = 0; continue }
+      if (c == "\\") { x++; continue }
+      if (dq) { if (c == "\"") dq = 0; continue }
+      if (c == q) sq = 1; else if (c == "\"") dq = 1; else v = v c }
+    u = v; sub(/(^|[ \t])#.*/, "", u)
+    if (match(u, "(^|[^<])<<-?[ \t]*[\"" q "]?[A-Za-z_][A-Za-z0-9_]*")) {
+      hd = substr(u, RSTART, RLENGTH); dash = hd ~ /<<-/; sub("^[^<]?<<-?[ \t]*[\"" q "]?", "", hd) } }
+  END { printf "%s", body }' <<<"$cmd")"
+lead='(^|[;&|({]|(^|[;&|({[:space:]])(eval|command|env|time|timeout|nice|nohup|xargs|sudo|exec|(ba|z|da|k)?sh)([[:space:]][^;&|]*)?[[:space:]])'
+lead="$lead"'[[:space:]]*((if|then|elif|else|do|while|until|!)[[:space:]]+|[A-Za-z_][A-Za-z0-9_]*=([^[:space:]]*|"[^"]*"|'"'"'[^'"'"']*'"'"')[[:space:]]+)*([$]?["'"'"'])?'
 cend='([[:space:];&|)]|$)'
 gopt='([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*'
 pr_cmd="$(grep -Ei "$lead"'gh'"$gopt"'[[:space:]]+pr[[:space:]]+(create|ready)'"$cend" <<<"$code" || true)"
-if [ -d "$FLOW_DIR" ] && flow_enabled ready && [ -n "$pr_cmd" ] &&
-   ! sed -E "s/\\\\.//g; s/\"[^\"]*\"//g; s/'[^']*'//g; s/[\"'].*\$//" <<<"$pr_cmd" | grep -Eq '((--draft|[[:space:]]-d)(=true)?|--undo)([[:space:]]|$)'; then
+# The line is split into shell words and commands (quotes, escapes, $'…', ; & | ( )), and sh -c / eval scripts are
+# split the same way, so a quoted title saying "-d" is one word, not a flag. Every gh pr create|ready command needs
+# its own --draft, -d, --draft=true or --undo word. A word with an unterminated quote is never a flag, and # starts
+# a comment. Fails closed: when the line starts gh pr create|ready (in a command position, as above, or after a
+# backtick) more often than the split found commands ("$(…)", another interpreter), it is not a draft. Only code
+# is counted: quoted titles, bodies and messages that name the command are text.
+split_awk='
+    # split_cmds(s): tokens T with kinds K (w | bad | op), the part of each word the shell runs as code C (unquoted
+    # text, and $(…) or `…` inside "…"; nothing from single-quoted text), and CS set when C holds such a substitution
+    function split_cmds(s, T, K, C, CS,   i, j, c, ch, e, n, w, wc, has, bad, L, sub_, bt, nq, sq, code, cs) {
+      n = 0; w = wc = ""; has = bad = cs = 0; L = length(s)
+      for (i = 1; i <= L; i++) {
+        c = substr(s, i, 1)
+        if (c == "\\") { if (substr(s, ++i, 1) != "\n") { w = w substr(s, i, 1); wc = wc substr(s, i, 1); has = 1 } }
+        else if (c == q) { j = index(substr(s, i + 1), q); has = 1
+          if (!j) { w = w substr(s, i + 1); bad = 1; i = L } else { w = w substr(s, i + 1, j - 1); i += j } }
+        else if (c == "\"" || (c == "$" && substr(s, i + 1, 1) == q)) {
+          e = (c == "$") ? q : "\""; if (c == "$") i++; has = 1; sub_ = bt = nq = sq = 0
+          for (i++; i <= L; i++) {
+            ch = substr(s, i, 1); code = sub_ || bt
+            if (!code && ch == e) break
+            # inside $(…) or `…`, quotes nest; that code is kept as written and checked as a script of its own
+            if (sq) { if (ch == q) sq = 0; wc = wc ch; w = w ch; continue }
+            # "…" drops a backslash only before $ ` " \ newline; ANSI-C quoting ($ then a single quote) always does
+            if (ch == "\\" && (e == q || index("$`\"\\\n", substr(s, i + 1, 1)))) { ch = substr(s, ++i, 1); if (code) wc = wc ch }
+            else if (code && ch == q) { sq = 1; wc = wc ch }
+            else if (code && ch == "\"") { nq = !nq; wc = wc ch }
+            else if (e != q && !nq && ch == "`") { bt = !bt; wc = wc ch; cs = 1 }
+            else if (e != q && !nq && substr(s, i, 2) == "$(") { sub_++; wc = wc "$("; w = w ch; ch = "("; i++; cs = 1 }
+            else if (code) { if (!nq) { if (ch == "(") sub_++; else if (ch == ")" && sub_) sub_-- } wc = wc ch }
+            w = w ch }
+          if (i > L) bad = 1 }
+        else if (c == "#" && !has) { j = index(substr(s, i), "\n"); i = j ? i + j - 2 : L }
+        else if (c ~ /[;&|()\n]/) { if (has) { T[++n] = w; K[n] = bad ? "bad" : "w"; C[n] = wc; CS[n] = cs }
+          T[++n] = c; K[n] = "op"; w = wc = ""; has = bad = cs = 0 }
+        else if (c ~ /[ \t]/) { if (has) { T[++n] = w; K[n] = bad ? "bad" : "w"; C[n] = wc; CS[n] = cs }
+          w = wc = ""; has = bad = cs = 0 }
+        else { w = w c; wc = wc c; has = 1 }
+      }
+      if (has) { T[++n] = w; K[n] = bad ? "bad" : "w"; C[n] = wc; CS[n] = cs }
+      return n
+    }
+'
+pr_drafts() {
+  awk -v q="'" -v said="(\`|$lead)gh$gopt[[:space:]]+pr[[:space:]]+(create|ready)" "$split_awk"'
+    # check(s): adds to found / nondraft for each gh pr create|ready command in s, recursing into every word after
+    # eval, after a -c option of sh, and into the substitutions in "…". Returns the code in s for the fail-closed count: each word keeps only its code
+    # part, and a recursed word is replaced by its own check.
+    function check(s,   T, K, C, CS, X, n, i, start, g, p, d, k, sh, ev, out) {
+      n = split_cmds(s, T, K, C, CS); start = 1
+      for (i = 1; i <= n + 1; i++) {
+        if (i <= n && K[i] != "op") continue
+        g = p = d = sh = ev = 0
+        for (k = start; k < i; k++) {
+          if (K[k] != "w") continue
+          if (ev || sh > 1) X[k] = check(T[k]); else if (CS[k]) X[k] = check(C[k])
+          if (tolower(T[k]) == "eval") ev = 1
+          if (T[k] ~ /^(ba|z|da|k)?sh$/ || T[k] ~ /\/(ba|z|da|k)?sh$/) sh = 1
+          else if (sh && T[k] ~ /^-[A-Za-z]*c[A-Za-z]*$/) sh = 2
+          if (!g && tolower(T[k]) == "gh") g = k
+          else if (g && !p && T[k] == "pr" && k < i - 1 && T[k + 1] ~ /^(create|ready)$/ && K[k + 1] == "w") p = ++k
+          else if (p && T[k] ~ /^(--draft(=true)?|-d|--undo)$/) d = 1
+        }
+        if (p) { found++; if (!d) nondraft++ }
+        start = i + 1
+      }
+      for (k = 1; k <= n; k++) out = out (K[k] == "op" ? T[k] : " " ((k in X) ? X[k] : C[k]) " ")
+      return out
+    }
+    { all = all $0 "\n" }
+    END { s = tolower(check(all)); exit !(found && !nondraft && found >= gsub(said, "", s)) }'
+}
+if [ -d "$FLOW_DIR" ] && flow_enabled ready && [ -n "$pr_cmd" ] && ! pr_drafts <<<"$code"; then
   ready="$(cd "$(dirname "$0")/../skills/review/scripts" && pwd)/ready.sh"
-  if [ "$(cd "$FLOW_ROOT" && "$ready" mode)" != yolo ] && ! (cd "$FLOW_ROOT" && "$ready" stamped); then
+  # `cd <dir> && gh pr create|ready …` (one plain gh call after it) is judged in <dir> when <dir> is a worktree of
+  # this repo; anything else (another clone, no repo, more shell after the cd) keeps the session's root.
+  rroot="$FLOW_ROOT" plain='^[[:space:]]*cd[[:space:]]+([A-Za-z0-9_./~@+,:=-]+)[[:space:]]*&&[[:space:]]*gh[[:space:]]+pr[[:space:]]+(create|ready)([[:space:]][^;&|`$()<>\\]*)?$'
+  if [[ "$cmd" != *$'\n'* && "$cmd" =~ $plain ]]; then
+    # resolved the way the shell's cd does (logical `..`, CDPATH off), not the way git -C does (physical)
+    d="$(cd "$FLOW_CWD" 2>/dev/null && CDPATH='' cd -- "${BASH_REMATCH[1]/#\~\//$HOME/}" 2>/dev/null && pwd)" || d=""
+    if [ -n "$d" ] && [ "$(git -C "$d" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" = "$FLOW_MAIN/.git" ]; then
+      rroot="$(git -C "$d" rev-parse --show-toplevel 2>/dev/null)" && [ -n "$rroot" ] || rroot="$FLOW_ROOT"
+    fi
+  fi
+  if [ "$(cd "$rroot" && "$ready" mode)" != yolo ] && ! (cd "$rroot" && "$ready" stamped); then
     pre_decide deny "flow ready-for-review: HEAD isn't stamped ready. Human review is the expensive step, so run $ready (it lists what's missing), or open a draft PR (--draft) meanwhile. review_gate: yolo in the profile or .flow/config.json turns this off."
   fi
 fi
@@ -258,13 +377,146 @@ ship_allowed() { # ship_allowed <one-line command>
     git\ push\ *)
       cur="$(git -C "$FLOW_ROOT" symbolic-ref --short -q HEAD)" && [ "$cur" != main ] && [ "$cur" != master ] || return 1
       [[ "$1" =~ ^git\ push(\ -u|\ --set-upstream)?\ [A-Za-z0-9._-]+\ ([^[:space:]]+)$ ]] && [ "${BASH_REMATCH[2]}" = "$cur" ] ;;
-    *) grep -Eq '^(gh pr (create|ready)( [^;&|`$<>()]*)?|gh pr merge( --(squash|merge|rebase|delete-branch))*)$' <<<"$1" ;;
+    gh\ release\ create\ *)
+      flow_auto_gha || return 1
+      # the tag is cut from the stamped branch, never from the default branch's tip
+      cur="$(git -C "$FLOW_ROOT" symbolic-ref --short -q HEAD)" && [ "$cur" != main ] && [ "$cur" != master ] || return 1
+      [[ "$1" =~ ^gh\ release\ create\ [A-Za-z0-9._-]+\ --target\ ([A-Za-z0-9._/-]+)(\ --(generate-notes|draft|prerelease)|\ --(title|notes-file)\ [A-Za-z0-9._-]+)*$ ]] && [ "${BASH_REMATCH[1]}" = "$cur" ] ;;
+    *) # FLOW_SHIP_DRAFT=1 (set by the runner for @claude runs, out of the agent's reach): draft PRs only
+      [ "${FLOW_SHIP_DRAFT:-}" != 1 ] || [[ "$1" =~ ^gh\ pr\ create\  && " $1 " == *" --draft "* ]] || return 1
+      grep -Eq '^(gh pr (create|ready)( [^;&|`$<>()]*)?|gh pr merge( --(squash|merge|rebase|delete-branch))*)$' <<<"$1" ;;
   esac
 }
-if grep -Eiq "$lead"'(git'"$gopt"'[[:space:]]+push|gh'"$gopt"'[[:space:]]+(pr[[:space:]]+(create|merge|ready)|release[[:space:]]+create)|npm'"$gopt"'[[:space:]]+publish)'"$cend" <<<"$code" && flow_auto; then
+# Turning a PR back into a draft only takes it out of review, so any auto mode may: `gh pr ready [<n>] --undo`, alone.
+undo_only() { [[ "$1" =~ ^gh\ pr\ ready(\ [0-9]+\ --undo|\ --undo(\ [0-9]+)?)$ ]]; }
+if grep -Eiq "$lead"'(git'"$gopt"'[[:space:]]+push|gh'"$gopt"'[[:space:]]+(pr[[:space:]]+(create|merge|ready)|release[[:space:]]+create)|npm'"$gopt"'[[:space:]]+publish)'"$cend" <<<"$code" && flow_auto \
+   && ! undo_only "$(sed -E 's/^[[:space:]]+|[[:space:]]+$//g' <<<"$cmd")"; then
   if ! flow_auto_ship || ! ship_allowed "$(sed -E 's/^[[:space:]]+|[[:space:]]+$//g' <<<"$cmd")" \
      || ! (cd "$FLOW_ROOT" && "$(dirname "$0")/../skills/review/scripts/ready.sh" stamped) 2>/dev/null; then
-    pre_decide ask "flow: outward-facing action$(flow_auto_ship && echo ". --auto ship allows only \`git push [-u] <remote> <current branch>\` (not main), gh pr create/ready (body via --body-file or --fill, no shell expansions), and gh pr merge of the current branch's PR, once review/scripts/ready.sh has stamped HEAD")."
+    pre_decide ask "flow: outward-facing action$(flow_auto_gha && echo ". --gha adds only gh release create <tag> --target <current branch> (plain flags) to the --auto ship set.")$(flow_auto_ship && echo ". --auto ship allows only \`git push [-u] <remote> <current branch>\` (not main), gh pr create/ready (body via --body-file or --fill, no shell expansions), and gh pr merge of the current branch's PR, once review/scripts/ready.sh has stamped HEAD")."
+  fi
+fi
+# 4c. Off a runner, auto mode also holds the GitHub writes the rule above can't see: gh api with a write method,
+# or with fields (gh sends those as POST unless -X GET), and issue/PR comments, reviews and edits. --auto ship with
+# a stamped HEAD lets the REST twins of gh pr create/ready through (cloud sessions have no GraphQL). Other gh write
+# commands are held too, since only listed reads pass. A runner's token is already
+# bounded by the workflow's grants, and the routines rely on these writes there.
+gh_writes() { # gh writes in $cmd, judged on shell words (quotes and escapes resolved), one command at a time
+  # a heredoc body is data unless a shell runs it (bash <<EOF, ssh host <<EOF), as in stop.sh
+  awk -v q="'" '
+    hd != "" { t = $0; if (dash) sub(/^\t+/, "", t); if (t == hd) { hd = ""; body = "" } else if (run) print; else body = body $0 "\n"; next }
+    { print
+      u = $0
+    # unquote a quoted delimiter (<<'EOF') first, so the blanking below keeps it
+    while (match(u, "<<-?[ \t]*[\"" q "][A-Za-z_][A-Za-z0-9_]*[\"" q "]")) { m = substr(u, RSTART, RLENGTH); gsub("[\"" q "]", "", m); u = substr(u, 1, RSTART - 1) m substr(u, RSTART + RLENGTH) }
+    v = ""; sq = dq = 0
+    # blank quoted text quote-aware: a backslash is literal in single quotes and escapes elsewhere
+    for (x = 1; x <= length(u); x++) { c = substr(u, x, 1)
+      if (sq) { if (c == q) sq = 0; continue }
+      if (c == "\\") { x++; continue }
+      if (dq) { if (c == "\"") dq = 0; continue }
+      if (c == q) sq = 1; else if (c == "\"") dq = 1; else v = v c }
+    u = v; sub(/(^|[ \t])#.*/, "", u)
+      if (match(u, "(^|[^<])<<-?[ \t]*[\"" q "]?[A-Za-z_][A-Za-z0-9_]*")) {
+        # the shell must be in the same command as the heredoc (cat <<EOF | bash), not a later one (…; ls /bin/sh)
+        a = substr(u, 1, RSTART); sub(/.*[;&]/, "", a); b = substr(u, RSTART + RLENGTH); sub(/[;&].*/, "", b)
+        run = (a b) ~ /(^|[|( \t\/"])(bash|sh|zsh|ksh|dash|ssh|\$SHELL|\$\{SHELL\})(["]?[ \t]|["]?$)/
+        hd = substr(u, RSTART, RLENGTH); dash = hd ~ /<<-/; sub("^[^<]?<<-?[ \t]*[\"" q "]?", "", hd) } }
+    END { printf "%s", body }' <<<"$cmd" |
+  awk -v q="'" "$split_awk"'
+    # unbt(s): an unquoted `…` is a command of its own, so it becomes one (split_cmds splits only `…` inside "…").
+    # Each backtick also stays in the words around it, so a word cut by one (gh p`echo r` …) still reads as computed.
+    function unbt(s,   i, c, o, sq, dq) {
+      for (i = 1; i <= length(s); i++) { c = substr(s, i, 1)
+        if (c == "\\" && !sq) { o = o c substr(s, ++i, 1); continue }
+        if (c == q && !dq) sq = !sq; else if (c == "\"" && !sq) dq = !dq
+        else if (c == "`" && !sq && !dq) c = "`\n`"
+        o = o c }
+      return o
+    }
+    # wr(s): 1 when s holds a gh command that is not a known read. An allowlist, so a spelling nobody listed is held:
+    # a read is a literal list/view/status/diff/checks/checkout/download/watch/search/browse (clone: repo only), or
+    # gh api with no method but GET/HEAD and no fields (GraphQL: a literal query without "mutation"). gh counts
+    # in command position (if ! gh …, xargs -I {} gh …, sudo -u bob gh …); any other command that names gh is held
+    # unless it starts with a known reader, and so is a shell reading stdin when gh is named. A $VAR command word
+    # is not gh. A $ or
+    # a backtick in the noun or verb (in gh api: the method, a flag position, or the start of the endpoint) is held;
+    # after a literal read verb it is only an argument. gh pr create/ready/merge and gh release create belong to
+    # rule 4. eval, sh -c and every substitution, flag values included, are checked as scripts of their own.
+    function wr(s,   T, K, C, CS, n, i, k, j, c, r, start, g, look, noun, verb, ep, m, f, mut, ev, sh, w, lw, comp, hlp, cp, skip, wrap, dur, other, bare, anygh, bn) {
+      n = split_cmds(unbt(s), T, K, C, CS); start = 1
+      for (i = 1; i <= n + 1; i++) {
+        if (i <= n && K[i] != "op") continue
+        for (j = start; j < i; j++) if (K[j] != "op" && CS[j] && wr(C[j])) return 1
+        g = hlp = skip = dur = anygh = 0; cp = 1; wrap = other = ""; noun = verb = ep = m = ""; f = mut = ev = sh = comp = 0
+        for (k = start; k < i; k++) {
+          if (K[k] == "op") continue
+          if (ev || sh > 1) { if (wr(T[k])) return 1 }
+          w = T[k]; lw = tolower(w)
+          if (lw == "eval") ev = 1
+          if (w ~ /^(ba|z|da|k)?sh$/ || w ~ /\/(ba|z|da|k)?sh$/) sh = 1; else if (sh && w ~ /^-[A-Za-z]*c[A-Za-z]*$/) sh = 2
+          if (lw == "gh" || lw ~ /\/gh$/ || w ~ /(^|[^A-Za-z0-9_.\/-])gh([ \t]|$)/) anygh = sawgh = 1
+          if (!g) {
+            # gh in command position (first, or after keywords, VAR=value and wrappers with their flags) is checked
+            # against the read list below. Any other command that names gh is held unless it is a known reader.
+            if (!cp) continue
+            if (skip) { skip--; continue }
+            if (wrap == "command" && w ~ /^-[vV]$/) { cp = 0; other = "command"; continue }
+            if (wrap != "" && w ~ /^-/) {
+              if ((wrap ~ /^(sudo|doas)$/ && w ~ /^-[ugCDhpr]$/) || (wrap == "env" && w ~ /^-[uC]$/) \
+                  || (wrap == "xargs" && w ~ /^-[IinLPdsE]$/) || (wrap ~ /^(timeout|nice|stdbuf)$/ && w ~ /^-[skn]$/)) skip = 1
+              continue }
+            if (wrap == "timeout" && !dur) { dur = 1; continue }
+            if (lw == "gh" || lw ~ /\/gh$/) { g = 1; continue }
+            bn = lw; sub(/.*\//, "", bn)
+            if (bn ~ /^(if|then|elif|else|do|while|until|!|\{|time)$/ || w ~ /^[A-Za-z_][A-Za-z0-9_]*=/) continue
+            if (bn ~ /^(sudo|doas|env|xargs|timeout|nice|nohup|exec|command|stdbuf)$/) { wrap = bn; dur = 0; continue }
+            cp = 0; other = lw
+            # a shell with no script reads stdin (echo gh pr close 1 | sh)
+            if (bn ~ /^(ba|z|da|k)?sh$/) { bare = 1; for (j = k + 1; j < i; j++) if (K[j] != "op" && T[j] !~ /^-[A-Za-bd-z]*$/) bare = 0; if (bare) pipesh = 1 }
+            continue }
+          if (w ~ /^(-R|--repo|--jq|-q|--search|-S|--template|-t)$/ && k + 1 < i) { k++; continue }
+          if (w ~ /^(--help|-h)$/ && T[k - 1] !~ /^-/) hlp = 1
+          if (noun == "") { if (w ~ /[$`]/) comp = 1; if (w !~ /^-/) noun = lw; else if (w ~ /^(--version|--help|-h)$/) noun = "help"; continue }
+          if (noun != "api") { if (verb == "" && w !~ /^-/) { verb = lw; if (w ~ /[$`]/) comp = 1 }; continue }
+          # gh api: a flag position, the method or the start of the endpoint may not be computed
+          if (w ~ /^[$`]/ || (w ~ /^-/ && w ~ /[$`]/)) comp = 1
+          if (w ~ /^--method=/) m = toupper(substr(w, 10))
+          else if (w == "--method") { m = toupper(T[++k]); if (m ~ /[$`]/) comp = 1 }
+          else if (w ~ /^--(field|raw-field|input)(=|$)/) { f = 1; if (w !~ /=/) k++ }
+          else if (w ~ /^--(header|preview|cache|hostname)$/) k++
+          else if (w ~ /^-[^-]/) {
+            # grouped short flags: -iXPOST, -iX DELETE, -if body=x
+            for (j = 2; j <= length(w); j++) { c = substr(w, j, 1); r = substr(w, j + 1)
+              if (c == "X") { m = r != "" ? r : T[++k]; sub(/^=/, "", m); if (m ~ /[$`]/) comp = 1; m = toupper(m); break }
+              if (c ~ /[fF]/) { f = 1; if (r == "") k++; break }
+              if (c ~ /[Hpqt]/) { if (r == "") k++; break } }
+          } else if (ep == "") ep = lw
+        }
+        # git is a reader except where it runs a command of its own
+        if (!g && other == "git" && anygh) for (j = start; j < i; j++) if (T[j] ~ /^(bisect|--exec|-x|-c|foreach|filter-branch|filter-repo)$/) return 1
+        if (!g && other != "" && anygh && other !~ /^(rg|grep|egrep|fgrep|ag|ack|ls|cat|head|tail|less|more|wc|file|stat|echo|printf|go|cd|git|which|type|hash|whereis|man|brew|apt|apt-get|dnf|yum|pacman|port|apk|tree|du|realpath|readlink|basename|dirname|diff|jq|mkdir|touch|rm|cp|mv|ln|test|\[|true|false|command)$/) return 1
+        if (g) {
+          for (j = start; j < i; j++) if (tolower(T[j]) ~ /(^|[^a-z])mutation([^a-z]|$)/ || T[j] ~ /[@$`]|^--input(=|$)/) mut = 1
+          if (comp) return 1
+          if (hlp) { start = i + 1; continue }
+          if (noun == "api") { if ((m != "" && m !~ /^(GET|HEAD)$/) || (f && m == "" && (ep != "graphql" || mut))) return 1 }
+          else if (!(noun ~ /^(help|version|status|browse|search)$/ || (noun == "auth" && verb ~ /^(status|token)$/) \
+                     || verb ~ /^(list|view|status|diff|checks|checkout|download|watch|search|browse|help)$/ || (noun == "repo" && verb == "clone") \
+                     || (noun == "pr" && verb ~ /^(create|ready|merge)$/) || (noun == "release" && verb == "create"))) return 1
+        }
+        start = i + 1
+      }
+      return pipesh && sawgh
+    }
+    { all = all $0 "\n" }
+    END { exit !wr(all) }'
+}
+if flow_auto && ! flow_on_runner && gh_writes; then
+  rest_pr='^gh api( (-X|--method) POST)? repos/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+/pulls(/[0-9]+/ccr/ready_for_review)?( -[fF] [A-Za-z0-9_]+=[A-Za-z0-9._/-]*)*$'
+  if ! { flow_auto_ship && [[ "$cmd" != *$'\n'* ]] && grep -Eq "$rest_pr" <<<"$(sed -E 's/^[[:space:]]+|[[:space:]]+$//g' <<<"$cmd")" \
+         && (cd "$FLOW_ROOT" && "$(dirname "$0")/../skills/review/scripts/ready.sh" stamped) 2>/dev/null; }; then
+    pre_decide ask "flow: outward-facing GitHub write (gh api write, comment, review, edit). Off a runner it uses your own token, so in auto mode it waits.$(flow_auto_ship && echo " --auto ship allows only the REST twins of gh pr create/ready (gh api -X POST repos/o/r/pulls -f k=v…, …/pulls/<n>/ccr/ready_for_review), once ready.sh has stamped HEAD.")"
   fi
 fi
 

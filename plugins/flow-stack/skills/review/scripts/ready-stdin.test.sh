@@ -3,7 +3,8 @@
 set -uo pipefail
 R="$(cd "$(dirname "$0")" && pwd)/ready.sh"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 SB="$(mktemp -d "${TMPDIR:-/tmp}/ready-stdin.XXXXXX")"; SB="$(cd "$SB" && pwd -P)"
 trap 'rm -rf "$SB"' EXIT
@@ -15,8 +16,8 @@ echo hi >f && git add f && git commit -qm i
 cat >.flow/config.json <<'JSON'
 {"ready":[{"id":"reader","run":"cat >/dev/null"},{"id":"later-ok","run":"test -f f"},{"id":"later-bad","run":"test -f nope"}]}
 JSON
-out="$("$R" </dev/null 2>&1)"
+out="$("$R" -v </dev/null 2>&1)"
 grep -q '✓ later-ok' <<<"$out" && ok "an entry after a stdin reader still runs" || bad "later-ok never reported: $out"
 grep -q '✗ later-bad' <<<"$out" && ok "a failing entry after a stdin reader is reported" || bad "later-bad never reported: $out"
 [ "$FAILS" = 0 ] || { echo "== ready-stdin · FAIL ($FAILS)"; exit 1; }
-echo "== ready-stdin · PASS"
+echo "== ready-stdin · PASS ($PASSES passed)"

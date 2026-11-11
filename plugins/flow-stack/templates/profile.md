@@ -9,12 +9,17 @@ budget:
   build_model: sonnet             # implementation workers
   design_model: opus              # intent, architecture, review
   handoff_at_context_pct: 60
+  handoff_at_tokens: 150000        # absolute backstop: a hook nudges handoff once the context passes this
+  delegate_after_turns: 7          # once a session hits this many human turns (or tokens), bulk reads get nudged to a subagent
+  delegate_after_tokens: 120000
 notify: osascript                 # osascript | ntfy:<topic> | off
 notify_on: blocked                # blocked | all
 dojo: off                         # off | light (explain-back) | on (TODO(you))
 digest: off                       # off | terminal | page: how /flow-stack:wrap delivers the daily brief
 review_gate: on                   # on | yolo: on = a PR needs ready.sh (review, deslop, tour, checks) before human review
 rigor: standard                   # lean | standard | strict: how much ceremony flow spends per task
+factory_ready: warn               # warn | enforce: --auto ship / --gha in a repo with no committed verify driver + feature map warns, or (enforce) runs as plain --auto
+auto_merge: labelled              # labelled | low-risk: the auto-merge routine also merges unlabelled risk:low size:S self-heal PRs (read from .github/routines/profile.md; needs the auto-merge routine, see factory.md)
 ---
 
 # Who
@@ -46,7 +51,7 @@ rigor: standard                   # lean | standard | strict: how much ceremony 
 - search: ~/Project          (where to look for repos not listed) -->
 # Board
 <!-- Read by: board/collect.sh on every /flow-stack:board run, from any session. Bad lines show as warnings
-     on the board. Panels: needs spend tasks features quality decisions debt shipped estimate repos.
+     on the board. Panels: needs spend attention tasks features quality decisions debt shipped estimate repos.
 - theme: auto                 # auto | light | dark
 - tab: current                # current | all | <repo name>
 - hide: spend
