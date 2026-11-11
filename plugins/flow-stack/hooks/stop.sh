@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Stop: the claims check, with or without a task. If the final message claims success
 # but no check passed (a tool result ending in `flow-evidence: PASS` or a ready stamp) after the
-# last code edit in this transcript, send the agent back once to either verify or mark
+# last code edit in this turn (since the last human prompt), send the agent back once per edit to either verify or mark
 # the claim as assumed. Shell writes count as edits; docs, .flow/ and temp files don't.
 # Then notify if configured.
 . "$(dirname "$0")/lib.sh"
@@ -34,32 +34,62 @@ events="$(tail -n 3000 "$transcript" | jq -nrR --argjson roots "$roots" --arg ch
   def expand: . as $cmd | [match("(?:^|[;&|\n])[[:space:]]*(?<n>[A-Za-z_][A-Za-z0-9_]*)=(?<v>[^[:space:];&|\"'"'"'$]*)"; "g").captures | {n: .[0].string, v: .[1].string}]
     | (group_by(.n) | map(select(length == 1) | .[0])) as $once | reduce $once[] as $a
     ($cmd; gsub("\\$(\\{" + $a.n + "\\}|" + $a.n + "\\b)"; $a.v));
-  def shell_write: unheredoc | expand | gsub("(>>?|\\btee( -a)?)[[:space:]]*(?![^[:space:];|&]*\\.\\.)[^[:space:];|&]*(\\.flow/|/tmp/|\\$\\{?TMPDIR\\b|scratchpad|\\.md|\\.txt)[^[:space:];|&]*"; "")
+  # sed -i, perl -i and mv with a quoted code path (Makefile, bin/run, src/app.sh): the quote stripping below would hide
+  # it. A quoted doc path is not one, nor a sed script (s/…/…/, y/…/…/) or an empty -i suffix.
+  def quoted_code: test("(^|[;&|\n][[:space:]]*)(sed -[a-zA-Z]*i|perl -[a-z]*i|mv)\\b[^;&|\n]*[\"'"'"'](?![sy]/)(?!((\\./)?(/tmp/|scratchpad/|\\.flow/)|[^\"'"'"']*\\.(md|txt)(\\.(new|bak|tmp|orig))?[\"'"'"']))[A-Za-z0-9_.][A-Za-z0-9_./-]*(?<!/)[\"'"'"']");
+  def shell_write: unheredoc | expand | if quoted_code then true else (gsub("(>>?|\\btee( -a)?)[[:space:]]*(?![^[:space:];|&]*\\.\\.)[^[:space:];|&]*(\\.flow/|/tmp/|\\$\\{?TMPDIR\\b|scratchpad|\\.md|\\.txt)[^[:space:];|&]*"; "")
+    | gsub("[\"'"'"'](?<p>[^\"'"'"'[:space:]]*\\.(md|txt))[\"'"'"']"; .p)
     | gsub("\"[^\"]*\"|'"'"'[^'"'"']*'"'"'"; "")
     | gsub("[0-9]*>>?[[:space:]]*(/dev/null|&[0-9]-?)"; "")
-    | test("\\bsed -[a-zA-Z]*i|\\bperl -[a-z]*i|\\btee\\b|>>?[[:space:]]*[^[:space:]=>&]"
+    | test("\\bsed -[a-zA-Z]*i(?!([[:space:]]+(-[A-Za-z]+|[^;&|\\n[:space:]]+\\.(md|txt)))+[[:space:]]*($|[;&|\\n]))|\\bperl -[a-z]*i(?!([[:space:]]+(-[A-Za-z]+|[^;&|\\n[:space:]]+\\.(md|txt)))+[[:space:]]*($|[;&|\\n]))|\\btee\\b|>>?[[:space:]]*[^[:space:]=>&]"
       + "|(^|[;&|][[:space:]]*)(cp|mv)( -[A-Za-z]+)*( [^-;&|[:space:]][^;&|[:space:]]*)+"
-      + " (?![^;&|[:space:]]*(/tmp/|scratchpad|\\.flow/)(?![^;&|[:space:]]*\\.\\.))[^-;&|[:space:]][^;&|[:space:]]*[[:space:]]*($|[;&|])"
+      + " (?![^;&|[:space:]]*\\.(md|txt)[[:space:]]*($|[;&|]))(?![^;&|[:space:]]*(/tmp/|scratchpad|\\.flow/)(?![^;&|[:space:]]*\\.\\.))[^-;&|[:space:]][^;&|[:space:]]*[[:space:]]*($|[;&|])"
+      # mv removes its sources, so a code source makes it a code write even when the destination is a doc
+      + "|(^|[;&|][[:space:]]*)mv( -[A-Za-z]+)*( [^;&|[:space:]]+)*? (?![^;&|[:space:]]*(\\.(md|txt)|/tmp/|scratchpad|\\.flow/))[^-;&|[:space:]][^;&|[:space:]]*( [^;&|[:space:]]+)+[[:space:]]*($|[;&|])"
       + "|(^|[;&|][[:space:]]*)patch[[:space:]]"
-      + "|git apply[[:space:]]+(?!--(check|stat|numstat|summary))");
+      + "|git apply[[:space:]]+(?!--(check|stat|numstat|summary))")) end;
   # The harness can append its own line (e.g. "Shell cwd was reset to …") after the output of the command.
   def verdict: txt | split("\n") | map(select(test("\\S") and (test("^Shell cwd was reset to ") | not))) | (last // "")
     | test("^flow-evidence: PASS|^ready for review: [0-9a-f]+ stamped");
-  reduce (inputs | fromjson? | .message.content? // [] | if type == "array" then .[] else empty end) as $c
-    ({checks: {}, s: ""};
-     if $c.type == "tool_use" and ($c.name | test("^(Edit|Write|MultiEdit|NotebookEdit)$"))
-        and (($c.input.file_path // $c.input.notebook_path // "") | scratch | not) then .s += "E"
-     elif $c.type == "tool_use" and $c.name == "Bash" then
-       (if ($c.input.command // "" | test($check_re)) then .checks[$c.id // ""] = true else . end)
-       | if ($c.input.command // "" | shell_write) then .s += "E" else . end
-     elif $c.type == "tool_result" and .checks[$c.tool_use_id // ""] and $c.is_error != true and ($c.content | verdict) then .s += "P"
-     else . end) | .s' 2>/dev/null || true)"
+  # Only edits since the last human prompt count; hand-backs, task notifications, relays, and
+  # meta lines (isMeta, tool_result lists) are not human prompts.
+  def ptext: (.message.content? // "") | if type == "string" then .
+    elif type == "array" and all(.[]; type == "object" and .type != "tool_result") then [.[] | select(.type == "text") | .text // ""] | join("\n")
+    else null end;
+  def prompt: .type == "user"
+    and (.isMeta? != true)
+    and (.isCompactSummary? != true)
+    and ((.origin.kind? // "human") == "human")
+    and (ptext | . != null and test("\\S") and (test("<(agent-message|task-notification|system-reminder)[[:space:]>]|^[[:space:]]*<(local-command|bash-stdout|bash-stderr)|^(Delegated task node:|Update on pull request #)") | not));
+  # lastE is the tool_use id of the most recent E (stable however far the transcript scrolls), so the
+  # same edit can be ignored on the next pass; an id-less call (never seen in real transcripts) falls back to its own JSON.
+  reduce (inputs | fromjson?) as $line
+    ({checks: {}, s: "", lastE: ""};
+     if ($line | prompt) then .s = "" | .lastE = "" | .checks = {}
+     else
+       reduce ($line.message.content? // [] | if type == "array" then .[] else empty end) as $c (.;
+         if $c.type == "tool_use" and ($c.name | test("^(Edit|Write|MultiEdit|NotebookEdit)$"))
+            and (($c.input.file_path // $c.input.notebook_path // "") | scratch | not) then .s += "E" | .lastE = ($c.id // ($c | tojson))
+         elif $c.type == "tool_use" and $c.name == "Bash" then
+           (if ($c.input.command // "" | test($check_re)) then .checks[$c.id // ""] = true else . end)
+           | if ($c.input.command // "" | shell_write) then .s += "E" | .lastE = ($c.id // ($c | tojson)) else . end
+         elif $c.type == "tool_result" and .checks[$c.tool_use_id // ""] and $c.is_error != true and ($c.content | verdict) then .s += "P"
+         else . end)
+     end) | ["x" + .s, (if .lastE == "" then "-" else .lastE end)] | @tsv' 2>/dev/null || true)"
+IFS=$'\t' read -r events lastE <<<"$events" || true
+lastE="${lastE:-none}"
 last_msg="$(tail -n 200 "$transcript" | jq -nrR '
   [inputs | fromjson? | select(.type == "assistant")] | last | .message.content // []
   | map(select(.type == "text") | .text) | join("\n")' 2>/dev/null || true)"
 
 claims='\b(done|fixed|works|working now|all (tests|checks) pass(ing)?|passes|complete[d]?|ready to (merge|ship|review))\b'
 if [[ "$events" =~ E[^P]*$ ]] && grep -Eiq "$claims" <<<"$last_msg" && ! grep -q '~ assumed' <<<"$last_msg"; then
+  # Block at most once per edit: remember which edit (its tool_use id) was sent back for.
+  blocked_state="${FLOW_STATE_DIR:-$FLOW_HOME}/stop-blocked/$(printf '%s' "$transcript" | git hash-object --stdin | cut -c1-16)"
+  if [ "$lastE" = "$(cat "$blocked_state" 2>/dev/null || echo -)" ]; then
+    notify_done; exit 0
+  fi
+  mkdir -p "$(dirname "$blocked_state")" && echo "$lastE" >"$blocked_state"
   if [ -n "$FLOW_TASK_DIR" ]; then
     run="task $FLOW_TASK's own check: \`evidence.sh C<n>\` or \`S<n>\`, \`features.sh run --impacted\`, or \`ready.sh\` (in a task, a free-label evidence.sh run doesn't count)"
   else

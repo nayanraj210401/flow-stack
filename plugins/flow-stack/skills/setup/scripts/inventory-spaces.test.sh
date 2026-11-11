@@ -3,7 +3,8 @@
 set -uo pipefail
 I="$(cd "$(dirname "$0")" && pwd)/inventory.sh"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 SB="$(mktemp -d "${TMPDIR:-/tmp}/inventory-spaces.XXXXXX")"; SB="$(cd "$SB" && pwd -P)"
 trap 'rm -rf "$SB"' EXIT
@@ -19,4 +20,4 @@ chk .repo_skills '["repo one"]'
 chk .user_agents '["my agent"]'
 chk .user_commands '["do it"]'
 [ "$FAILS" = 0 ] || { echo "$FAILS failed"; exit 1; }
-echo "all passed"
+echo "inventory-spaces: $PASSES passed"

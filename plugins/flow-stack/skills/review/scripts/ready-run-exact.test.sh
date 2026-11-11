@@ -3,7 +3,8 @@
 set -uo pipefail
 R="$(cd "$(dirname "$0")" && pwd)/ready.sh"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 SB="$(mktemp -d "${TMPDIR:-/tmp}/ready-run-exact.XXXXXX")"; SB="$(cd "$SB" && pwd -P)"
 trap 'rm -rf "$SB"' EXIT
@@ -16,9 +17,9 @@ printf 'a.b\n' >data
 jq -n --arg bs "grep -q 'a\\.b' data" --arg multi $'echo one\nfalse' \
   '{ready:[{id:"bs",run:$bs},{id:"multi",run:$multi},{id:"plain",run:"test -f f"}]}' >.flow/config.json
 git add data && git commit -qm d
-out="$("$R" </dev/null 2>&1)"
+out="$("$R" -v </dev/null 2>&1)"
 grep -q '✓ bs' <<<"$out" && ok "a backslash in run is kept" || bad "bs failed: $out"
 grep -q '✗ multi' <<<"$out" && ok "a later line of a multi-line run is executed" || bad "multi passed: $out"
 grep -q '✓ plain' <<<"$out" && ok "a plain entry still passes" || bad "plain failed: $out"
 [ "$FAILS" = 0 ] || { echo "== ready-run-exact · FAIL ($FAILS)"; exit 1; }
-echo "== ready-run-exact · PASS"
+echo "== ready-run-exact · PASS ($PASSES passed)"
