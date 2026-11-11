@@ -4,7 +4,8 @@
 set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 
 SB="$(mktemp -d "${TMPDIR:-/tmp}/read-guard.XXXXXX")"; SB="$(cd "$SB" && pwd -P)"
@@ -23,7 +24,7 @@ check() {
   if [ "$got" = "$1" ]; then ok "$2 → $1"; else bad "$2 → got $got, want $1"; fi
 }
 
-echo "-- .env"
+# -- .env
 check deny  "Grep path=.env"          Grep '{"pattern":"K","path":".env"}'
 check deny  "Grep path=.env.local"    Grep '{"pattern":"K","path":".env.local"}'
 check deny  "Grep absolute .env"      Grep "$(jq -nc --arg p "$PWD/.env" '{pattern:"K",path:$p}')"
@@ -32,7 +33,7 @@ check deny  "Read .env"               Read '{"file_path":".env"}'
 check allow "Grep path=.env.example"  Grep '{"pattern":"K","path":".env.example"}'
 check allow "Grep path=.env.sample"   Grep '{"pattern":"K","path":".env.sample"}'
 
-echo "-- held-out checks"
+# -- held-out checks
 check deny  "Grep held-out dir"       Grep '{"pattern":"m","path":".flow/tasks/x/blind"}'
 check deny  "Grep task dir"           Grep '{"pattern":"m","path":".flow/tasks/x"}'
 check deny  "Grep task dir slash"     Grep '{"pattern":"m","path":".flow/tasks/x/"}'
@@ -47,7 +48,7 @@ check allow "Grep .flow/features"     Grep '{"pattern":"m","path":".flow/feature
 check allow "Grep task INTENT.md"     Grep '{"pattern":"m","path":".flow/tasks/x/INTENT.md"}'
 check allow "Glob src"                Glob '{"pattern":"src/**/*.sh"}'
 
-echo "-- dot segments, cwd, globs"
+# -- dot segments, cwd, globs
 check deny  "Grep .flow/tasks/x/../x"   Grep '{"pattern":"m","path":".flow/tasks/x/../x"}'
 check deny  "Grep .flow/./tasks"        Grep '{"pattern":"m","path":".flow/./tasks"}'
 check deny  "Grep .flow//tasks"         Grep '{"pattern":"m","path":".flow//tasks"}'
@@ -65,5 +66,5 @@ check deny  "cwd=.flow path=tasks"      Grep '{"pattern":"m","path":"tasks"}'
 check deny  "cwd=.flow no path"         Grep '{"pattern":"m"}'
 CWD_OVERRIDE=""
 
-[ "$FAILS" -eq 0 ] && { echo "read-guard: all ok"; exit 0; }
+[ "$FAILS" -eq 0 ] && { echo "read-guard: $PASSES passed"; exit 0; }
 echo "read-guard: $FAILS failed"; exit 1
