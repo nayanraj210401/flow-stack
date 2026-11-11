@@ -41,23 +41,32 @@ lit="$(perl -e '
 #     ${VAR:?} aborts instead of expanding to nothing, so guarded targets pass.
 while IFS= read -r seg; do
   grep -Eq '[[:space:]](-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)([[:space:]]|$)' <<<"$seg" || continue
-  if grep -Eq "[[:space:]][\"']?(/|~|\\\$HOME|\\\$\{HOME\})/?\*?[\"']?([[:space:]]|\$)" <<<"$seg"; then
+  # A target that resolves to / or home (or its * glob) once quotes, ., .. and // are folded.
+  if perl -ne 'for (split) { s/["\x27]//g; s{^(~|\$HOME|\$\{HOME\})(?=/|$)}{} or m{^/} or next; my @s;
+      for (split m{/}) { next if $_ eq "" || $_ eq "."; $_ eq ".." ? pop @s : push @s, $_ }
+      $hit = 1 if !@s || "@s" eq "*" } END { exit !$hit }' <<<"$seg"; then
     pre_decide deny "flow guard: recursive delete of / or home is never allowed."
   fi
   if sed -E 's/\$\{[A-Za-z_0-9]+:\?[^}]*\}//g' <<<"$seg" | grep -Eq '\$\{?[A-Za-z_0-9@*]'; then
     pre_decide ask "flow guard: recursive rm on an unguarded variable ('$seg'). If it's empty or points elsewhere, this deletes the wrong tree. Check it first, then guard it: rm -rf \"\${VAR:?}\"."
   fi
 done < <(grep -Eo "(^|[;&|(\`[:space:]]|(-c|eval)[[:space:]]+[\"'])rm[[:space:]][^;&|)\`]*" <<<"$lit" || true)
-gopts='git([[:space:]]+(-[cC][[:space:]]+[^[:space:];&|]+|-[^[:space:];&|]+))*'
+gopts='git([[:space:]]+((-[cC]|--(git-dir|work-tree|namespace|super-prefix|exec-path|config-env))[[:space:]]+[^[:space:];&|]+|-[^[:space:];&|]+))*'
 force_push="" force_main=""
 while IFS= read -r seg; do
   rest="$(sed -E "s/^$gopts[[:space:]]+push//" <<<"$seg")"
-  grep -Eq '(^|[[:space:]])(--force|-[A-Za-z]*f[A-Za-z]*([[:space:]]|$))|(^|[[:space:]:])\+[^[:space:]]' <<<"$rest" || continue
+  # Deleting main (:main, --delete/-d) is as final as force-pushing it; --mirror can do either.
+  if grep -Eq '(^|[[:space:]])["'"'"']?:(refs/heads/)?(main|master)["'"'"']?([[:space:]]|$)' <<<"$rest" ||
+    { grep -Eq '(^|[[:space:]])(--delete|-[A-Za-z]*d[A-Za-z]*)([[:space:]]|$)' <<<"$rest" &&
+      grep -Eq '[[:space:]]["'"'"']?(refs/heads/)?(main|master)["'"'"']?([[:space:]]|$)' <<<"$rest"; }; then
+    force_main=1
+  fi
+  grep -Eq '(^|[[:space:]])(--force|--mirror|-[A-Za-z]*f[A-Za-z]*([[:space:]]|$))|(^|[[:space:]:])["'"'"']?\+[^[:space:]]' <<<"$rest" || continue
   force_push=1
   grep -Eq '([[:space:]:+]["'"'"']?|refs/heads/)(main|master)["'"'"']?([[:space:]]|$)' <<<"$rest" && force_main=1
 done < <(grep -Eo "$gopts[[:space:]]+push([[:space:]][^;&|)\`]*)?" <<<"$lit" || true)
 if [ -n "$force_main" ]; then
-  pre_decide deny "flow guard: force-push to main/master is blocked. Push a branch and open a PR."
+  pre_decide deny "flow guard: force-pushing or deleting main/master is blocked. Push a branch and open a PR."
 fi
 # Judge each argument of a reader on its own: quotes and dirs stripped, the example/sample/template
 # names exempt per path, so a second .env.example arg doesn't waive the check.
@@ -520,7 +529,7 @@ fi
 if [ -n "$force_push" ]; then
   pre_decide ask "flow guard: force-push rewrites remote history."
 fi
-if has 'git[[:space:]]+(reset[[:space:]]+--hard|clean[[:space:]]+-[a-z]*f)'; then
+if has "$gopts[[:space:]]+(reset([[:space:]][^;&|]*)?[[:space:]]--hard|clean([[:space:]][^;&|]*)?[[:space:]](--force|-[a-z]*f[a-z]*)([[:space:]]|\$))"; then
   pre_decide ask "flow guard: this discards uncommitted work."
 fi
 if has '(drop[[:space:]]+(table|database|schema)|truncate[[:space:]]+table)'; then

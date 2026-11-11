@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# force-push.test.sh: guard.sh denies a force-push to main/master however the flags are spelled,
-# asks for any other force-push, and leaves ordinary pushes alone. Runs the working tree's hook.
+# force-push.test.sh: guard.sh denies a force-push or delete of main/master however the flags are
+# spelled, asks for any other force-push or a work-discarding reset/clean, and leaves ordinary pushes alone. Runs the working tree's hook.
 set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)"
 FAILS=0
@@ -36,6 +36,17 @@ expect deny 'git push -uf origin master'
 expect deny 'git push origin +main'
 expect deny 'git push origin HEAD:+main'
 expect deny 'git push origin HEAD:refs/heads/main -f'
+expect deny "git push origin '+main'"
+expect deny 'git push origin "+HEAD:main"'
+expect deny 'git --work-tree . push -f origin main'
+expect deny 'git --namespace foo push --force origin main'
+expect deny 'git --git-dir .git --exec-path /x push -f origin main'
+# -- deleting main/master: deny
+expect deny 'git push origin :main'
+expect deny 'git push origin :refs/heads/master'
+expect deny 'git push --delete origin main'
+expect deny 'git push -d origin master'
+expect deny 'git -C . push origin --delete main'
 expect deny 'git push origin refs/heads/main --force'
 # -- force-push elsewhere: ask
 expect ask 'git push -f origin feat/x'
@@ -45,10 +56,26 @@ expect ask 'git push origin +feat/x'
 expect ask 'git push -f origin feature/main'
 expect ask 'git push --force origin HEAD:refs/heads/feature/main'
 expect ask 'git push --force-with-lease origin feat/x'
+expect ask "git push origin '+feat/x'"
+expect ask 'git push --mirror'
+expect ask 'git --super-prefix x push -f origin feat/x'
 # -- ordinary pushes: allow
 expect allow 'git push origin main'
 expect allow 'git push -u origin main'
 expect allow 'git push -u origin feat/maintenance'
+expect allow 'git push origin :feat/x'
+expect allow 'git push --delete origin feat/main'
+expect allow 'git --work-tree . push origin main'
+# -- discarding uncommitted work: ask, with global options or split/long flags
+expect ask 'git reset --hard'
+expect ask 'git -C . reset --hard'
+expect ask 'git reset -q --hard HEAD~1'
+expect ask 'git clean -fd'
+expect ask 'git -c x=y clean -fd'
+expect ask 'git clean -d -f'
+expect ask 'git clean --force -d'
+expect allow 'git reset --soft HEAD~1'
+expect allow 'git clean -n -d'
 
 [ "$FAILS" -eq 0 ] && { echo "force-push: PASS ($PASSES passed)"; exit 0; }
 echo "force-push: FAIL ($FAILS)"; exit 1
