@@ -48,7 +48,7 @@ while IFS= read -r seg; do
     pre_decide ask "flow guard: recursive rm on an unguarded variable ('$seg'). If it's empty or points elsewhere, this deletes the wrong tree. Check it first, then guard it: rm -rf \"\${VAR:?}\"."
   fi
 done < <(grep -Eo "(^|[;&|(\`[:space:]]|(-c|eval)[[:space:]]+[\"'])rm[[:space:]][^;&|)\`]*" <<<"$lit" || true)
-gopts='git([[:space:]]+(-[cC][[:space:]]+[^[:space:];&|]+|-[^[:space:];&|]+))*'
+gopts='git([[:space:]]+(-[cC][[:space:]]+[^[:space:];&|]+|--(git-dir|work-tree|namespace|super-prefix|exec-path|config-env|attr-source)[[:space:]]+[^[:space:];&|]+|-[^[:space:];&|]+))*'
 force_push="" force_main=""
 while IFS= read -r seg; do
   rest="$(sed -E "s/^$gopts[[:space:]]+push//" <<<"$seg")"
