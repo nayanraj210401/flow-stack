@@ -41,6 +41,7 @@ expect deny 'git push origin "+HEAD:main"'
 expect deny 'git --work-tree . push -f origin main'
 expect deny 'git --namespace foo push --force origin main'
 expect deny 'git --git-dir .git --exec-path /x push -f origin main'
+expect deny 'git --attr-source HEAD push -f origin main'
 # -- deleting main/master: deny
 expect deny 'git push origin :main'
 expect deny 'git push origin :refs/heads/master'
@@ -58,6 +59,7 @@ expect ask 'git push --force origin HEAD:refs/heads/feature/main'
 expect ask 'git push --force-with-lease origin feat/x'
 expect ask "git push origin '+feat/x'"
 expect ask 'git push --mirror'
+expect ask "git push --prune origin 'refs/heads/*:refs/heads/*'"
 expect ask 'git --super-prefix x push -f origin feat/x'
 # -- ordinary pushes: allow
 expect allow 'git push origin main'

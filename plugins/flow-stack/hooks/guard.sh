@@ -42,7 +42,7 @@ lit="$(perl -e '
 while IFS= read -r seg; do
   grep -Eq '[[:space:]](-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)([[:space:]]|$)' <<<"$seg" || continue
   # A target that resolves to / or home (or its * glob) once quotes, ., .. and // are folded.
-  if perl -ne 'for (split) { s/["\x27]//g; s{^(~|\$HOME|\$\{HOME\})(?=/|$)}{} or m{^/} or next; my @s;
+  if perl -ne 'for (split) { s/["\x27]//g; s{^(~|\$HOME|\$\{HOME(:\?[^\}]*)?\})(?=/|$)}{} or m{^/} or next; my @s;
       for (split m{/}) { next if $_ eq "" || $_ eq "."; $_ eq ".." ? pop @s : push @s, $_ }
       $hit = 1 if !@s || "@s" eq "*" } END { exit !$hit }' <<<"$seg"; then
     pre_decide deny "flow guard: recursive delete of / or home is never allowed."
@@ -51,17 +51,17 @@ while IFS= read -r seg; do
     pre_decide ask "flow guard: recursive rm on an unguarded variable ('$seg'). If it's empty or points elsewhere, this deletes the wrong tree. Check it first, then guard it: rm -rf \"\${VAR:?}\"."
   fi
 done < <(grep -Eo "(^|[;&|(\`[:space:]]|(-c|eval)[[:space:]]+[\"'])rm[[:space:]][^;&|)\`]*" <<<"$lit" || true)
-gopts='git([[:space:]]+((-[cC]|--(git-dir|work-tree|namespace|super-prefix|exec-path|config-env))[[:space:]]+[^[:space:];&|]+|-[^[:space:];&|]+))*'
+gopts='git([[:space:]]+((-[cC]|--(git-dir|work-tree|namespace|super-prefix|exec-path|config-env|attr-source))[[:space:]]+[^[:space:];&|]+|-[^[:space:];&|]+))*'
 force_push="" force_main=""
 while IFS= read -r seg; do
   rest="$(sed -E "s/^$gopts[[:space:]]+push//" <<<"$seg")"
-  # Deleting main (:main, --delete/-d) is as final as force-pushing it; --mirror can do either.
+  # Deleting main (:main, --delete/-d) is as final as force-pushing it; --mirror and --prune can do either.
   if grep -Eq '(^|[[:space:]])["'"'"']?:(refs/heads/)?(main|master)["'"'"']?([[:space:]]|$)' <<<"$rest" ||
     { grep -Eq '(^|[[:space:]])(--delete|-[A-Za-z]*d[A-Za-z]*)([[:space:]]|$)' <<<"$rest" &&
       grep -Eq '[[:space:]]["'"'"']?(refs/heads/)?(main|master)["'"'"']?([[:space:]]|$)' <<<"$rest"; }; then
     force_main=1
   fi
-  grep -Eq '(^|[[:space:]])(--force|--mirror|-[A-Za-z]*f[A-Za-z]*([[:space:]]|$))|(^|[[:space:]:])["'"'"']?\+[^[:space:]]' <<<"$rest" || continue
+  grep -Eq '(^|[[:space:]])(--force|--mirror|--prune|-[A-Za-z]*f[A-Za-z]*([[:space:]]|$))|(^|[[:space:]:])["'"'"']?\+[^[:space:]]' <<<"$rest" || continue
   force_push=1
   grep -Eq '([[:space:]:+]["'"'"']?|refs/heads/)(main|master)["'"'"']?([[:space:]]|$)' <<<"$rest" && force_main=1
 done < <(grep -Eo "$gopts[[:space:]]+push([[:space:]][^;&|)\`]*)?" <<<"$lit" || true)
