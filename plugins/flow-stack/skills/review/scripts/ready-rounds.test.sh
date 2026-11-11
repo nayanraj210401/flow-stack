@@ -4,7 +4,8 @@
 set -uo pipefail
 R="$(cd "$(dirname "$0")" && pwd)/ready.sh"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 SB="$(mktemp -d "${TMPDIR:-/tmp}/ready-rounds.XXXXXX")"; SB="$(cd "$SB" && pwd -P)"
 trap 'rm -rf "$SB"' EXIT
@@ -37,4 +38,4 @@ grep -q 'round 1' <<<"$out5" && ! grep -q 'challenge' <<<"$out5" \
   && ok "after ships, the next slice's first fix-first is round 1" || bad "ships counted as fix rounds: $out5"
 
 [ "$FAILS" = 0 ] || { echo "== ready-rounds · FAIL ($FAILS)"; exit 1; }
-echo "== ready-rounds · PASS"
+echo "== ready-rounds · PASS ($PASSES passed)"

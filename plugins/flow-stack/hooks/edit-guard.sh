@@ -63,6 +63,7 @@ case "$rel" in
       pre_decide deny "flow gate: mark a slice done with '../flow/scripts/task.sh slice <id> done' (it checks red-first, green, teeth, and budget), not by editing SLICES.md. Missing proofs: 'task.sh proofs <id>'."
     fi
     exit 0 ;;
+  .flow/ready.tsv) pre_decide ask "flow ready: .flow/ready.tsv is ready.sh's ledger, and a stamp written by hand would skip the bar. Record steps with ready.sh record; ready.sh writes the stamp." ;;
   .flow/*) exit 0 ;;     # bookkeeping is always allowed
 esac
 
