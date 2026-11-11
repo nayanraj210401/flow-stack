@@ -133,9 +133,6 @@ if [ -n "$FLOW_TASK_DIR" ] && [ -f "$FLOW_TASK_DIR/SEALS" ]; then
   if has 'seal\.sh[[:space:]]+(reseal|rm)'; then
     pre_decide ask "flow seal: re-sealing or unsealing changes what 'done' means for task '$FLOW_TASK'. Approve only if you agreed to the check change."
   fi
-  if has '(SEALS|INTENT\.md)' && has '(sed[[:space:]]+-i|perl[[:space:]]+-p?i|>|tee|mv|rm|cp|truncate)'; then
-    pre_decide ask "flow seal: task '$FLOW_TASK' is sealed; this command may change its acceptance contract."
-  fi
   # A sealed check that is only read, run or copied from is not a write: '>' and cp count only when
   # the sealed path is their target (cp's last non-flag word). Every other write verb asks as before.
   wt="$(grep -Eo '>[>|]?[[:space:]]*[^[:space:];&|<>]+' <<<"$cmd" | sed -E 's/^>[>|]?[[:space:]]*//' || true)"
@@ -150,6 +147,13 @@ if [ -n "$FLOW_TASK_DIR" ] && [ -f "$FLOW_TASK_DIR/SEALS" ]; then
     done <<<"$wt"
     return 1
   }
+  # INTENT.md/SEALS: a write verb run as a command, or a '>'/cp that targets them. Reading
+  # (grep confirm INTENT.md, ... 2>&1) is not a write.
+  if has '(SEALS|INTENT\.md)' &&
+     { has '(^|[^[:alnum:]_.-])(sed[[:space:]]+(-i|--in-place)|perl[[:space:]]+-p?i|(tee|mv|rm|truncate)([[:space:]]|$))' ||
+       grep -Eq '(^|/)(SEALS|INTENT\.md)$' <<<"$wt"; }; then
+    pre_decide ask "flow seal: task '$FLOW_TASK' is sealed; this command may change its acceptance contract."
+  fi
   # SEALS names "<path>" (home repo) or "<repo>:<path>"; match the absolute path from anywhere,
   # and the relative path only inside the repo that owns it.
   while read -r _ sealed; do
