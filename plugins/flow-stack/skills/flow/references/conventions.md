@@ -20,7 +20,9 @@ The single source of truth for file locations and formats. Skills and hooks both
 | `<repo>/.flow/features/.ignore` | globs that are not features (for `coverage`) | yes |
 | `<repo>/.flow/board/` | board staging: `board.json`, `board.html` (from `board`; the artifact is the product) | no |
 | `~/.flow-stack/board/url` | the board artifact's link, reused on every publish | no (personal) |
-| `~/.flow-stack/auto/<session_id>` | auto mode is on for that session: `--auto` in a prompt creates it, `--no-auto` removes it (anchor hook); hooks turn every ask into deny-and-queue | no |
+| `~/.flow-stack/waits.jsonl` | notify.sh: one `{ts,sid,kind}` line per permission prompt or MCP elicitation shown; board/attention.sh reads it | no (personal) |
+| `~/.flow-stack/auto/<session_id>` | auto mode is on for that session: `--auto` in a prompt creates it, `--auto ship` or `--gha` (honoured only on a GitHub-hosted runner) writes ship or gha into it, `--no-auto` removes it (anchor hook); hooks turn every ask into deny-and-queue | no |
+| `~/.flow-stack/anchor/<session_id>.{auto,hash,count}` | anchor hook's per-session state: the auto banner mode already shown, the hash of the last injected anchor, prompts since; removed on compaction and by `--no-auto` (`.auto`), pruned after 7 days | no |
 | `~/.flow-stack/hosts/<session_id>` | the host hook's last sidebar push: text, gate count, herdr seq, then the files whose change moves the phase; removed at session end, and by any session start once older than 3 days (a crashed session's) | no |
 | `~/.claude/sessions/<pid>.json` | Claude Code's own row per live session (`pid sessionId cwd name status`); flow reads it for task owners and never writes it | no (Claude Code's) |
 | `<repo>/.flow/ready.tsv` | ready-for-review ledger: `ts\tsha\tkind\tresult\tnote`, kinds review, deslop, tour, ready, and each `do` id (from `review/scripts/ready.sh`). The repo's own pre-PR gates are `.flow/config.json` `"ready": [{"id": "e2e", "run": "<cmd>"}, {"id": "sec-scan", "do": "<step, e.g. an MCP scan>"}]`: a `run` is checked live, and a `do` needs `ready.sh record <id> done` for HEAD | no |
@@ -61,7 +63,7 @@ The single source of truth for file locations and formats. Skills and hooks both
 | `TDD` | `task.sh tdd` | opt-in TDD lock: `<slice> <red\|green> <red-FAIL count at the switch>`; per lane in a worktree |
 | `lanes/<lane>/` | a worker in a linked git worktree | its own `EVIDENCE.md`, `trail.jsonl`, `.circuit`, `HANDOFF.auto.md`; imported with `task.sh accept <lane>` |
 
-**Multi-repo tasks.** A profile `# Workspaces` entry (`- repos: a, b, c`) lists repos from `# Repos` (`- path:`, `- role: primary|dep|reference`, optional `- remote:`, `- run:`). `task.sh new <slug> <playbook> --workspace <name>` puts the task folder in the primary repo and points every other repo's ACTIVE at it. Each slice names its `repo:` (default: the home repo) and its fence is relative to that repo; an edit in any other repo is denied, whichever repo the session runs in. SEALS paths outside the home repo are `<repo>:<path>`, and evidence blocks run elsewhere carry `- repo: <name>`. Each repo gets its own branch, PR, and ready-for-review stamp.
+**Multi-repo tasks.** A profile `# Workspaces` entry (`- repos: a, b, c`) lists repos from `# Repos` (`- path:`, `- role: primary|dep|reference`, optional `- remote:`, `- run:`). `task.sh new <slug> <playbook> --workspace <name>` puts the task folder in the primary repo and points every other repo's ACTIVE at it. Each slice names its `repo:` (default: the home repo) and its fence is relative to that repo; an edit in any other repo is denied, whichever repo the session runs in. SEALS paths outside the home repo are `<repo>:<path>`, and evidence blocks run elsewhere carry `- repo: <name>`. Each repo gets its own branch, PR, and ready-for-review stamp. A request that names no repo goes through `task.sh route "<request>"` first: it matches the request's words against each repo's name, `what:`, and feature-map `title:`/`owns:` (only words unique to one repo count) and prints one line, `repo<TAB><name><TAB><path>`, `workspace<TAB><name>` (the smallest workspace holding every matched repo), or `ask<TAB><question>`.
 
 **Worktrees.** `.flow/` is untracked, so a linked worktree has none. Every hook and script resolves `.flow/` through `hooks/roots.sh` to the main checkout's copy. A worktree is a lane only once `flow-lane` exists (a subagent's first hook, or `task.sh join`); with neither it nor `flow-active` it has no task. A lane's plan files (INTENT, SLICES, SEALS, blind/) are read-only there, and its writes go to `lanes/<branch>/` so parallel workers never share a file. A subagent of the main checkout that wants its own task must remove `<git-dir>/flow-lane` first. `task.sh new` or `switch` run in a worktree writes its `flow-active`, making it a lead of its own task: it keeps the main-checkout role (plan files writable, evidence in the task folder), and main's ACTIVE is untouched. One checkout per task: a slug named by main's ACTIVE or any worktree's `flow-active` is refused elsewhere, except that `switch` moves the calling session's own task here, and `switch --take` moves anyone's. One session per task: the pointer's line 2 is the owner's pid, and while it lives other sessions in that checkout have no task.
 
@@ -115,6 +117,8 @@ status: verified                     # verified | unverified | stale | broken
 verified: 2026-09-27 a1b2c3d         # date + short sha of the last PASS
 ```
 
+`status` and `verified` here are the starting values. Runs, `mark`, and `stale --write` append to `.flow/verified.tsv` (untracked; the last row per id wins), so a committed map stays unchanged.
+
 Body sections, in order: `## Sub-features` (lines `- <id>.<sub> · <behavior>`), `## How to get to it`, `## Driving it`, `## Proof`, `## Gotchas`. Evidence labels for scenario runs are `feat:<id>`. Acceptance checks cite sub-feature IDs.
 
 ## Human gates
@@ -145,6 +149,7 @@ A generic skill with a slot looks for its fill in this order and uses the first 
 | build/run | `.claude/skills/run-<repo>/` | make-runner |
 | repo playbooks | `.flow/playbooks/*.md` | make-playbook |
 | irreversible actions | `.flow/gates.md` | make-gates |
+| scheduled routines | `.github/routines/<name>.md` (frontmatter cron, timeout, labels, auth; body is the prompt) → `.github/workflows/flow-<name>.yml`; `.github/routines/profile.md` is the CI profile | make-routines |
 | anything else | `.claude/skills/<name>/` | make-skill |
 
 ## Delegation

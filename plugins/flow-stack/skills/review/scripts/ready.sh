@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # ready.sh: the "ready for review" bar. Human review is the most expensive step in the loop,
 # so a PR reaches a human only after this passes for its exact HEAD.
-#   ready.sh [--base <ref>]                  run the bar; on pass, stamp HEAD in .flow/ready.tsv
+#   ready.sh [-v] [--base <ref>]                run the bar; on pass, stamp HEAD in .flow/ready.tsv
 #   ready.sh record <kind> <result> [note]   record a model-judged step for HEAD:
 #                                            review ship|fix-first|rethink · deslop done · tour done
 #                                            · <id> done for a repo `do` step (below)
 #   ready.sh stamped [<sha>]                 exit 0 if <sha> (default HEAD) has a pass stamp
 #   ready.sh mode                            on | yolo  (repo .flow/config.json > profile > on)
+#   ready.sh rounds                          reviewed commits on this branch since the last ship; a review record prints it,
+#                                            and round 3 without ship says to challenge the approach
 # Live checks: clean tree, lint + typecheck (config commands), impacted feature scenarios,
 # and with an active flow task: acceptance checks, seals, blind checks.
 # Repo quality gates: .flow/config.json "ready": [{"id","run":"<cmd>"} | {"id","do":"<step>"}].
@@ -19,6 +21,7 @@ sk="$here/../.."
 ledger="$FLOW_DIR/ready.tsv"
 profile="${FLOW_STACK_HOME:-$HOME/.flow-stack}/profile.md"
 sha() { git -C "$FLOW_ROOT" rev-parse "${1:-HEAD}" 2>/dev/null; }
+v=0; for a in "$@"; do { [ "$a" = -v ] || [ "$a" = --verbose ]; } && v=1; done
 
 mode() {
   local v; v="$(jq -r '.review_gate // empty' "$FLOW_DIR/config.json" 2>/dev/null)"
@@ -27,12 +30,27 @@ mode() {
 }
 custom() { # custom [<do-id>]: the repo's ready entries as id<TAB>run|do<TAB>body, or test one do id
   if [ -n "${1:-}" ]; then jq -e --arg k "$1" '.ready // [] | any(.id == $k and has("do"))' "$FLOW_DIR/config.json" >/dev/null 2>&1; return; fi
-  jq -r '.ready // [] | .[] | select(.id) | [.id, (if .run then "run" else "do" end), (.run // .do // "")] | @tsv' "$FLOW_DIR/config.json" 2>/dev/null
+  # The body is fetched by index: @tsv would double backslashes and flatten newlines.
+  jq -r '.ready // [] | to_entries[] | select(.value.id) | [.value.id, (if .value.run then "run" else "do" end), .key] | @tsv' "$FLOW_DIR/config.json" 2>/dev/null
+}
+custom_body() { jq -r --argjson i "$1" '.ready[$i] | .run // .do // ""' "$FLOW_DIR/config.json" 2>/dev/null; }
+merge_base() {
+  local ref
+  for ref in origin/HEAD origin/main origin/master main master; do
+    git -C "$FLOW_ROOT" rev-parse -q --verify "$ref" >/dev/null && { git -C "$FLOW_ROOT" merge-base HEAD "$ref"; return; }
+  done
+}
+rounds() { # reviewed commits on this branch since the last one reviewed ship; one commit reviewed twice is one round
+  local b; b="$(merge_base)"
+  [ -f "$ledger" ] || { echo 0; return; }
+  git -C "$FLOW_ROOT" rev-list "${b:+$b..}HEAD" 2>/dev/null |
+    awk -F'\t' 'NR == FNR { if ($3 == "review") v[$2] = $4; next } v[$1] == "ship" { exit } $1 in v { n++ } END { print n + 0 }' "$ledger" -
 }
 latest() { awk -F'\t' -v s="$1" -v k="$2" '$2 == s && $3 == k { r = $4 } END { print r }' "$ledger" 2>/dev/null; }
 
 case "${1:-}" in
   mode) mode; exit 0 ;;
+  rounds) rounds; exit 0 ;;
   stamped) [ "$(latest "$(sha "${2:-HEAD}")" ready)" = pass ]; exit ;;
   record)
     kind="${2:-}"; res="${3:-}"
@@ -43,21 +61,23 @@ case "${1:-}" in
     esac
     mkdir -p "$FLOW_DIR"
     printf '%s\t%s\t%s\t%s\t%s\n' "$(date -u +%FT%TZ)" "$(sha)" "$kind" "$res" "$(printf '%s' "${4:-}" | tr '\t\n' '  ')" >>"$ledger"
-    echo "recorded $kind=$res for $(sha | cut -c1-7)"; exit 0 ;;
+    echo "recorded $kind=$res for $(sha | cut -c1-7)"
+    if [ "$kind" = review ] && [ "$res" != ship ]; then
+      n="$(rounds)"
+      echo "review round $n on this branch; a re-review reads only: git diff $(sha | cut -c1-7)..HEAD"
+      [ "$n" -lt 3 ] || echo "round $n without ship: stop patching findings; run the challenge skill on the approach before another round"
+    fi
+    exit 0 ;;
 esac
 
-base=""; [ "${1:-}" = --base ] && base="${2:-}"
+base=""; prev=""; for a in "$@"; do [ "$prev" = --base ] && base="$a"; prev="$a"; done
 if [ "$(mode)" = yolo ]; then echo "review gate: yolo; nothing to check, PRs go straight to review"; exit 0; fi
-if [ -z "$base" ]; then
-  for ref in origin/HEAD origin/main origin/master main master; do
-    git -C "$FLOW_ROOT" rev-parse -q --verify "$ref" >/dev/null && { base="$(git -C "$FLOW_ROOT" merge-base HEAD "$ref")"; break; }
-  done
-fi
+[ -n "$base" ] || base="$(merge_base)"
 head="$(sha)"; fails=0
-pass() { echo "  ✓ $*"; }
+pass() { if [ "$v" = 1 ]; then echo "  ✓ $*"; fi; }
 miss() { echo "  ✗ $*"; fails=$((fails + 1)); }
 run() { # run <label> <cmd>: through evidence.sh so an active task records it
-  ( cd "$FLOW_ROOT" && "$sk/verify/scripts/evidence.sh" "$1" "$2" >/dev/null 2>&1 )
+  ( cd "$FLOW_ROOT" && "$sk/verify/scripts/evidence.sh" "$1" "$2" >/dev/null 2>&1 </dev/null )
 }
 echo "ready for review? $(echo "$head" | cut -c1-7)${base:+ vs $(echo "$base" | cut -c1-7)}"
 
@@ -72,6 +92,7 @@ for c in lint typecheck; do
 done
 
 while IFS=$'\t' read -r id kind body; do
+  body="$(custom_body "$body")"
   if [ "$kind" = run ]; then
     if run "ready:$id" "$body"; then pass "$id"; else miss "$id fails: $body"; fi
   elif [ "$(latest "$head" "$id")" = done ]; then pass "$id"

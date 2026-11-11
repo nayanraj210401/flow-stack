@@ -9,4 +9,4 @@ printf '%s\n%s\n' "$line" "$line" >"$t/projects/p1/s.jsonl"
 printf '%s\n%s\n' "$line" "$line" >"$t/projects/my proj/t.jsonl"
 out="$(CLAUDE_CONFIG_DIR="$t" "$here/usage.sh" 30)"
 grep -Eq '^ *4 flow-stack:flow$' <<<"$out" || { echo "FAIL: expected 4 flow-stack:flow"; echo "$out"; exit 1; }
-echo ok
+echo "usage-spaces: ok"

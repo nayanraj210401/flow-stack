@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # seal.sh: lock the acceptance checks of the active task.
-#   seal.sh add <path> [path ...]   seal files (directories expand to their files); exit 1 if any path sealed nothing
+#   seal.sh add <path> [path ...]   seal files (directories expand to their files); exit 1 if any path sealed nothing,
+#                                   or if an INTENT.md "## Edge cases" row maps to no check ID and no "non-goal: <why>"
 #   seal.sh verify                  exit 1 if any sealed file changed or vanished
 #   seal.sh list                    show sealed files
 #   seal.sh reseal                  re-hash every sealed file (after an approved change)
@@ -30,12 +31,66 @@ cd "$root"
 # Paths reach awk through ENVIRON, never -v, which unescapes backslashes.
 # Hash from stdin: shasum prefixes "\" to the hash of a file whose name has a backslash.
 sha() { shasum -a 256 <"$1" | cut -d' ' -f1; }
-hash_file() { printf '%s  %s\n' "$(sha "$1")" "$(flow_qual "$1")"; }
+
+# Edge-case rows ("- <case> → C1, C2" or "- <case> → non-goal: <why>") that map to neither.
+# A check ID counts only if INTENT's "## Acceptance checks" lists it.
+unmapped() {
+  [ -f "$FLOW_TASK_DIR/INTENT.md" ] || return 0
+  awk '
+    # The gate is on when INTENT has a "## Edge cases" heading outside fences and comments (a trailing ":" or "##"
+    # is fine). That section is a whitelist: list rows, blank lines, and comments that open at column 0 (the
+    # template form). Any other fence or comment marker there is refused, as is an unclosed fence or comment
+    # anywhere, since either could hide rows. Lookalike headings are not guessed at: renaming or deleting the
+    # section turns the gate off either way, and the reviewer sees that in the diff.
+    { l = $0; sub(/\r$/, "", l) }
+    sec == "edge cases" && l !~ /^##?[ \t]/ {
+      # text after a closing --> is visible, so it must be empty
+      if (ecm) { if ((i = index(l, "-->"))) { ecm = 0; if (substr(l, i + 3) ~ /[^ \t]/) bad[++nb] = l }; next }
+      # search from the dashes of the opener: <!--> and <!---> close on their line, as in CommonMark
+      if (l ~ /^<!--/) { if (!(i = index(substr(l, 3), "-->"))) ecm = 1; else if (substr(l, i + 5) ~ /[^ \t]/) bad[++nb] = l; next }
+      if (l ~ /^[ \t]*$/) next
+      if (l ~ /```|~~~|<!--|-->/) bad[++nb] = l; else rows[++n] = l
+      next
+    }
+    # Fences and multi-line comments open only at indent 0-3, as in CommonMark; deeper they are text.
+    fm != "" { if (index(l, fm) && l ~ /^ ? ? ?(```|~~~)/) fm = ""; next }
+    {
+      if (cm) { i = index(l, "-->"); if (!i) next; l = substr(l, i + 3); cm = 0 }
+      closed = 0
+      while ((i = index(l, "<!--"))) {
+        r = substr(l, i + 2); j = index(r, "-->")
+        if (j) { l = substr(l, 1, i - 1) substr(r, j + 3); closed = 1 }
+        else if (!closed && substr(l, 1, i - 1) ~ /^ ? ? ?$/) { l = ""; cm = 1 }
+        else break
+      }
+    }
+    l ~ /^ ? ? ?(```|~~~)/ { match(l, /(```|~~~)/); fm = substr(l, RSTART, 3); next }
+    l ~ /^##?[ \t]/ { sec = tolower(l); sub(/^#+[ \t]+/, "", sec); sub(/[ \t#:]+$/, "", sec); gsub(/[ \t]+/, " ", sec); if (sec == "edge cases") has = 1; next }
+    l ~ /^[ \t]*$/ { next }
+    sec == "acceptance checks" && l ~ /^[ \t]*- \[.\] C[0-9]+/ { match(l, /C[0-9]+/); ids[substr(l, RSTART, RLENGTH)] = 1 }
+    END {
+      if (has && fm != "") print "unclosed " fm " fence: it could hide edge-case rows"
+      if (has && (cm || ecm)) print "unclosed <!-- comment: it could hide edge-case rows"
+      for (i = 1; i <= nb; i++) print bad[i] "  (a fence or comment marker inside Edge cases; keep rows plain)"
+      for (i = 1; i <= n; i++) {
+        t = rows[i]; ok = 0
+        # [^ \t] then a separate → test: a byte class would refuse case text starting with any multi-byte character
+        if (t ~ /^[ \t]*([-*+]|[0-9]+[.)])[ \t]+[^ \t]/ && t !~ /^[ \t]*([-*+]|[0-9]+[.)])[ \t]+→/ && sub(/^.*→[ \t]*/, "", t)) {
+          sub(/[ \t\r]+$/, "", t)
+          if (t ~ /^non-goal:[ \t]*[^ \t]/) ok = 1
+          else if (t ~ /^C[0-9]+([ ,]+C[0-9]+)*$/) { ok = 1; k = split(t, a, /[ ,]+/); for (j = 1; j <= k; j++) if (!(a[j] in ids)) ok = 0 }
+        }
+        if (!ok) print rows[i]
+      }
+    }' "$FLOW_TASK_DIR/INTENT.md"
+}
 
 expand() {
   local p="${1#./}"
   if [ -d "$p" ]; then
-    { git ls-files -- "$p"; git ls-files --others --exclude-standard -- "$p"; } | sort -u
+    # git ls-files still lists files that are tracked but deleted in the working tree
+    { git ls-files -- "$p"; git ls-files --others --exclude-standard -- "$p"; } | sort -u |
+      while IFS= read -r f; do [ -f "$f" ] && printf '%s\n' "$f"; done
   elif [ -f "$p" ]; then
     printf '%s\n' "$p"
   else
@@ -46,14 +101,18 @@ expand() {
 case "${1:-}" in
   add)
     shift; [ $# -gt 0 ] || { echo "usage: seal.sh add <path> ..." >&2; exit 2; }
+    u="$(unmapped)"
+    [ -z "$u" ] || { printf 'seal.sh: INTENT.md edge-case rows map to no check and no non-goal, or the matrix is malformed:\n%s\nmap each to a check ID (→ C2) or "→ non-goal: <why>", one row per line (no wrapping), then seal\n' "$u" >&2; exit 1; }
     touch "$seals"; rc=0
     for p in "$@"; do
       n=0
       while IFS= read -r f; do
         [ -n "$f" ] || continue
+        # hash first: a seal line is never written without one
+        h="$(sha "$f")" && [ -n "$h" ] || { echo "seal.sh: cannot hash: $f" >&2; exit 1; }
         q="$(flow_qual "$f")" awk 'substr($0, 67) != ENVIRON["q"]' "$seals" >"$seals.tmp"
         mv "$seals.tmp" "$seals"
-        hash_file "$f" >>"$seals"
+        printf '%s  %s\n' "$h" "$(flow_qual "$f")" >>"$seals"
         echo "sealed: $(flow_qual "$f")"; n=$((n + 1))
       done < <(expand "$p")
       [ "$n" -gt 0 ] || rc=1
