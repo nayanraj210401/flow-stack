@@ -7,7 +7,8 @@ set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)"
 command -v osascript >/dev/null || { echo "== notify-escape · SKIP (no osascript)"; exit 0; }
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 
 SB="$(mktemp -d "${TMPDIR:-/tmp}/notify-escape.XXXXXX")"
@@ -32,5 +33,5 @@ expect 'say "hi"'
 expect 'x\" & (ASCII character 33) --'
 expect 'trailing \'
 
-[ "$FAILS" -eq 0 ] && { echo "== notify-escape · PASS"; exit 0; }
+[ "$FAILS" -eq 0 ] && { echo "== notify-escape · PASS ($PASSES passed)"; exit 0; }
 echo "== notify-escape · FAIL ($FAILS)"; exit 1

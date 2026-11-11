@@ -1,7 +1,7 @@
 # Intent · {{slug}}
 
 ## Goal
-<!-- One sentence: the outcome, from the user's point of view. The anchor hook injects this line on every prompt. -->
+<!-- One sentence: the outcome, from the user's point of view. The anchor hook injects this line once per session, when it changes, and every 10th prompt. -->
 
 ## Why now
 <!-- The problem this solves and who feels it. -->
@@ -21,6 +21,13 @@
      - [ ] C2 · <what it proves> · human-judged: <how>    (only when no command can prove it)
      Sealed after approval: editing these needs the human. -->
 - [ ] C1 ·  · ``
+
+## Edge cases
+<!-- One row per input or state case, each on one line: empty, huge, concurrent, offline, unauthorized, retry, plus the domain's own.
+     Each maps to the checks that cover it or to a non-goal with its reason; seal refuses while a row maps to neither.
+     - empty → C2
+     - concurrent → C3, C4
+     - offline → non-goal: CLI only, never networked -->
 
 ## Blind checks
 <!-- Written by the checker agent into blind/. Only the count and the behavior area go here, never the content. -->

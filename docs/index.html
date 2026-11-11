@@ -102,15 +102,21 @@ code { font-size: .86em; background: var(--accent-soft); color: var(--accent-ink
 
 /* nav */
 nav { position: sticky; top: 0; z-index: 20; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); background: color-mix(in srgb, var(--bg) 78%, transparent); border-bottom: 1px solid var(--line); }
-nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 60px; gap: 16px; }
+nav .wrap { display: flex; align-items: center; height: 60px; gap: 22px; }
 .logo { display: flex; align-items: center; gap: 10px; font: 600 15px "JetBrains Mono", monospace; text-decoration: none; }
 .logo-mark { width: 26px; height: 26px; border-radius: 7px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); display: grid; place-items: center; color: #fff; font-size: 14px; box-shadow: 0 4px 14px var(--glow); }
-.nav-links { display: flex; align-items: center; gap: 22px; font-size: 14px; }
-.nav-links a { text-decoration: none; color: var(--muted); }
-.nav-links a:hover { color: var(--ink); }
+.nav-links, .nav-opts { display: flex; align-items: center; gap: 22px; font-size: 14px; }
+.nav-opts { margin-left: auto; }
+.nav-links a, .nav-opts a { text-decoration: none; color: var(--muted); white-space: nowrap; }
+.nav-links a:hover, .nav-opts a:hover { color: var(--ink); }
 .nav-links .btn-sm { color: var(--ink); border: 1px solid var(--line); padding: 6px 12px; border-radius: 8px; background: var(--surface); }
 .theme-btn { background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 8px; width: 32px; height: 32px; cursor: pointer; font-size: 14px; }
-@media (max-width: 760px) { .nav-links .opt { display: none; } }
+@media (max-width: 860px) {
+  nav .wrap { flex-wrap: wrap; height: auto; padding-top: 10px; row-gap: 0; }
+  .nav-links { margin-left: auto; }
+  .nav-opts { order: 3; width: 100%; margin: 0; gap: 18px; overflow-x: auto; padding: 10px 0 12px; scrollbar-width: none; }
+  .nav-opts::-webkit-scrollbar { display: none; }
+}
 
 /* hero */
 .hero { position: relative; padding: 88px 0 72px; isolation: isolate; overflow-x: clip; }
@@ -247,6 +253,20 @@ h2 em { font-family: "Instrument Serif", Georgia, serif; font-style: italic; fon
 .never b { color: var(--ink); }
 .auto-grid .term-body { min-height: 0; }
 
+/* factory */
+.fx-label { font: 600 12px "JetBrains Mono", monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin: 0 0 10px; }
+.hosts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 26px; }
+.hosts .amode p { font-size: 14px; }
+.risk { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--surface); }
+.risk div { padding: 12px 14px; display: grid; gap: 4px; font-size: 13.5px; color: var(--muted); }
+.risk div + div { border-left: 1px solid var(--line); }
+.risk b { font: 600 13px "JetBrains Mono", monospace; color: var(--accent-ink); }
+.risk .hi b { color: var(--ink); }
+.fx-routines { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.fx-notes { display: grid; grid-template-columns: 1fr 1fr; gap: 0 32px; }
+@media (max-width: 900px) { .fx-routines, .fx-notes { grid-template-columns: 1fr; } }
+@media (max-width: 560px) { .hosts, .risk { grid-template-columns: 1fr; } .risk div + div { border-left: 0; border-top: 1px solid var(--line); } }
+
 /* board */
 .mc { margin-top: 8px; display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); gap: 32px; align-items: start; padding: 28px; border: 1px solid var(--line); border-radius: 22px; background-color: var(--surface);
   background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px); background-size: 28px 28px; }
@@ -360,13 +380,16 @@ footer a { color: var(--muted); }
 <nav>
   <div class="wrap">
     <a class="logo" href="#top"><span class="logo-mark">⟳</span>flow-stack</a>
+    <div class="nav-opts">
+      <a href="#how">How it works</a>
+      <a href="#mods">Mods</a>
+      <a href="#auto">Auto</a>
+      <a href="#factory">Factory</a>
+      <a href="#board">Board</a>
+      <a href="#guardrails">Guardrails</a>
+      <a href="#cost">Cost</a>
+    </div>
     <div class="nav-links">
-      <a class="opt" href="#how">How it works</a>
-      <a class="opt" href="#mods">Mods</a>
-      <a class="opt" href="#auto">Auto</a>
-      <a class="opt" href="#board">Board</a>
-      <a class="opt" href="#guardrails">Guardrails</a>
-      <a class="opt" href="#cost">Cost</a>
       <button class="theme-btn" id="theme" type="button" aria-label="Toggle theme">◐</button>
       <a class="btn-sm" href="https://github.com/nayanraj210401/flow-stack">GitHub ↗</a>
     </div>
@@ -377,7 +400,7 @@ footer a { color: var(--muted); }
   <div class="wrap hero-inner">
     <span class="pill"><span class="dot"></span>A plugin for Claude Code · skills + bash hooks</span>
     <h1>Spend attention like <em>money.</em></h1>
-    <p class="lede">flow-stack makes your agent agree on what "done" means before it writes code, then prove it with evidence it can't fake. You make three decisions per task. The hooks handle the rest.</p>
+    <p class="lede">flow-stack makes your agent agree on what "done" means before it writes code, then prove it with evidence it can't fake. You make three decisions per task. The hooks handle the rest, in your session or <a href="#factory">with nobody at the keyboard</a>: requests in, verified PRs out.</p>
     <div class="cta-row">
       <a class="btn primary" href="#install">Install in Claude Code →</a>
       <a class="btn" href="https://github.com/nayanraj210401/flow-stack#readme">Read the docs</a>
@@ -401,7 +424,7 @@ footer a { color: var(--muted); }
   </div>
 </div>
 
-<section>
+<section id="problem">
   <div class="wrap">
     <div class="reveal">
       <div class="kicker">The problem</div>
@@ -551,6 +574,7 @@ mul() { echo 6; } fooled one, not both.</span></div>
         <div class="modes">
           <div class="amode"><div class="flag">--auto</div><p>Approves its own intent and seals, takes its recommended option at every reversible gate, and logs each choice as <code>who=agent</code>. Hooks deny questions, push, PR, and publish commands, and the agent queues them instead.</p></div>
           <div class="amode"><div class="flag">--auto ship</div><p>Same as <code>--auto</code>, but the agent may also push its branch (never main), open the PR, and merge it once <code>ready.sh</code> has stamped HEAD after review. Deploys and publishing still wait for you.</p></div>
+          <div class="amode"><div class="flag">--gha</div><p>For GitHub Actions routines, where nobody can answer a gate and the disk is thrown away. Same as <code>--auto ship</code> plus <code>gh release create</code>, and it works only on a GitHub-hosted runner: on your laptop it is refused. Force-push, the default branch, publishing, and deploys stay blocked.</p></div>
           <div class="amode"><div class="flag">--no-auto</div><p>You're back, and gates ask you again. Approve or reject what's queued from <code>/flow-pane</code>, or read it in the handoff.</p></div>
         </div>
         <p class="never"><b>Unless you grant <code>--auto ship</code>, irreversible actions wait for you.</b> Hooks block push, PR, and publish commands; a deploy script is on the agent to hold back. Each queued item waits in <code>GATES.md</code> with its options and a recommendation. At the end, the agent notifies you and writes a trace and a handoff that lists the open gates first.</p>
@@ -573,6 +597,69 @@ mul() { echo 6; } fooled one, not both.</span></div>
 <span class="acc">⚑ 2</span> drop the legacy /export.xml route?
     <span class="d">A) drop  B) keep  · recommend B</span></div>
       </div>
+    </div>
+  </div>
+</section>
+
+<section id="factory">
+  <span id="routines"></span>
+  <div class="wrap">
+    <div class="reveal">
+      <div class="kicker">Software factory</div>
+      <h2>Requests in. <em>Verified PRs out.</em></h2>
+      <p class="sub">An issue you labelled, an <code>@claude</code> comment, or a bug a routine reproduced becomes a draft PR that passed flow's ready gate. You review the spec, the code, and the product. One command sets it up: <code>/flow-stack:setup-factory</code> reads your repo and your machine, asks where it should run, what it should do, and how much risk it takes alone, then ends in a draft PR (repo changes) or local changes only (a machine setup).</p>
+    </div>
+    <div class="auto-grid">
+      <div class="reveal">
+        <div class="fx-label">Where it runs</div>
+        <div class="hosts">
+          <div class="amode"><div class="flag">this laptop</div><p><code>flow --auto</code> sessions, and the shift: your own queue prepared overnight.</p></div>
+          <div class="amode"><div class="flag">a server or VPS</div><p>The same, always on: the shift on cron, long runs in tmux, notices over ntfy.</p></div>
+          <div class="amode"><div class="flag">GitHub Actions</div><p>Routines in the repo, for everyone on it. Each run installs the plugin, so the hooks hold.</p></div>
+          <div class="amode"><div class="flag">cloud sessions</div><p>Claude Code on the web or Slack builds and stamps a branch; a routine or your laptop opens the PR.</p></div>
+        </div>
+        <div class="fx-label">What it builds alone</div>
+        <div class="risk">
+          <div><b>risk:low</b><span>built</span></div>
+          <div><b>risk:med</b><span>built, unless you cap it at low</span></div>
+          <div class="hi"><b>risk:high</b><span>a spec and <code>needs-human</code>, never code</span></div>
+        </div>
+        <p class="never"><b>It needs a repo that can prove its own changes:</b> a committed verify driver and feature map with a scenario, because a runner sees only the clone. setup-factory fixes that first.</p>
+      </div>
+      <div class="term reveal">
+        <div class="term-bar"><i></i><i></i><i></i><span class="title">setup-factory · illustrative</span></div>
+        <div class="term-body"><span class="you">› /flow-stack:setup-factory</span>
+<span class="d">host</span>      laptop <span class="d">macOS</span>
+<span class="d">verify</span>    <span class="bad">missing</span> <span class="d">driver on disk, not committed</span>
+<span class="d">secret</span>    <span class="ok">ok</span>      <span class="d">protect</span> <span class="ok">ok</span>
+
+<span class="d">where?</span>    <span class="acc">[x] GitHub Actions</span>  [x] this laptop
+<span class="d">what?</span>     <span class="acc">[x] review</span>  <span class="acc">[x] self-heal</span>  <span class="acc">[x] triage</span>
+<span class="d">risk?</span>     <span class="acc">› low and med</span>  <span class="d">· low · specs only</span>
+<span class="d">alone?</span>    <span class="acc">› draft PRs only</span>
+
+<span class="d">profile</span>   factory_ready: <span class="acc">enforce</span> <span class="d">· approved</span>
+committed .claude/skills/verify-app <span class="d">· .flow/features</span>
+rendered  flow-review · flow-self-heal · flow-triage
+<span class="ok">✓ factory ok</span>   <span class="d">detect.sh</span>
+
+<span class="d">open a draft PR?</span>  <span class="acc">› Draft PR</span>
+<span class="ok">✓</span> draft PR opened <span class="d">· your steps are in it</span></div>
+      </div>
+    </div>
+
+    <div class="fx-label reveal" style="margin-top:44px">The routines it can set up</div>
+    <div class="fx-routines reveal">
+      <div class="amode"><div class="flag">review · every PR</div><p>A fresh-context reviewer posts one comment with a verdict and file:line findings. It never approves, blocks, or pushes.</p></div>
+      <div class="amode"><div class="flag">self-create · nightly</div><p>Hunts for bugs by running your tests and verify driver, and files an issue only with a repro that ran.</p></div>
+      <div class="amode"><div class="flag">self-heal · nightly</div><p>Fixes issues a maintainer labelled <code>heal-ok</code>. A draft PR opens only after <code>ready.sh</code> stamps the commit.</p></div>
+      <div class="amode"><div class="flag">mention · @claude</div><p>A comment from someone with write access runs through flow and ends in a draft PR. Bots and forks are refused.</p></div>
+      <div class="amode"><div class="flag">triage · every 4 hours</div><p>Labels new issues by type, size and risk, with the evidence. Its risk label decides what self-heal may build.</p></div>
+      <div class="amode"><div class="flag">the shift · your machine</div><p>Pending reviews, fixes for feedback on your PRs, and commits for issues assigned to you, prepared overnight. You release each one.</p></div>
+    </div>
+    <div class="fx-notes reveal">
+      <p class="never"><b>Each routine gets only the write access it needs.</b> Issue and PR text is data, never instructions, and every run installs flow-stack from its default branch or the release you pin. How far a run may go is the <a href="#auto">auto mode</a> it runs in.</p>
+      <p class="never"><b>You can stop it in one command.</b> <code>gh variable set FLOW_FACTORY --body off</code> pauses every routine. Routines never create or edit your labels: map yours in <code>.github/routines/labels.tsv</code>.</p>
     </div>
   </div>
 </section>
@@ -696,7 +783,7 @@ mul() { echo 6; } fooled one, not both.</span></div>
   </div>
 </section>
 
-<section style="padding-top:40px">
+<section id="setup" style="padding-top:40px">
   <div class="wrap">
     <div class="reveal">
       <div class="kicker">Fits your setup</div>
@@ -715,6 +802,8 @@ mul() { echo 6; } fooled one, not both.</span></div>
           <span class="k">make-runner</span><span class="v">build, run, reset</span>
           <span class="k">make-gates</span><span class="v">your repo's irreversible actions</span>
           <span class="k">make-playbook</span><span class="v">your workflows</span>
+          <span class="k">make-routines</span><span class="v">flow-stack on GitHub Actions</span>
+          <span class="k">setup-factory</span><span class="v">the whole factory, any host</span>
         </div>
       </div>
       <div class="b-c">
@@ -745,7 +834,7 @@ mul() { echo 6; } fooled one, not both.</span></div>
 <span class="acc">›</span> /plugin install flow-stack@flow-stack
 <span class="acc">›</span> /flow-stack:setup</div>
     </div>
-    <p class="mods-note">Needs jq, git, perl, curl, and shasum, which ship with macOS and most Linux.</p>
+    <p class="mods-note">Needs jq, git, perl, curl, and shasum, which ship with macOS and most Linux. Want it running without you? Then <code>/flow-stack:setup-factory</code>.</p>
     <div class="cta-row" style="margin-top:28px">
       <a class="btn primary" href="https://github.com/nayanraj210401/flow-stack">Star on GitHub</a>
       <a class="btn" href="https://github.com/nayanraj210401/flow-stack#readme">Full docs</a>
