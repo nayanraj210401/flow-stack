@@ -4,7 +4,8 @@
 set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 SB="$(mktemp -d "${TMPDIR:-/tmp}/ecosystem.XXXXXX")"; trap 'rm -rf "$SB"' EXIT
 cd "$SB" || exit 1
@@ -20,4 +21,4 @@ check e2/ "pkg/package.json "
 check e2 "pkg/package.json "
 check "$SB/.hid" "sub/package.json "
 
-[ "$FAILS" -eq 0 ] && echo "PASS" || { echo "FAIL: $FAILS"; exit 1; }
+[ "$FAILS" -eq 0 ] && echo "ecosystem: $PASSES passed" || { echo "FAIL: $FAILS"; exit 1; }

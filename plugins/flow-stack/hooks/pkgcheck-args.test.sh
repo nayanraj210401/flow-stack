@@ -4,7 +4,8 @@
 set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)"
 FAILS=0
-ok()  { echo "  ✓ $*"; }
+PASSES=0
+ok()  { PASSES=$((PASSES + 1)); }
 bad() { echo "  ✗ $*"; FAILS=$((FAILS + 1)); }
 
 SB="$(mktemp -d "${TMPDIR:-/tmp}/pkgcheck.XXXXXX")"; SB="$(cd "$SB" && pwd -P)"
@@ -50,4 +51,4 @@ expect deny  'pnpm add -r notreal-pkg'
 expect deny  'npm install -t notreal-pkg'
 expect deny  'pip install -t vendor notreal-pkg'
 
-[ "$FAILS" -eq 0 ] && echo ok || { echo "$FAILS failed"; exit 1; }
+[ "$FAILS" -eq 0 ] && echo "pkgcheck-args: $PASSES passed" || { echo "pkgcheck-args: $FAILS failed"; exit 1; }

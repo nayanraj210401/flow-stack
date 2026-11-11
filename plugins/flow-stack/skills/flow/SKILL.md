@@ -46,6 +46,7 @@ Three currencies: tokens (cheap, capped), dollars (moderate), the human's attent
 | Rename, migration, sweep | `playbooks/refactor.md` | task folder |
 | Make a metric better | `playbooks/optimize.md` | task folder |
 | Spans days or sessions | `playbooks/multi-session.md` | task folder + handoffs |
+| Names no repo, and the profile lists several (`# Repos`) | `scripts/task.sh route "<request>"` first: `repo` → work there; `workspace` → the row below; `ask` → that one question (unattended: GATES.md, never a guess). Without flow-stack's hooks (a cloud multi-repo session), a `workspace` result is intake only: file a `factory-request` issue in the primary repo (repos, goal, links) and stop | none until routed |
 | Spans several repos (a ticket touching a profile workspace) | the matching playbook, opened with `task.sh new <slug> <playbook> --workspace <name>` | task folder in the primary repo; one slice per repo change; one PR per repo |
 | No playbook fits: ambitious, mixed kinds, or reviewed after stepping away | `playbooks/compose.md` | task folder, rigor +1 |
 | Source is a ticket someone else wrote | the matching playbook; `intent` fact-checks the ticket (§1a) | as that playbook |
@@ -102,8 +103,10 @@ Base the forecast on the change size and the profile's `# Calibration`. If the h
 | Mode | Trigger | Behavior |
 |---|---|---|
 | **Interactive** (default) | — | Proceed on reversible work. Stop at gates. |
-| **Autonomous** | `--auto` anywhere in a prompt (`--no-auto` ends it), "going to bed", "run until done", "don't stop", `/loop` | Never block on a question. Intent and seal approval are yours to give; log them with `who=agent`. With `--auto` the hooks enforce it for the session: every ask is denied with "queue it", and so are AskUserQuestion, push, and PR commands. Put open gates in `.flow/tasks/<slug>/GATES.md` (question, options, recommendation), pick the recommended reversible option, log it with `who=agent`, and keep going on anything the gate doesn't block. **Irreversible actions still never happen.** `--auto ship` and, on a GitHub-hosted Actions runner only, `--gha` (ship plus `gh release create`; refused elsewhere) unlock a stamped push, PR, merge of the current branch. They wait in GATES.md. At the end, notify, then `trace` plus a HANDOFF that lists the GATES.md items first. |
+| **Autonomous** | `--auto` anywhere in a prompt (`--no-auto` ends it), "going to bed", "run until done", "don't stop", `/loop` | Never block on a question. Intent and seal approval are yours to give; log them with `who=agent`. With `--auto` the hooks enforce it for the session: every ask is denied with "queue it", and so are AskUserQuestion, push, and PR commands. Put open gates in `.flow/tasks/<slug>/GATES.md` (question, options, recommendation), pick the recommended reversible option, log it with `who=agent`, and keep going on anything the gate doesn't block. **Irreversible actions still never happen.** `--auto ship` and, on a GitHub-hosted Actions runner only, `--gha` (ship plus `gh release create`; refused elsewhere) unlock a stamped push, PR, merge of the current branch. They wait in GATES.md. In a repo with no committed verify driver and feature map (with a scenario), the anchor says "factory not ready"; with the profile's `factory_ready: enforce` the session drops to plain `--auto`. At the end, notify, then `trace` plus a HANDOFF that lists the GATES.md items first. |
 | **Quick** | "quick", "just do it" | rigor `lean` for this task. The hooks stay on. |
+
+Unattended work (`--auto`, routines) runs the factory loop: [references/factory.md](references/factory.md) has its stages, where the human sits, and the factory-ready rule.
 
 ## 6. Sessions and subagents
 

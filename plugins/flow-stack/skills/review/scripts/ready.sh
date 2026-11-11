@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ready.sh: the "ready for review" bar. Human review is the most expensive step in the loop,
 # so a PR reaches a human only after this passes for its exact HEAD.
-#   ready.sh [--base <ref>]                  run the bar; on pass, stamp HEAD in .flow/ready.tsv
+#   ready.sh [-v] [--base <ref>]                run the bar; on pass, stamp HEAD in .flow/ready.tsv
 #   ready.sh record <kind> <result> [note]   record a model-judged step for HEAD:
 #                                            review ship|fix-first|rethink · deslop done · tour done
 #                                            · <id> done for a repo `do` step (below)
@@ -21,6 +21,7 @@ sk="$here/../.."
 ledger="$FLOW_DIR/ready.tsv"
 profile="${FLOW_STACK_HOME:-$HOME/.flow-stack}/profile.md"
 sha() { git -C "$FLOW_ROOT" rev-parse "${1:-HEAD}" 2>/dev/null; }
+v=0; for a in "$@"; do { [ "$a" = -v ] || [ "$a" = --verbose ]; } && v=1; done
 
 mode() {
   local v; v="$(jq -r '.review_gate // empty' "$FLOW_DIR/config.json" 2>/dev/null)"
@@ -69,11 +70,11 @@ case "${1:-}" in
     exit 0 ;;
 esac
 
-base=""; [ "${1:-}" = --base ] && base="${2:-}"
+base=""; prev=""; for a in "$@"; do [ "$prev" = --base ] && base="$a"; prev="$a"; done
 if [ "$(mode)" = yolo ]; then echo "review gate: yolo; nothing to check, PRs go straight to review"; exit 0; fi
 [ -n "$base" ] || base="$(merge_base)"
 head="$(sha)"; fails=0
-pass() { echo "  ✓ $*"; }
+pass() { if [ "$v" = 1 ]; then echo "  ✓ $*"; fi; }
 miss() { echo "  ✗ $*"; fails=$((fails + 1)); }
 run() { # run <label> <cmd>: through evidence.sh so an active task records it
   ( cd "$FLOW_ROOT" && "$sk/verify/scripts/evidence.sh" "$1" "$2" >/dev/null 2>&1 </dev/null )

@@ -121,7 +121,8 @@ repo_json() {
   feats="$(for f in "$fd"/features/*.md; do [ -f "$f" ] && [ "$(basename "$f")" != README.md ] || continue
       awk 'NR==1&&$0=="---"{fm=1;next} fm&&$0=="---"{exit} fm{k=$0; sub(/:.*/,"",k); v=$0; sub(/^[^:]*:[[:space:]]*/,"",v); if(k=="id"||k=="status"||k=="verified") printf "%s\t%s\n", k, v}' "$f" |
       jq -Rsc 'split("\n") | map(select(length>0) | split("\t") | {(.[0]): .[1]}) | add'
-    done | jq -sc 'map(select(. != null))')"
+    done | jq -sc --rawfile t <(cat "$fd/verified.tsv" 2>/dev/null) '(reduce ($t | split("\n") | map(select(length > 0) | split("\t")))[] as $r ({}; .[$r[0]] = {status: $r[1], verified: $r[2]})) as $m
+      | map(select(. != null) | . + ($m[.id // ""] // {}))')"
   decs="$(for t in "$fd"/tasks/*/DECISIONS.tsv; do [ -f "$t" ] || continue; s="$(basename "$(dirname "$t")")"
       tail -n +2 "$t" | awk -F'\t' -v s="$s" 'NF>=3{print $1"\t"s"\t"$2"\t"$3"\t"$4"\t"$6}'; done |
     jq -Rsc 'split("\n") | map(select(length>0) | split("\t") | {ts:.[0], task:.[1], who:.[2], decision:.[3], why:.[4], reversible:.[5]})
@@ -171,7 +172,7 @@ board_prefs() {
   perl -0pe 's/<!--.*?-->//gs' "$profile" 2>/dev/null |
     awk '/^# /{on = ($0 ~ /^# Board[[:space:]]*$/); next}
       on && /^-[[:space:]]+[A-Za-z_]+:/{l=$0; sub(/^-[[:space:]]+/,"",l); k=l; sub(/:.*/,"",k); sub(/^[^:]*:[[:space:]]*/,"",l); if (k == "view") { sub(/[[:space:]]+$/,"",l); if (match(l, / · (table|list|count)[[:space:]]+#[[:space:]].*$/)) { t = substr(l, RSTART); sub(/[[:space:]]+#.*$/,"",t); l = substr(l, 1, RSTART - 1) t } } else sub(/[[:space:]]+(#[[:space:]].*)?$/,"",l); print k"\t"l}' |
-    jq -Rsc '["needs","spend","attention","tasks","features","quality","decisions","debt","shipped","estimate","repos"] as $ids
+    jq -Rsc '["needs","spend","attention","tasks","features","quality","decisions","debt","shipped","estimate","repos","factory"] as $ids
       | reduce (split("\n")[] | select(length > 0) | split("\t") | {k: .[0], v: (.[1] // "")}) as $p
         ({hide: [], order: [], wide: [], theme: "auto", tab: "current", accent: null, views: [], warnings: []};
          if $p.k == "hide" or $p.k == "order" or $p.k == "wide" then
@@ -217,11 +218,20 @@ attention_json() { # null when skipped or no transcripts; else the day-by-day wi
        | map(.text = (if .level == "crit" then "🔴 " else "🟡 " end) + .text + " (" + (.sids | names) + ")")) as $w
     | {cap_secs: $cap, days: $days, budget_min: $budget, today: $t, by_day: $by, warnings: $w} end' "$att"
 }
+# the factory's GitHub Project (factory.sh), only when the profile names one: no key otherwise
+factory=""; fp="$("$here/factory.sh" project 2>"$att.f")"; rc=$?
+if [ "$rc" = 0 ]; then
+  if [ "$prs" = 0 ]; then factory='{"error":"not collected (--no-prs)"}'
+  else factory="$("$here/factory.sh" json "$fp" 2>"$att.f")" || factory="$(jq -nc --arg e "$(head -c 300 "$att.f")" '{error: $e}')"; fi
+  factory="$(jq -c --arg p "$fp" '{project: $p} + .' <<<"$factory" 2>/dev/null)" || factory="$(jq -nc --arg p "$fp" '{project: $p, error: "factory.sh json printed no JSON"}')"
+elif [ "$rc" != 3 ]; then factory="$(jq -nc --arg e "$(head -c 300 "$att.f")" --arg rc "$rc" '{error: (if $e == "" then "factory.sh project exited \($rc)" else $e end)}')"
+fi; rm -f "$att.f"
 budget="$(sed -n 's/^[[:space:]]*review_minutes_per_day:[[:space:]]*\([0-9]*\).*/\1/p' "$profile" 2>/dev/null | head -n1 | grep . || echo null)"
 
 board="$(printf '%s\n' "${rj[@]:-}" | jq -sc --arg at "$(date +%FT%T%z)" --argjson spend "${spend:-null}" --argjson prefs "$(board_prefs)" \
-  --argjson budget "$budget" --argjson attention "$(attention_json "$budget" 2>/dev/null | grep . || echo null)" \
+  --argjson budget "$budget" --arg factory "$factory" --argjson attention "$(attention_json "$budget" 2>/dev/null | grep . || echo null)" \
   '{generated:$at, review_minutes_per_day:$budget, spend:$spend, attention:$attention, repos:map(select(. != null))}
+  + (if $factory == "" then {} else {factory: ($factory | fromjson)} end)
   | .prefs = ([.repos[].name] as $names | $prefs | if .tab | IN(("current", "all", $names[])) then . else .warnings += ["tab: no repo named \(.tab)"] | .tab = null end)')"
 
 # each view is jq over the board: empty environment (no secrets), 5 s, 50 rows. Its stderr is
