@@ -55,6 +55,8 @@ expect deny 'bash -c "git push origin :main"'
 expect deny 'git push origin :\main'
 expect deny 'git push origin \:ma\in'
 expect deny 'git push origin :heads/main'
+expect deny 'git push -f origin HEAD:heads/main'
+expect deny 'git push origin +heads/main'
 expect deny 'git push origin refs/heads/main --force'
 # -- force-push elsewhere: ask
 expect ask 'git push -f origin feat/x'
