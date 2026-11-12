@@ -96,6 +96,16 @@ expect deny "git log -1 --format='git push -f origin main #' | sh"
 expect deny "git grep -O'git push -f origin main #' x"
 expect deny "\$'git' push -f origin main"
 expect deny "git \$'push' -f origin main"
+expect deny "cat <<<'git push -f origin main' > >(sh)"
+expect deny "cat <<<'git push -f origin main' > x.sh && sh x.sh"
+expect deny "git log -1 --format='git push -f origin main' > x; . x"
+expect deny "cat <<<'git push -f origin main' | cat | sh"
+# -- a reader piped into another reader still runs nothing
+expect allow 'rg -n "git push origin :main" plugins | head'
+expect allow 'git log --grep="git push --delete origin main" | wc -l'
+expect allow "grep -c 'git push --mirror' x | cat"
+expect allow 'grep -rn "git push origin :main" plugins 2>&1 | sort | uniq'
+expect allow 'grep -rn "git push origin :main" plugins 2>/dev/null'
 # -- an unread target asks without making a plain main argument a force-push to main
 expect ask 'git push origin main :$OLD'
 expect ask 'git push origin main v{1..3}'

@@ -75,15 +75,18 @@ while IFS= read -r seg; do
   force_push=1
   grep -Eq '[[:space:]:+]((refs/)?heads/)?(main|master)([[:space:]]|$)' <<<"$rest" && force_main=1
 done < <(G="$gopts" perl -0777 -ne '
-  # A command that only reads (grep, cat, git log …) can quote a push without running one, as long
-  # as nothing pipes or substitutes its output on: then the text can reach a shell and is judged.
-  # Anything that can run its arguments (sed e, git rebase -x, submodule foreach) is judged too.
-  my $runs = /[|`]|\$\(|<\(/;
-  for (split /[;&|(`\n]/) {
-    s{(\S+)}{ my $o = $1; (my $w = $o) =~ s/\$(?=["\x27])//g; $w =~ tr/"\x27\\//d; $w =~ /^(?:git|push)$/ ? $w : $o }ge; # quoted or escaped spellings of git and push
-    (my $c = $_) =~ s/^\s*(?:\w+=\S*\s+)*//;
-    next if !$runs && ($c =~ /^(?:grep|rg|ag|cat|head|tail|less)\s/ || $c =~ /^$ENV{G}\s+(?:log|show|diff|commit|status|blame)(?:\s|$)/);
-    print "$_\n";
+  # A pipeline can quote a push without running one only if every stage just reads (grep, cat,
+  # git log …) and its output goes nowhere: no redirect but 2>&1 or /dev/null, and no substitution
+  # anywhere. Everything else is judged, so text that could reach a shell or a file still is.
+  my $subst = /`|\$\(|[<>]\(/;
+  for my $p (split /[;\n]|(?<!>)&/) {
+    $p =~ s{(\S+)}{ my $o = $1; (my $w = $o) =~ s/\$(?=["\x27])//g; $w =~ tr/"\x27\\//d; $w =~ /^(?:git|push)$/ ? $w : $o }ge; # quoted or escaped spellings of git and push
+    (my $q = $p) =~ s{\d*>&\d|\d*>\s*/dev/null}{}g;
+    next if !$subst && $q !~ />/ && !grep {
+      (my $c = $_) =~ s/^\s*(?:\w+=\S*\s+)*//;
+      $c !~ /^(?:grep|rg|ag|cat|head|tail|less|wc|sort|uniq)(?:\s|$)/ && $c !~ /^$ENV{G}\s+(?:log|show|diff|commit|status|blame)(?:\s|$)/
+    } split /\|/, $q;
+    print "$p\n";
   }' <<<"$lit" | grep -Eo "$gopts[[:space:]]+push([[:space:]][^;&|)\`]*)?" || true)
 if [ -n "$force_main" ]; then
   pre_decide deny "flow guard: force-pushing or deleting main/master is blocked. Push a branch and open a PR."
