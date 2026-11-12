@@ -71,6 +71,10 @@ expect deny "git push origin $(printf 'x{a,b}%.0s' {1..8}) :{y,main}"
 expect deny "git push origin $(printf 'r%s ' {1..70}):{main,y}"
 expect deny "git push origin $(printf 'x{a,b}%.0s' {1..8}) :ma{in,x}"
 expect deny 'git push origin :ma{in,x}'
+# one group of 2000 alternatives on a 2000-char word: the size bound stops it, and the leftover braces deny
+t0=$SECONDS
+expect deny "git push origin x{$(printf 'a,%.0s' {1..2000})b}$(printf 'y%.0s' {1..2000}) {a,b}{a,b}"
+[ $((SECONDS - t0)) -lt 5 ] && ok || bad "wide brace group took $((SECONDS - t0))s"
 expect allow "git push origin $(printf 'r%s ' {1..70})feat/x"
 expect deny 'git push origin refs/heads/main --force'
 # -- force-push elsewhere: ask
