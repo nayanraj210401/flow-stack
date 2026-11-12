@@ -89,6 +89,16 @@ expect deny "git rebase -x 'git push -f origin main' HEAD~3"
 expect deny "git submodule foreach 'git push -f origin main'"
 expect deny 'git bisect run git push -f origin main'
 expect deny "sed -n '1e git push -f origin main' f"
+expect deny "cat <<<'git push -f origin main' | sh"
+expect deny 'head -1 <<<"git push -f origin main" | bash'
+expect deny "\$(cat <<<'git push -f origin main')"
+expect deny "git log -1 --format='git push -f origin main #' | sh"
+expect deny "git grep -O'git push -f origin main #' x"
+expect deny "\$'git' push -f origin main"
+expect deny "git \$'push' -f origin main"
+# -- an unread target asks without making a plain main argument a force-push to main
+expect ask 'git push origin main :$OLD'
+expect ask 'git push origin main v{1..3}'
 expect deny "git push -f origin \$'\\155ain'"
 expect deny '"git" push --delete origin main'
 expect deny 'sudo git push origin :main'

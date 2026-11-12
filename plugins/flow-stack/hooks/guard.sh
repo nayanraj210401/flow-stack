@@ -61,7 +61,9 @@ while IFS= read -r seg; do
   # a delete whose target is a $ expansion).
   rest="$(sed -E "s/^$gopts[[:space:]]+push//" <<<"$seg" | perl -pe '$m = /\$\x27[^\x27]*\\/; $r = /\{[^{}]*\.\.[^{}]*\}/; '"$unshell"'1 while $n++ < 64 && length() < 8192 && s/(\S*)\{([^{}]*,[^{}]*)\}(\S*)/join " ", map { "$1$_$3" } split m{,}, $2, -1/e;
     $r ||= /(^|\s):\S*\$/ || (/(^|\s)(--de(l(e(te?)?)?)?|-[A-Za-z]*d[A-Za-z]*)(\s|$)/ && /\$/);
-    $_ .= " :main" if $m || /\{[^{}]*,[^{}]*\}/; $_ .= " +unread" if $r')"
+    $_ .= " :main" if $m || /\{[^{}]*,[^{}]*\}/; print "\@unread\n" if $r')"
+  # An unread target asks on its own; it says nothing about main.
+  case "$rest" in *@unread*) force_push=1 rest="${rest//@unread/}" ;; esac
   # Deleting main (:main, --delete/-d) is as final as force-pushing it; --mirror and --prune can do either.
   # git takes any unique prefix of a long option (--del, --m, --pru, --for).
   if grep -Eq '(^|[[:space:]]):((refs/)?heads/)?(main|master)([[:space:]]|$)' <<<"$rest" ||
@@ -72,13 +74,15 @@ while IFS= read -r seg; do
   grep -Eq '(^|[[:space:]])((--for(c(e[a-z-]*)?)?|--m(i(r(r(or?)?)?)?)?|--pru(ne?)?)([[:space:]=]|$)|-[A-Za-z]*f[A-Za-z]*([[:space:]]|$))|(^|[[:space:]:])\+[^[:space:]]' <<<"$rest" || continue
   force_push=1
   grep -Eq '[[:space:]:+]((refs/)?heads/)?(main|master)([[:space:]]|$)' <<<"$rest" && force_main=1
-done < <(G="$gopts" perl -ne '
-  # A command that only reads (grep, cat, git log …) can quote a push without running one. Anything
-  # that can run its arguments (echo | sh, sed e, git rebase -x, submodule foreach) is still judged.
-  for (split /[;&|(`]/) {
-    s{(\S+)}{ (my $w = $1) =~ tr/"\x27\\//d; $w =~ /^(?:git|push)$/ ? $w : $1 }ge; # quoted or escaped spellings of git and push
+done < <(G="$gopts" perl -0777 -ne '
+  # A command that only reads (grep, cat, git log …) can quote a push without running one, as long
+  # as nothing pipes or substitutes its output on: then the text can reach a shell and is judged.
+  # Anything that can run its arguments (sed e, git rebase -x, submodule foreach) is judged too.
+  my $runs = /[|`]|\$\(|<\(/;
+  for (split /[;&|(`\n]/) {
+    s{(\S+)}{ my $o = $1; (my $w = $o) =~ s/\$(?=["\x27])//g; $w =~ tr/"\x27\\//d; $w =~ /^(?:git|push)$/ ? $w : $o }ge; # quoted or escaped spellings of git and push
     (my $c = $_) =~ s/^\s*(?:\w+=\S*\s+)*//;
-    next if $c =~ /^(?:grep|rg|ag|cat|head|tail|less)\s/ || $c =~ /^$ENV{G}\s+(?:log|show|grep|diff|commit|status|blame)(?:\s|$)/;
+    next if !$runs && ($c =~ /^(?:grep|rg|ag|cat|head|tail|less)\s/ || $c =~ /^$ENV{G}\s+(?:log|show|diff|commit|status|blame)(?:\s|$)/);
     print "$_\n";
   }' <<<"$lit" | grep -Eo "$gopts[[:space:]]+push([[:space:]][^;&|)\`]*)?" || true)
 if [ -n "$force_main" ]; then
