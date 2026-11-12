@@ -56,9 +56,9 @@ force_push="" force_main=""
 unshell='s/\$(?=["\x27])//g; tr/"\x27\\\\//d; '
 while IFS= read -r seg; do
   # Push args as the shell hands them to git: $'..' and quotes and backslashes dropped, {a,b} expanded
-  # (64 rounds or 8KB; braces left after that count as main), so '+main', :$'main',
-  # '':main, :\main and :{main,x} read as written.
-  rest="$(sed -E "s/^$gopts[[:space:]]+push//" <<<"$seg" | perl -pe "$unshell"'1 while $n++ < 64 && length() < 8192 && s/(\S*)\{([^{}]*,[^{}]*)\}(\S*)/join " ", map { "$1$_$3" } split m{,}, $2, -1/e; $_ .= " :main" if /\{[^{}]*,[^{}]*\}/')"
+  # (64 rounds or 8KB), so '+main', :$'main', '':main, :\main and :{main,x} read as written. What
+  # this can't read counts as main: braces left over, {a..b} ranges, escapes inside $'..'.
+  rest="$(sed -E "s/^$gopts[[:space:]]+push//" <<<"$seg" | perl -pe '$m = /\$\x27[^\x27]*\\|\{[^{}]*\.\.[^{}]*\}/; '"$unshell"'1 while $n++ < 64 && length() < 8192 && s/(\S*)\{([^{}]*,[^{}]*)\}(\S*)/join " ", map { "$1$_$3" } split m{,}, $2, -1/e; $_ .= " :main" if $m || /\{[^{}]*,[^{}]*\}/')"
   # Deleting main (:main, --delete/-d) is as final as force-pushing it; --mirror and --prune can do either.
   # git takes any unique prefix of a long option (--del, --m, --pru, --for).
   if grep -Eq '(^|[[:space:]]):((refs/)?heads/)?(main|master)([[:space:]]|$)' <<<"$rest" ||
@@ -69,7 +69,13 @@ while IFS= read -r seg; do
   grep -Eq '(^|[[:space:]])((--for(c(e[a-z-]*)?)?|--m(i(r(r(or?)?)?)?)?|--pru(ne?)?)([[:space:]=]|$)|-[A-Za-z]*f[A-Za-z]*([[:space:]]|$))|(^|[[:space:]:])\+[^[:space:]]' <<<"$rest" || continue
   force_push=1
   grep -Eq '[[:space:]:+]((refs/)?heads/)?(main|master)([[:space:]]|$)' <<<"$rest" && force_main=1
-done < <(grep -Eo "$gopts[[:space:]]+push([[:space:]][^;&|)\`]*)?" <<<"$lit" || true)
+done < <(G="$gopts" perl -ne '
+  # A command that only reads (grep, cat …) or is another git subcommand can quote a push without running one.
+  for (split /[;&|(`]/) {
+    s/(["\x27])git\1/git/g; (my $c = $_) =~ s/^\s*(?:\w+=\S*\s+)*//;
+    next if $c =~ /^(?:grep|rg|ag|cat|sed|awk|head|tail|less|echo|printf)\s/ || ($c =~ /^git\s/ && $c !~ /^$ENV{G}\s+push(?:\s|$)/);
+    print "$_\n";
+  }' <<<"$lit" | grep -Eo "$gopts[[:space:]]+push([[:space:]][^;&|)\`]*)?" || true)
 if [ -n "$force_main" ]; then
   pre_decide deny "flow guard: force-pushing or deleting main/master is blocked. Push a branch and open a PR."
 fi

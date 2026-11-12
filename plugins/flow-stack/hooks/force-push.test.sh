@@ -71,6 +71,16 @@ expect deny "git push origin $(printf 'x{a,b}%.0s' {1..8}) :{y,main}"
 expect deny "git push origin $(printf 'r%s ' {1..70}):{main,y}"
 expect deny "git push origin $(printf 'x{a,b}%.0s' {1..8}) :ma{in,x}"
 expect deny 'git push origin :ma{in,x}'
+expect deny "git push origin :\$'\\x6dain'"
+expect deny 'git push origin :ma{i..i}n'
+expect deny "git push -f origin \$'\\155ain'"
+expect deny '"git" push --delete origin main'
+expect deny 'sudo git push origin :main'
+expect deny 'cd x && git push origin :main'
+# -- a read-only command that quotes a push runs none
+expect allow 'grep -rn "git push origin :main" plugins'
+expect allow 'git log --grep="git push --delete origin main"'
+expect allow 'git log --oneline; rg "git push -f origin main" .'
 # one group of 2000 alternatives on a 2000-char word: the size bound stops it, and the leftover braces deny
 t0=$SECONDS
 expect deny "git push origin x{$(printf 'a,%.0s' {1..2000})b}$(printf 'y%.0s' {1..2000}) {a,b}{a,b}"
