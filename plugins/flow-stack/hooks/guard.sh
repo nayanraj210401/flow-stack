@@ -57,8 +57,11 @@ unshell='s/\$(?=["\x27])//g; tr/"\x27\\\\//d; '
 while IFS= read -r seg; do
   # Push args as the shell hands them to git: $'..' and quotes and backslashes dropped, {a,b} expanded
   # (64 rounds or 8KB), so '+main', :$'main', '':main, :\main and :{main,x} read as written. What
-  # this can't read counts as main: braces left over, {a..b} ranges, escapes inside $'..'.
-  rest="$(sed -E "s/^$gopts[[:space:]]+push//" <<<"$seg" | perl -pe '$m = /\$\x27[^\x27]*\\|\{[^{}]*\.\.[^{}]*\}/; '"$unshell"'1 while $n++ < 64 && length() < 8192 && s/(\S*)\{([^{}]*,[^{}]*)\}(\S*)/join " ", map { "$1$_$3" } split m{,}, $2, -1/e; $_ .= " :main" if $m || /\{[^{}]*,[^{}]*\}/')"
+  # this can't read counts as main (braces left over, escapes inside $'..') or asks ({a..b} ranges,
+  # a delete whose target is a $ expansion).
+  rest="$(sed -E "s/^$gopts[[:space:]]+push//" <<<"$seg" | perl -pe '$m = /\$\x27[^\x27]*\\/; $r = /\{[^{}]*\.\.[^{}]*\}/; '"$unshell"'1 while $n++ < 64 && length() < 8192 && s/(\S*)\{([^{}]*,[^{}]*)\}(\S*)/join " ", map { "$1$_$3" } split m{,}, $2, -1/e;
+    $r ||= /(^|\s):\S*\$/ || (/(^|\s)(--de(l(e(te?)?)?)?|-[A-Za-z]*d[A-Za-z]*)(\s|$)/ && /\$/);
+    $_ .= " :main" if $m || /\{[^{}]*,[^{}]*\}/; $_ .= " +unread" if $r')"
   # Deleting main (:main, --delete/-d) is as final as force-pushing it; --mirror and --prune can do either.
   # git takes any unique prefix of a long option (--del, --m, --pru, --for).
   if grep -Eq '(^|[[:space:]]):((refs/)?heads/)?(main|master)([[:space:]]|$)' <<<"$rest" ||
@@ -70,10 +73,12 @@ while IFS= read -r seg; do
   force_push=1
   grep -Eq '[[:space:]:+]((refs/)?heads/)?(main|master)([[:space:]]|$)' <<<"$rest" && force_main=1
 done < <(G="$gopts" perl -ne '
-  # A command that only reads (grep, cat …) or is another git subcommand can quote a push without running one.
+  # A command that only reads (grep, cat, git log …) can quote a push without running one. Anything
+  # that can run its arguments (echo | sh, sed e, git rebase -x, submodule foreach) is still judged.
   for (split /[;&|(`]/) {
-    s/(["\x27])git\1/git/g; (my $c = $_) =~ s/^\s*(?:\w+=\S*\s+)*//;
-    next if $c =~ /^(?:grep|rg|ag|cat|sed|awk|head|tail|less|echo|printf)\s/ || ($c =~ /^git\s/ && $c !~ /^$ENV{G}\s+push(?:\s|$)/);
+    s{(\S+)}{ (my $w = $1) =~ tr/"\x27\\//d; $w =~ /^(?:git|push)$/ ? $w : $1 }ge; # quoted or escaped spellings of git and push
+    (my $c = $_) =~ s/^\s*(?:\w+=\S*\s+)*//;
+    next if $c =~ /^(?:grep|rg|ag|cat|head|tail|less)\s/ || $c =~ /^$ENV{G}\s+(?:log|show|grep|diff|commit|status|blame)(?:\s|$)/;
     print "$_\n";
   }' <<<"$lit" | grep -Eo "$gopts[[:space:]]+push([[:space:]][^;&|)\`]*)?" || true)
 if [ -n "$force_main" ]; then

@@ -72,7 +72,23 @@ expect deny "git push origin $(printf 'r%s ' {1..70}):{main,y}"
 expect deny "git push origin $(printf 'x{a,b}%.0s' {1..8}) :ma{in,x}"
 expect deny 'git push origin :ma{in,x}'
 expect deny "git push origin :\$'\\x6dain'"
-expect deny 'git push origin :ma{i..i}n'
+expect ask 'git push origin :ma{i..i}n'
+expect ask 'git push origin v{1..3}'
+expect ask 'git push origin :$(echo main)'
+expect ask 'git push origin --delete $(echo main)'
+expect ask 'git push origin :${X:-main}'
+expect ask 'B=main; git push origin :$B'
+expect allow 'git push origin "$BRANCH"'
+expect deny "g''it push -f origin main"
+expect deny 'gi"t" push -f origin main'
+expect deny "git 'push' origin :main"
+# -- a skipped-looking word that runs its arguments is still judged
+expect deny 'echo git push -f origin main | sh'
+expect deny 'printf "git push -f origin main" | bash'
+expect deny "git rebase -x 'git push -f origin main' HEAD~3"
+expect deny "git submodule foreach 'git push -f origin main'"
+expect deny 'git bisect run git push -f origin main'
+expect deny "sed -n '1e git push -f origin main' f"
 expect deny "git push -f origin \$'\\155ain'"
 expect deny '"git" push --delete origin main'
 expect deny 'sudo git push origin :main'
