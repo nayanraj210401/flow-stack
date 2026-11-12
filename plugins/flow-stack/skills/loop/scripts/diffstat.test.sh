@@ -30,4 +30,10 @@ git add src/top.sh && git -c user.name=t -c user.email=t@t commit -q -m top
 git mv src/top.sh src/moved.sh && printf "z\n" >>src/moved.sh
 out="$(bash "$D/diffstat.sh" "src/*.sh")"
 grep -q "moved.sh" <<<"$out" && ok "renamed file matches the fence" || bad "rename fence: $out"
+grep -q " deleted_files=1" <<<"$out" && ok "rename counts the old path as deleted" || bad "rename deleted_files: $out"
+grep -q "top.sh" <<<"$out" && ok "rename lists the removed old path" || bad "rename old path: $out"
+X="$(mktemp -d "${TMPDIR:-/tmp}/diffstat-tools.XXXXXX")"; trap 'rm -rf "$SB" "$X"' EXIT
+mkdir -p "$X/skills/loop/scripts" && cp "$D/diffstat.sh" "$X/skills/loop/scripts/" && cp -R "$D/../../../hooks" "$X/hooks"
+out="$(cd "$SB/src" && bash "../../$(basename "$X")/skills/loop/scripts/diffstat.sh" "src/*.sh" 2>&1)"
+grep -q "moved.sh" <<<"$out" && ok "runs by a relative path from another dir" || bad "relative path run: $out"
 [ "$FAILS" -eq 0 ] && echo "diffstat: $PASSES passed" || { echo "diffstat: $FAILS failed"; exit 1; }

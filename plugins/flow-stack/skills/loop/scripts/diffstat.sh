@@ -4,9 +4,10 @@
 # Prints:  added=<n> removed=<n> net=<n> changed=<n> new_files=<n> deleted_files=<n>
 # followed by per-file rows. .flow/ is always excluded.
 set -uo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "diffstat: needs a git repo" >&2; exit 2; }
 cd "$root"
-. "$(dirname "${BASH_SOURCE[0]}")/../../../hooks/lib.sh"
+. "$here/../../../hooks/lib.sh"
 specs=("." ":(exclude).flow")
 # Fences match the way the fence hook does (glob_match: * crosses /), not as git pathspecs.
 want() { local g; [ ${#globs[@]} -eq 0 ] && return 0; for g in "${globs[@]}"; do glob_match "$1" "$g" && return 0; done; return 1; }
@@ -20,7 +21,7 @@ rows="$({
     printf '%s\t0\t%s\tA\n' "$([ "${n:--}" = - ] && echo 0 || echo "$n")" "$f"
   done
 } | keep)"
-deleted="$(git -c core.quotepath=off diff --diff-filter=D --name-only HEAD -- "${specs[@]}" 2>/dev/null | while IFS= read -r f; do want "$f" && echo x; done | wc -l | tr -d ' ')"
+deleted="$(git -c core.quotepath=off diff --diff-filter=D --name-only --no-renames HEAD -- "${specs[@]}" 2>/dev/null | while IFS= read -r f; do want "$f" && echo x; done | wc -l | tr -d ' ')"
 
 awk -F'\t' -v del="$deleted" '
   NF >= 3 { a += $1; r += $2; if ($4 == "A") n++; rows[++k] = sprintf("  %+5d %-5s %s%s", $1 - $2, "-" $2, $3, ($4 == "A" ? "  (new)" : "")) }
