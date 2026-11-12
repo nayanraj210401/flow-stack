@@ -69,6 +69,8 @@ expect deny "git push --force origin main $(printf 'x{a,b}%.0s' {1..20})"
 [ $((SECONDS - t0)) -lt 5 ] && ok || bad "brace expansion took $((SECONDS - t0))s"
 expect deny "git push origin $(printf 'x{a,b}%.0s' {1..8}) :{y,main}"
 expect deny "git push origin $(printf 'r%s ' {1..70}):{main,y}"
+expect deny "git push origin $(printf 'x{a,b}%.0s' {1..8}) :ma{in,x}"
+expect deny 'git push origin :ma{in,x}'
 expect allow "git push origin $(printf 'r%s ' {1..70})feat/x"
 expect deny 'git push origin refs/heads/main --force'
 # -- force-push elsewhere: ask
