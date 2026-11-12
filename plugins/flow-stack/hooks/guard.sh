@@ -58,7 +58,7 @@ while IFS= read -r seg; do
   for w in "$@"; do
     w="${w//[\"\'\\]/}"
     case "$w" in
-      --*) [ "${#w}" -ge 4 ] && [[ "--mirror" == "$w"* ]] && wipe_push=1
+      --*) [ "${#w}" -ge 3 ] && [[ "--mirror" == "$w"* ]] && wipe_push=1
            [ "${#w}" -ge 4 ] && [[ "--delete" == "$w"* ]] && del=1 ;;
       -*) [[ "$w" == *d* ]] && del=1 ;;
       :*) grep -Eq '^:(refs/)?(heads/)?(main|master)$' <<<"$w" && wipe_push=1 ;;
@@ -69,7 +69,7 @@ while IFS= read -r seg; do
   grep -Eq '(^|[[:space:]])(--force|-[A-Za-z]*f[A-Za-z]*([[:space:]]|$))|(^|[[:space:]:])\+[^[:space:]]' <<<"$rest" || continue
   force_push=1
   grep -Eq '([[:space:]:+]["'"'"']?|refs/heads/)(main|master)["'"'"']?([[:space:]]|$)' <<<"$rest" && force_main=1
-done < <(grep -Eo "$gopts[[:space:]]+push([[:space:]][^;&|)\`]*)?" <<<"$lit" || true)
+done < <(grep -Eo "$gopts[[:space:]]+push([[:space:]][^;&|)\`]*)?" <<<"${lit//$'\\\n'/ }" || true)
 if [ -n "$force_main" ]; then
   pre_decide deny "flow guard: force-push to main/master is blocked. Push a branch and open a PR."
 fi
