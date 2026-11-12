@@ -54,12 +54,12 @@ done < <(grep -Eo "(^|[;&|(\`[:space:]]|(-c|eval)[[:space:]]+[\"'])rm[[:space:]]
 gopts='git([[:space:]]+((-[cC]|--(git-dir|work-tree|namespace|super-prefix|exec-path|config-env|attr-source))[[:space:]]+[^[:space:];&|]+|-[^[:space:];&|]+))*'
 force_push="" force_main=""
 while IFS= read -r seg; do
-  # Quotes dropped as the shell drops them, so '+main', :'main' and '':main read as written.
-  rest="$(sed -E "s/^$gopts[[:space:]]+push//" <<<"$seg" | tr -d "\"'")"
+  # Quotes and backslashes dropped as the shell drops them, so '+main', :'main', '':main and :\main read as written.
+  rest="$(sed -E "s/^$gopts[[:space:]]+push//" <<<"$seg" | tr -d "\"'\\\\")"
   # Deleting main (:main, --delete/-d) is as final as force-pushing it; --mirror and --prune can do either.
-  if grep -Eq '(^|[[:space:]]):(refs/heads/)?(main|master)([[:space:]]|$)' <<<"$rest" ||
+  if grep -Eq '(^|[[:space:]]):((refs/)?heads/)?(main|master)([[:space:]]|$)' <<<"$rest" ||
     { grep -Eq '(^|[[:space:]])(--delete|-[A-Za-z]*d[A-Za-z]*)([[:space:]]|$)' <<<"$rest" &&
-      grep -Eq '[[:space:]](refs/heads/)?(main|master)([[:space:]]|$)' <<<"$rest"; }; then
+      grep -Eq '[[:space:]]((refs/)?heads/)?(main|master)([[:space:]]|$)' <<<"$rest"; }; then
     force_main=1
   fi
   grep -Eq '(^|[[:space:]])(--force|--mirror|--prune|-[A-Za-z]*f[A-Za-z]*([[:space:]]|$))|(^|[[:space:]:])\+[^[:space:]]' <<<"$rest" || continue
@@ -530,7 +530,7 @@ fi
 if [ -n "$force_push" ]; then
   pre_decide ask "flow guard: force-push rewrites remote history."
 fi
-if has "$gopts[[:space:]]+(reset([[:space:]][^;&|]*)?[[:space:]]--hard|clean([[:space:]][^;&|]*)?[[:space:]](--force|-[a-z]*f[a-z]*)([[:space:]\"');&|]|\$))"; then
+if has "$gopts[[:space:]]+(reset([[:space:]][^;&|]*)?[[:space:]]--hard|clean([[:space:]][^;&|]*)?[[:space:]](--force|-[a-z]*f[a-z]*)([^a-z]|\$))"; then
   pre_decide ask "flow guard: this discards uncommitted work."
 fi
 if has '(drop[[:space:]]+(table|database|schema)|truncate[[:space:]]+table)'; then

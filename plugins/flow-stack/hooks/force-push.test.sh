@@ -52,6 +52,9 @@ expect deny "git push origin :'main'"
 expect deny "git push origin '':main"
 expect deny 'git push origin "":main'
 expect deny 'bash -c "git push origin :main"'
+expect deny 'git push origin :\main'
+expect deny 'git push origin \:ma\in'
+expect deny 'git push origin :heads/main'
 expect deny 'git push origin refs/heads/main --force'
 # -- force-push elsewhere: ask
 expect ask 'git push -f origin feat/x'
@@ -84,6 +87,8 @@ expect ask 'bash -c "git clean -fd"'
 expect ask '(git clean -fdx)'
 expect ask 'git clean -fd;ls'
 expect ask 'git clean -fd&& ls'
+expect ask 'git clean -fd>/dev/null'
+expect ask 'echo `git clean -fd`'
 expect allow 'git reset --soft HEAD~1'
 expect allow 'git clean -n -d'
 
