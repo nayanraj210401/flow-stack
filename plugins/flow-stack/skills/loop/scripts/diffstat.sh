@@ -14,8 +14,8 @@ globs=("$@")
 keep() { local line; while IFS= read -r line; do [ -n "$line" ] && want "$(cut -f3 <<<"$line")" && printf '%s\n' "$line"; done; }
 
 rows="$({
-  git diff --numstat HEAD -- "${specs[@]}" 2>/dev/null | awk -F'\t' '{a=($1=="-"?0:$1); r=($2=="-"?0:$2); print a "\t" r "\t" $3 "\tM"}'
-  git ls-files --others --exclude-standard -- "${specs[@]}" 2>/dev/null | while IFS= read -r f; do
+  git -c core.quotepath=off diff --numstat --no-renames HEAD -- "${specs[@]}" 2>/dev/null | awk -F'\t' '{a=($1=="-"?0:$1); r=($2=="-"?0:$2); print a "\t" r "\t" $3 "\tM"}'
+  git -c core.quotepath=off ls-files --others --exclude-standard -- "${specs[@]}" 2>/dev/null | while IFS= read -r f; do
     n="$(git diff --numstat --no-index /dev/null "$f" 2>/dev/null | cut -f1)"   # numstat count, like tracked files; "-" = binary
     printf '%s\t0\t%s\tA\n' "$([ "${n:--}" = - ] && echo 0 || echo "$n")" "$f"
   done

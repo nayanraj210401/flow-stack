@@ -23,4 +23,11 @@ out="$(bash "$D/diffstat.sh" 'src/*.sh')"
 grep -q '^added=2 ' <<<"$out" && ok "src/*.sh crosses / like the fence hook" || bad "fence glob: $out"
 out="$(bash "$D/diffstat.sh" 'src/**/*.sh')"
 grep -q '^added=2 ' <<<"$out" && ok "src/**/*.sh matches zero dirs" || bad "** glob: $out"
+printf "a\nb\n" >src/é.sh
+out="$(bash "$D/diffstat.sh" "src/*.sh")"
+grep -q "^added=4 " <<<"$out" && ok "non-ASCII name matches the fence" || bad "non-ASCII fence: $out"
+git add src/top.sh && git -c user.name=t -c user.email=t@t commit -q -m top
+git mv src/top.sh src/moved.sh && printf "z\n" >>src/moved.sh
+out="$(bash "$D/diffstat.sh" "src/*.sh")"
+grep -q "moved.sh" <<<"$out" && ok "renamed file matches the fence" || bad "rename fence: $out"
 [ "$FAILS" -eq 0 ] && echo "diffstat: $PASSES passed" || { echo "diffstat: $FAILS failed"; exit 1; }
