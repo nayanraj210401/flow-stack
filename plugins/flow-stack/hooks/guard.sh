@@ -56,9 +56,9 @@ force_push="" force_main=""
 unshell='s/\$(?=["\x27])//g; tr/"\x27\\\\//d; '
 while IFS= read -r seg; do
   # Push args as the shell hands them to git: $'..' and quotes and backslashes dropped, {a,b} expanded
-  # (up to 64 words, then the leftover braces just split), so '+main', :$'main', '':main, :\main and
-  # :{main,x} read as written.
-  rest="$(sed -E "s/^$gopts[[:space:]]+push//" <<<"$seg" | perl -pe "$unshell"'1 while tr/ // < 64 && s/(\S*)\{([^{}]*,[^{}]*)\}(\S*)/join " ", map { "$1$_$3" } split m{,}, $2, -1/e; tr/{},/   /')"
+  # (64 rounds; braces left after that count as main if main is named at all), so '+main', :$'main',
+  # '':main, :\main and :{main,x} read as written.
+  rest="$(sed -E "s/^$gopts[[:space:]]+push//" <<<"$seg" | perl -pe "$unshell"'1 while $n++ < 64 && s/(\S*)\{([^{}]*,[^{}]*)\}(\S*)/join " ", map { "$1$_$3" } split m{,}, $2, -1/e; $_ .= " :main" if /\{[^{}]*,[^{}]*\}/ && /main|master/')"
   # Deleting main (:main, --delete/-d) is as final as force-pushing it; --mirror and --prune can do either.
   # git takes any unique prefix of a long option (--del, --m, --pru, --for).
   if grep -Eq '(^|[[:space:]]):((refs/)?heads/)?(main|master)([[:space:]]|$)' <<<"$rest" ||
