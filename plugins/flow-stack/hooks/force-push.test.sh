@@ -63,6 +63,10 @@ expect deny "git push origin :\$'main'"
 expect deny 'git push origin :{main,x}'
 expect deny "git push -f origin \$'main'"
 expect deny 'git push --for origin main'
+# 20 brace groups would be 2^20 words: expansion is capped, so the deny comes back fast
+t0=$SECONDS
+expect deny "git push --force origin main $(printf 'x{a,b}%.0s' {1..20})"
+[ $((SECONDS - t0)) -lt 5 ] && ok || bad "brace expansion took $((SECONDS - t0))s"
 expect deny 'git push origin refs/heads/main --force'
 # -- force-push elsewhere: ask
 expect ask 'git push -f origin feat/x'
@@ -75,6 +79,8 @@ expect ask 'git push --force-with-lease origin feat/x'
 expect ask "git push origin '+feat/x'"
 expect ask 'git push --mirror'
 expect ask 'git push --mirro'
+expect ask 'git push --m origin'
+expect ask 'git push --force-with-lease=main:abc origin feat/x'
 expect ask 'git push --pru origin feat/x'
 expect ask 'git push -f origin feature/heads/main'
 expect ask "git push --prune origin 'refs/heads/*:refs/heads/*'"
@@ -105,6 +111,10 @@ expect ask "git clean '-fd'"
 expect ask 'git clean "-f" -d'
 expect ask "git reset '--hard'"
 expect ask 'git reset --har'
+expect ask 'git reset --h'
+expect allow 'git reset HEAD -- --hash.txt'
+expect allow 'git push origin feat -o msg=fix-mirror-docs'
+expect allow 'git push origin feat -o --mirror-docs'
 expect allow 'git push --dry-run origin main'
 expect allow 'git push origin {feat,fix}/x'
 expect allow 'git reset --soft HEAD~1'

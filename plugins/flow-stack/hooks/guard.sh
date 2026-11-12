@@ -55,17 +55,18 @@ gopts='git([[:space:]]+((-[cC]|--(git-dir|work-tree|namespace|super-prefix|exec-
 force_push="" force_main=""
 unshell='s/\$(?=["\x27])//g; tr/"\x27\\\\//d; '
 while IFS= read -r seg; do
-  # Push args as the shell hands them to git: $'..' and quotes and backslashes dropped, {a,b} expanded,
-  # so '+main', :$'main', '':main, :\main and :{main,x} read as written.
-  rest="$(sed -E "s/^$gopts[[:space:]]+push//" <<<"$seg" | perl -pe "$unshell"'1 while s/(\S*)\{([^{}]*,[^{}]*)\}(\S*)/join " ", map { "$1$_$3" } split m{,}, $2, -1/e')"
+  # Push args as the shell hands them to git: $'..' and quotes and backslashes dropped, {a,b} expanded
+  # (up to 64 words, then the leftover braces just split), so '+main', :$'main', '':main, :\main and
+  # :{main,x} read as written.
+  rest="$(sed -E "s/^$gopts[[:space:]]+push//" <<<"$seg" | perl -pe "$unshell"'1 while tr/ // < 64 && s/(\S*)\{([^{}]*,[^{}]*)\}(\S*)/join " ", map { "$1$_$3" } split m{,}, $2, -1/e; tr/{},/   /')"
   # Deleting main (:main, --delete/-d) is as final as force-pushing it; --mirror and --prune can do either.
-  # git takes any unique prefix of a long option (--del, --mirro, --pru, --for).
+  # git takes any unique prefix of a long option (--del, --m, --pru, --for).
   if grep -Eq '(^|[[:space:]]):((refs/)?heads/)?(main|master)([[:space:]]|$)' <<<"$rest" ||
     { grep -Eq '(^|[[:space:]])(--de(l(e(te?)?)?)?|-[A-Za-z]*d[A-Za-z]*)([[:space:]]|$)' <<<"$rest" &&
       grep -Eq '[[:space:]]((refs/)?heads/)?(main|master)([[:space:]]|$)' <<<"$rest"; }; then
     force_main=1
   fi
-  grep -Eq '(^|[[:space:]])(--for|--mi|--pru|-[A-Za-z]*f[A-Za-z]*([[:space:]]|$))|(^|[[:space:]:])\+[^[:space:]]' <<<"$rest" || continue
+  grep -Eq '(^|[[:space:]])((--for(c(e[a-z-]*)?)?|--m(i(r(r(or?)?)?)?)?|--pru(ne?)?)([[:space:]=]|$)|-[A-Za-z]*f[A-Za-z]*([[:space:]]|$))|(^|[[:space:]:])\+[^[:space:]]' <<<"$rest" || continue
   force_push=1
   grep -Eq '[[:space:]:+]((refs/)?heads/)?(main|master)([[:space:]]|$)' <<<"$rest" && force_main=1
 done < <(grep -Eo "$gopts[[:space:]]+push([[:space:]][^;&|)\`]*)?" <<<"$lit" || true)
@@ -535,7 +536,7 @@ if [ -n "$force_push" ]; then
 fi
 # Unquoted like the push args above (git clean '-fd'), and long options by any prefix git accepts.
 if perl -pe "$unshell" <<<"$cmd" |
-  grep -Eiq -- "$gopts[[:space:]]+(reset([[:space:]][^;&|]*)?[[:space:]]--ha|clean([[:space:]][^;&|]*)?[[:space:]](--f[a-z]*|-[a-z]*f[a-z]*)([^a-z]|\$))"; then
+  grep -Eiq -- "$gopts[[:space:]]+(reset([[:space:]][^;&|]*)?[[:space:]]--h(a(rd?)?)?([^a-z-]|\$)|clean([[:space:]][^;&|]*)?[[:space:]](--f(o(r(ce?)?)?)?|-[a-z]*f[a-z]*)([^a-z-]|\$))"; then
   pre_decide ask "flow guard: this discards uncommitted work."
 fi
 if has '(drop[[:space:]]+(table|database|schema)|truncate[[:space:]]+table)'; then
