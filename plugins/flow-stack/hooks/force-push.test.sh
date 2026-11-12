@@ -57,6 +57,12 @@ expect deny 'git push origin \:ma\in'
 expect deny 'git push origin :heads/main'
 expect deny 'git push -f origin HEAD:heads/main'
 expect deny 'git push origin +heads/main'
+expect deny 'git push --del origin main'
+expect deny 'git push --dele origin main'
+expect deny "git push origin :\$'main'"
+expect deny 'git push origin :{main,x}'
+expect deny "git push -f origin \$'main'"
+expect deny 'git push --for origin main'
 expect deny 'git push origin refs/heads/main --force'
 # -- force-push elsewhere: ask
 expect ask 'git push -f origin feat/x'
@@ -68,6 +74,9 @@ expect ask 'git push --force origin HEAD:refs/heads/feature/main'
 expect ask 'git push --force-with-lease origin feat/x'
 expect ask "git push origin '+feat/x'"
 expect ask 'git push --mirror'
+expect ask 'git push --mirro'
+expect ask 'git push --pru origin feat/x'
+expect ask 'git push -f origin feature/heads/main'
 expect ask "git push --prune origin 'refs/heads/*:refs/heads/*'"
 expect ask 'git --super-prefix x push -f origin feat/x'
 # -- ordinary pushes: allow
@@ -91,6 +100,13 @@ expect ask 'git clean -fd;ls'
 expect ask 'git clean -fd&& ls'
 expect ask 'git clean -fd>/dev/null'
 expect ask 'echo `git clean -fd`'
+expect ask 'git clean --fo -d'
+expect ask "git clean '-fd'"
+expect ask 'git clean "-f" -d'
+expect ask "git reset '--hard'"
+expect ask 'git reset --har'
+expect allow 'git push --dry-run origin main'
+expect allow 'git push origin {feat,fix}/x'
 expect allow 'git reset --soft HEAD~1'
 expect allow 'git clean -n -d'
 
