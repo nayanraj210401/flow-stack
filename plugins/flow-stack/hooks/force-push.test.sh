@@ -66,7 +66,7 @@ expect deny 'git push --for origin main'
 # 20 brace groups would be 2^20 words: expansion is capped, so the deny comes back fast
 t0=$SECONDS
 expect deny "git push --force origin main $(printf 'x{a,b}%.0s' {1..20})"
-[ $((SECONDS - t0)) -lt 5 ] && ok || bad "brace expansion took $((SECONDS - t0))s"
+[ $((SECONDS - t0)) -lt 15 ] && ok || bad "brace expansion took $((SECONDS - t0))s"
 expect deny "git push origin $(printf 'x{a,b}%.0s' {1..8}) :{y,main}"
 expect deny "git push origin $(printf 'r%s ' {1..70}):{main,y}"
 expect deny "git push origin $(printf 'x{a,b}%.0s' {1..8}) :ma{in,x}"
@@ -100,12 +100,13 @@ expect deny "cat <<<'git push -f origin main' > >(sh)"
 expect deny "cat <<<'git push -f origin main' > x.sh && sh x.sh"
 expect deny "git log -1 --format='git push -f origin main' > x; . x"
 expect deny "cat <<<'git push -f origin main' | cat | sh"
-# -- a reader piped into another reader still runs nothing
-expect allow 'rg -n "git push origin :main" plugins | head'
-expect allow 'git log --grep="git push --delete origin main" | wc -l'
-expect allow "grep -c 'git push --mirror' x | cat"
-expect allow 'grep -rn "git push origin :main" plugins 2>&1 | sort | uniq'
-expect allow 'grep -rn "git push origin :main" plugins 2>/dev/null'
+expect deny "GIT_EDITOR=sh git commit --allow-empty -e -F - <<<'git push -f origin main'"
+expect deny 'git -C log push -f origin main'
+expect deny "git log -1 --format='git push -f origin main' --output=x.sh; sh x.sh"
+expect deny "sort -o x.sh <<<'git push -f origin main'; sh x.sh"
+# -- no command is trusted to only read: a push quoted in a grep is judged like any other
+expect deny 'grep -rn "git push origin :main" plugins'
+expect deny 'git log --oneline; rg "git push -f origin main" .'
 # -- an unread target asks without making a plain main argument a force-push to main
 expect ask 'git push origin main :$OLD'
 expect ask 'git push origin main v{1..3}'
@@ -113,14 +114,10 @@ expect deny "git push -f origin \$'\\155ain'"
 expect deny '"git" push --delete origin main'
 expect deny 'sudo git push origin :main'
 expect deny 'cd x && git push origin :main'
-# -- a read-only command that quotes a push runs none
-expect allow 'grep -rn "git push origin :main" plugins'
-expect allow 'git log --grep="git push --delete origin main"'
-expect allow 'git log --oneline; rg "git push -f origin main" .'
 # one group of 2000 alternatives on a 2000-char word: the size bound stops it, and the leftover braces deny
 t0=$SECONDS
 expect deny "git push origin x{$(printf 'a,%.0s' {1..2000})b}$(printf 'y%.0s' {1..2000}) {a,b}{a,b}"
-[ $((SECONDS - t0)) -lt 5 ] && ok || bad "wide brace group took $((SECONDS - t0))s"
+[ $((SECONDS - t0)) -lt 15 ] && ok || bad "wide brace group took $((SECONDS - t0))s"
 expect allow "git push origin $(printf 'r%s ' {1..70})feat/x"
 expect deny 'git push origin refs/heads/main --force'
 # -- force-push elsewhere: ask

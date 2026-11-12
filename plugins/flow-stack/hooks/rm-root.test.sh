@@ -44,6 +44,8 @@ want deny 'rm -rf ~/./*'
 want deny 'rm -rf "$HOME"/*'
 want deny 'rm -rf "$HOME/"'
 want deny 'rm -rf "${HOME:?}"/*'
+want deny 'rm -rf $HOME*'
+want deny 'rm -rf ${HOME}*'
 
 # -- other targets keep their decision
 want allow 'rm -rf ./build'
