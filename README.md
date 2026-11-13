@@ -354,7 +354,7 @@ Check your own spend with `/flow-stack:budget` (uses ccusage) and the estimate-v
 
 | Hook | Blocks or does |
 |---|---|
-| **guard** (Bash) | Denies `rm -rf /`, force-push to main, reading `.env`, and packages that don't exist on npm or PyPI (hallucinated dependencies). Asks you before `reset --hard`, destructive SQL, `curl \| sh`, and anything in your repo's `.flow/gates.md`. |
+| **guard** (Bash) | Denies `rm -rf /`, force-pushing or deleting main, reading `.env`, and packages that don't exist on npm or PyPI (hallucinated dependencies). Asks you before `reset --hard`, destructive SQL, `curl \| sh`, and anything in your repo's `.flow/gates.md`. |
 | **seal** (Edit, Write, Bash) | Editing a sealed check, INTENT.md, or SEALS needs your confirmation. |
 | **fence** (Edit, Write) | Edits outside the current slice's file fence are denied until the fence is widened on purpose and logged. |
 | **holds** (Edit, Write) | Two Claude sessions on different tasks, in any worktrees of one repo, editing the same file: the first to edit it holds it. The second is warned once (`soft`, the default) or denied (`{"holds": "hard"}`), told who holds it, and pointed at `SendMessage` to sort it out. Its band shows `⚡ <file> · <holder>`. A hold lapses when the holder's slice is done, its session ends, or after 30 minutes without an edit (`holds_ttl`, seconds). |

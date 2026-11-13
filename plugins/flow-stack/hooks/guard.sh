@@ -41,25 +41,45 @@ lit="$(perl -e '
 #     ${VAR:?} aborts instead of expanding to nothing, so guarded targets pass.
 while IFS= read -r seg; do
   grep -Eq '[[:space:]](-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)([[:space:]]|$)' <<<"$seg" || continue
-  # "." and ".." segments are resolved first, so /./*, /usr/../* and ~/./ read as the / and ~ they are.
-  nseg="$(perl -pe 's{(?<=\s)(["\x27]?)((?:~|\$HOME|\$\{HOME\}|(?=/))(?:["\x27]?/[^\s"\x27]*)?)}{ my ($q, $p) = ($1, $2); my ($root, @s) = split m{/}, $p, -1; my @o; for (@s) { next if $_ eq "." || $_ eq ""; if ($_ eq "..") { pop @o; next } push @o, $_ } $q . $root . "/" . join("/", @o) }ge' <<<"$seg")"
-  if grep -Eq "[[:space:]][\"']?(/|~|\\\$HOME|\\\$\{HOME\})/?(\.?\*)?[\"']?([[:space:]]|\$)" <<<"$nseg"; then
+  # A target that resolves to / or home (or its * glob) once quotes, ., .. and // are folded.
+  if perl -ne 'for (split) { s/["\x27]//g; s{^(~|\$HOME|\$\{HOME(:\?[^\}]*)?\})(?=/|\*|$)}{} or m{^/} or next; my @s;
+      for (split m{/}) { next if $_ eq "" || $_ eq "."; $_ eq ".." ? pop @s : push @s, $_ }
+      $hit = 1 if !@s || "@s" =~ /^\.?\*$/ } END { exit !$hit }' <<<"$seg"; then
     pre_decide deny "flow guard: recursive delete of / or home is never allowed."
   fi
   if sed -E 's/\$\{[A-Za-z_0-9]+:\?[^}]*\}//g' <<<"$seg" | grep -Eq '\$\{?[A-Za-z_0-9@*]'; then
     pre_decide ask "flow guard: recursive rm on an unguarded variable ('$seg'). If it's empty or points elsewhere, this deletes the wrong tree. Check it first, then guard it: rm -rf \"\${VAR:?}\"."
   fi
 done < <(grep -Eo "(^|[;&|(\`[:space:]]|(-c|eval)[[:space:]]+[\"'])rm[[:space:]][^;&|)\`]*" <<<"$lit" || true)
-gopts='git([[:space:]]+(-[cC][[:space:]]+[^[:space:];&|]+|-[^[:space:];&|]+))*'
+gopts='git([[:space:]]+((-[cC]|--(git-dir|work-tree|namespace|super-prefix|exec-path|config-env|attr-source))[[:space:]]+[^[:space:];&|]+|-[^[:space:];&|]+))*'
 force_push="" force_main=""
+unshell='s/\$(?=["\x27])//g; tr/"\x27\\\\//d; '
 while IFS= read -r seg; do
-  rest="$(sed -E "s/^$gopts[[:space:]]+push//" <<<"$seg")"
-  grep -Eq '(^|[[:space:]])(--force|-[A-Za-z]*f[A-Za-z]*([[:space:]]|$))|(^|[[:space:]:])\+[^[:space:]]' <<<"$rest" || continue
+  # Push args as the shell hands them to git: $'..' and quotes and backslashes dropped, {a,b} expanded
+  # (64 rounds or 8KB), so '+main', :$'main', '':main, :\main and :{main,x} read as written. What
+  # this can't read counts as main (braces left over, escapes inside $'..') or asks ({a..b} ranges,
+  # a delete whose target is a $ expansion).
+  rest="$(sed -E "s/^$gopts[[:space:]]+push//" <<<"$seg" | perl -pe '$m = /\$\x27[^\x27]*\\/; $r = /\{[^{}]*\.\.[^{}]*\}/; '"$unshell"'1 while $n++ < 64 && length() < 8192 && s/(\S*)\{([^{}]*,[^{}]*)\}(\S*)/join " ", map { "$1$_$3" } split m{,}, $2, -1/e;
+    $r ||= /(^|\s):\S*\$/ || (/(^|\s)(--de(l(e(te?)?)?)?|-[A-Za-z]*d[A-Za-z]*)(\s|$)/ && /\$/);
+    $_ .= " :main" if $m || /\{[^{}]*,[^{}]*\}/; print "\@unread\n" if $r')"
+  # An unread target asks on its own; it says nothing about main.
+  case "$rest" in *@unread*) force_push=1 rest="${rest//@unread/}" ;; esac
+  # Deleting main (:main, --delete/-d) is as final as force-pushing it; --mirror and --prune can do either.
+  # git takes any unique prefix of a long option (--del, --m, --pru, --for).
+  if grep -Eq '(^|[[:space:]]):((refs/)?heads/)?(main|master)([[:space:]]|$)' <<<"$rest" ||
+    { grep -Eq '(^|[[:space:]])(--de(l(e(te?)?)?)?|-[A-Za-z]*d[A-Za-z]*)([[:space:]]|$)' <<<"$rest" &&
+      grep -Eq '[[:space:]]((refs/)?heads/)?(main|master)([[:space:]]|$)' <<<"$rest"; }; then
+    force_main=1
+  fi
+  grep -Eq '(^|[[:space:]])((--for(c(e[a-z-]*)?)?|--m(i(r(r(or?)?)?)?)?|--pru(ne?)?)([[:space:]=]|$)|-[A-Za-z]*f[A-Za-z]*([[:space:]]|$))|(^|[[:space:]:])\+[^[:space:]]' <<<"$rest" || continue
   force_push=1
-  grep -Eq '([[:space:]:+]["'"'"']?|refs/heads/)(main|master)["'"'"']?([[:space:]]|$)' <<<"$rest" && force_main=1
-done < <(grep -Eo "$gopts[[:space:]]+push([[:space:]][^;&|)\`]*)?" <<<"$lit" || true)
+  grep -Eq '[[:space:]:+]((refs/)?heads/)?(main|master)([[:space:]]|$)' <<<"$rest" && force_main=1
+# A push is judged wherever its text appears, even quoted in a grep: telling a command that only
+# reads from one that runs its arguments is not something a regex gets right. Quoted or escaped
+# spellings of the git and push words ("git", g''it, $'push') are read as written first.
+done < <(perl -pe 's{(\S+)}{ my $o = $1; (my $w = $o) =~ s/\$(?=["\x27])//g; $w =~ tr/"\x27\\//d; $w =~ /^(?:git|push)$/ ? $w : $o }ge' <<<"$lit" | grep -Eo "$gopts[[:space:]]+push([[:space:]][^;&|)\`]*)?" || true)
 if [ -n "$force_main" ]; then
-  pre_decide deny "flow guard: force-push to main/master is blocked. Push a branch and open a PR."
+  pre_decide deny "flow guard: force-pushing or deleting main/master is blocked. Push a branch and open a PR."
 fi
 # Judge each argument of a reader on its own: quotes and dirs stripped, the example/sample/template
 # names exempt per path, so a second .env.example arg doesn't waive the check.
@@ -522,7 +542,9 @@ fi
 if [ -n "$force_push" ]; then
   pre_decide ask "flow guard: force-push rewrites remote history."
 fi
-if has 'git[[:space:]]+(reset[[:space:]]+--hard|clean[[:space:]]+-[a-z]*f)'; then
+# Unquoted like the push args above (git clean '-fd'), and long options by any prefix git accepts.
+if perl -pe "$unshell" <<<"$cmd" |
+  grep -Eiq -- "$gopts[[:space:]]+(reset([[:space:]][^;&|]*)?[[:space:]]--h(a(rd?)?)?([^a-z-]|\$)|clean([[:space:]][^;&|]*)?[[:space:]](--f(o(r(ce?)?)?)?|-[a-z]*f[a-z]*)([^a-z-]|\$))"; then
   pre_decide ask "flow guard: this discards uncommitted work."
 fi
 if has '(drop[[:space:]]+(table|database|schema)|truncate[[:space:]]+table)'; then
