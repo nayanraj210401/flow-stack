@@ -550,7 +550,8 @@ fi
 if has '(drop[[:space:]]+(table|database|schema)|truncate[[:space:]]+table)'; then
   pre_decide ask "flow guard: destructive SQL."
 fi
-if has '(curl|wget)[^|]*\|[[:space:]]*(sudo[[:space:]]+)?(ba|z)?sh'; then
+if has '(curl|wget)[^|]*\|[[:space:]]*(sudo[[:space:]]+)?(ba|z)?sh' ||
+   has '(^|[^[:alnum:]_.-])(eval|source|\.|(ba|z)?sh)([[:space:]]+-[-A-Za-z]+)*[[:space:]]+(<{1,3}[[:space:]]*)?["'"'"']?(\$\(|<\(|`)[[:space:]]*([^[:space:]]*/)?(curl|wget)[[:space:]]'; then
   pre_decide ask "flow guard: piping a download into a shell."
 fi
 
