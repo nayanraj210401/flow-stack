@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# guard-push.test.sh: pushes that delete or mirror remote refs ask; plain branch pushes stay allowed.
+# guard-push.test.sh: pushes that delete remote main or master deny, mirrors ask; plain branch pushes stay allowed.
 set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)"
 FAILS=0
@@ -22,24 +22,24 @@ check() {
   if [ "$got" = "$1" ]; then ok "$2 → $1"; else bad "$2 → got $got, want $1"; fi
 }
 
-check ask   'git push origin :main'
-check ask   'git push origin :master'
-check ask   'git push --delete origin main'
-check ask   'git push origin --delete master'
-check ask   'git push -d origin main'
+check deny  'git push origin :main'
+check deny  'git push origin :master'
+check deny  'git push --delete origin main'
+check deny  'git push origin --delete master'
+check deny  'git push -d origin main'
 check ask   'git push --mirror'
-check ask   'git push -qd origin main'
-check ask   'git push -ud origin main'
-check ask   'git push --del origin main'
+check deny  'git push -qd origin main'
+check deny  'git push -ud origin main'
+check deny  'git push --del origin main'
 check ask   'git push --mirr'
 check ask   'git push --m'
-check ask   $'git push origin \\\n  --delete main'
-check ask   'git push origin \:main'
-check ask   'git push --delete origin ma\in'
-check ask   "git push origin ':main'"
-check ask   'git push origin ":main"'
-check ask   'git push origin :heads/main'
-check ask   'git push --delete origin heads/main'
+check deny  $'git push origin \\\n  --delete main'
+check deny  'git push origin \:main'
+check deny  'git push --delete origin ma\in'
+check deny  "git push origin ':main'"
+check deny  'git push origin ":main"'
+check deny  'git push origin :heads/main'
+check deny  'git push --delete origin heads/main'
 check allow 'git push -u origin feature'
 check allow 'git push --dry-run origin main'
 check deny  'git push --force origin main'
