@@ -44,7 +44,7 @@ while IFS= read -r seg; do
   # A target that resolves to / or home (or its * glob) once quotes, ., .. and // are folded.
   if perl -ne 'for (split) { s/["\x27]//g; s{^(~|\$HOME|\$\{HOME(:\?[^\}]*)?\})(?=/|\*|$)}{} or m{^/} or next; my @s;
       for (split m{/}) { next if $_ eq "" || $_ eq "."; $_ eq ".." ? pop @s : push @s, $_ }
-      $hit = 1 if !@s || "@s" eq "*" } END { exit !$hit }' <<<"$seg"; then
+      $hit = 1 if !@s || "@s" =~ /^\.?\*$/ } END { exit !$hit }' <<<"$seg"; then
     pre_decide deny "flow guard: recursive delete of / or home is never allowed."
   fi
   if sed -E 's/\$\{[A-Za-z_0-9]+:\?[^}]*\}//g' <<<"$seg" | grep -Eq '\$\{?[A-Za-z_0-9@*]'; then
