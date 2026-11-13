@@ -48,6 +48,7 @@ expect deny 'git push origin :refs/heads/master'
 expect deny 'git push --delete origin main'
 expect deny 'git push -d origin master'
 expect deny 'git -C . push origin --delete main'
+expect deny $'git push origin \\\n  --delete main'
 expect deny "git push origin :'main'"
 expect deny "git push origin '':main"
 expect deny 'git push origin "":main'
