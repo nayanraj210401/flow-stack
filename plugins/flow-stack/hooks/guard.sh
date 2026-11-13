@@ -77,7 +77,7 @@ while IFS= read -r seg; do
 # A push is judged wherever its text appears, even quoted in a grep: telling a command that only
 # reads from one that runs its arguments is not something a regex gets right. Quoted or escaped
 # spellings of the git and push words ("git", g''it, $'push') are read as written first.
-done < <(perl -pe 's{(\S+)}{ my $o = $1; (my $w = $o) =~ s/\$(?=["\x27])//g; $w =~ tr/"\x27\\//d; $w =~ /^(?:git|push)$/ ? $w : $o }ge' <<<"$lit" | grep -Eo "$gopts[[:space:]]+push([[:space:]][^;&|)\`]*)?" || true)
+done < <(perl -pe 's{(\S+)}{ my $o = $1; (my $w = $o) =~ s/\$(?=["\x27])//g; $w =~ tr/"\x27\\//d; $w =~ /^(?:git|push)$/ ? $w : $o }ge' <<<"${lit//$'\\\n'/ }" | grep -Eo "$gopts[[:space:]]+push([[:space:]][^;&|)\`]*)?" || true)
 if [ -n "$force_main" ]; then
   pre_decide deny "flow guard: force-pushing or deleting main/master is blocked. Push a branch and open a PR."
 fi
