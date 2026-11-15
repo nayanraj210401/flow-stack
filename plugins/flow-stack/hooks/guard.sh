@@ -16,26 +16,6 @@ cmd="$(flow_field .tool_input.command)"
 
 has() { grep -Eiq -- "$1" <<<"$cmd"; }
 
-# Write targets (2b and 2c): the path must follow a write verb (a whole word, or a redirect) in the same
-# segment, so reading these files stays allowed. Interpreter one-liners (python -c, node -e) are a known gap.
-cfg="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"; c2="${cmd//"$FLOW_HOME"/FLOW_HOME}"; c2="${c2//"$cfg"/CLAUDE_CONFIG_DIR}"
-wr='(>|(^|[[:space:];&|(])(tee|cp|mv|ln|install|dd|truncate|rm|sponge|sed[[:space:]]+-[A-Za-z]*i|perl[[:space:]]+-[A-Za-z]*i)([[:space:]]|$))[^;&|]*'
-home='(\.flow-stack|FLOW_STACK_HOME\}?|FLOW_HOME\}?)'; conf='(\.claude|CLAUDE_CONFIG_DIR\}?)'
-end='([/"'\''[:space:]]|$)'; sett='settings[^/[:space:]"'\'']*\.json'
-cdin() { grep -Eq -- "(^|[;&|(][[:space:]]*)cd[[:space:]]+[^;&|]*$1" <<<"$c2"; }
-
-# 2c. Turning a hook off is allowed, but never silent. Found up front so a check that decides first names
-# it too (pre_decide appends FLOW_HOOK_OFF); otherwise warned at the end. A repo .flow/config.json write
-# warns only when it writes a false: commands and suites edits there are routine.
-FLOW_HOOK_OFF=""
-if [[ "$cmd" =~ settings\.sh[[:space:]]+hook[[:space:]]+([a-z-]+)[[:space:]]+(off|default) ]]; then
-  FLOW_HOOK_OFF="flow guard: this turns off the ${BASH_REMATCH[1]} hook"
-  [ "${BASH_REMATCH[2]}" = off ] || FLOW_HOOK_OFF="$FLOW_HOOK_OFF if a lower layer sets it false"
-  FLOW_HOOK_OFF="$FLOW_HOOK_OFF. Allowed (your call); say what that check stops catching."
-elif grep -Eq -- "$wr$home/(settings|config)\.json$end" <<<"$c2" || { cdin "$home" && grep -Eq -- "$wr[\"']?(\./)?(settings|config)\.json$end" <<<"$c2"; } \
-  || { has false && grep -Eq -- "$wr\.flow/config\.json$end" <<<"$c2"; }; then
-  FLOW_HOOK_OFF="$FLOW_HOOK_OFF_WARN"
-fi
 
 # Literal text can't run, so the hard stops below skip it: the bodies of heredocs fed to cat, tee,
 # git or gh that have a terminator line (an unquoted one only without $( or backticks), and quoted
@@ -56,6 +36,28 @@ lit="$(perl -e '
   s/((?:^|\s)(?:-m|--message|--title|--body)(?:\s+|=))(\x27[^\x27]*\x27|"[^"`\$\\]*")/$1\x27\x27/g;
   s{((?:^|[;&|(])[ \t]*)(echo|printf)([^;&|\n]*)(\|?)}{ my @m = ($1, $2, $3, $4); $m[3] || $m[2] =~ /\$\(|`/ ? join("", @m) : "$m[0]$m[1]" }ge;
   print' <<<"$cmd")"
+
+# Write targets (2b and 2c): the path must follow a write verb (a whole word, or a redirect) in the same
+# segment, so reading these files stays allowed. Interpreter one-liners (python -c, node -e) are a known gap.
+cfg="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"; c2="${cmd//"$FLOW_HOME"/FLOW_HOME}"; c2="${c2//"$cfg"/CLAUDE_CONFIG_DIR}"
+wr='(>|(^|[[:space:];&|(])(tee|cp|mv|ln|install|dd|truncate|rm|sponge|sed[[:space:]]+-[A-Za-z]*i|perl[[:space:]]+-[A-Za-z]*i)([[:space:]]|$))[^;&|]*'
+home='(\.flow-stack|FLOW_STACK_HOME\}?|FLOW_HOME\}?)'; conf='(\.claude|CLAUDE_CONFIG_DIR\}?)'
+end='([/"'\''[:space:]]|$)'; sett='settings[^/[:space:]"'\'']*\.json'
+cdin() { grep -Eq -- "(^|[;&|(][[:space:]]*)cd[[:space:]]+[^;&|]*$1" <<<"$c2"; }
+
+# 2c. Turning a hook off is allowed, but never silent. Found up front so a check that decides first names
+# it too (pre_decide appends FLOW_HOOK_OFF); otherwise warned at the end. A repo .flow/config.json write
+# warns only when it writes a false: commands and suites edits there are routine. The settings.sh match
+# reads $lit, so a commit message that names the command isn't one.
+FLOW_HOOK_OFF=""
+if [[ "$lit" =~ settings\.sh[[:space:]]+hook[[:space:]]+([a-z-]+)[[:space:]]+(off|default) ]]; then
+  FLOW_HOOK_OFF="flow guard: this turns off the ${BASH_REMATCH[1]} hook"
+  [ "${BASH_REMATCH[2]}" = off ] || FLOW_HOOK_OFF="$FLOW_HOOK_OFF if a lower layer sets it false"
+  FLOW_HOOK_OFF="$FLOW_HOOK_OFF. Allowed (your call); say what that check stops catching."
+elif grep -Eq -- "$wr$home/(settings|config)\.json$end" <<<"$c2" || { cdin "$home" && grep -Eq -- "$wr[\"']?(\./)?(settings|config)\.json$end" <<<"$c2"; } \
+  || { has false && grep -Eq -- "$wr\.flow/config\.json$end" <<<"$c2"; }; then
+  FLOW_HOOK_OFF="$FLOW_HOOK_OFF_WARN"
+fi
 
 # 1. Built-in hard stops: recursive delete of / or home, in any flag spelling.
 # 1b. Recursive delete of an unguarded variable: empty or wrong, it hits the wrong tree.

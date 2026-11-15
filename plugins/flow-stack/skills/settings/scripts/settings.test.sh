@@ -101,7 +101,8 @@ rm -f "$FLOW_STACK_HOME/settings.json"; echo '{}' >"$FLOW_STACK_HOME/real.json";
 # in a linked worktree, tests.* comes from the files suites.sh reads: the worktree's .flow/config.json, then settings.json
 rm -f "$FLOW_STACK_HOME/settings.json" "$FLOW_STACK_HOME/real.json" "$FLOW_STACK_HOME/config.json" .flow/config.json
 echo '{"tests":{"scope":"full"}}' >"$FLOW_STACK_HOME/config.json"   # legacy: suites.sh never reads it
-git -c user.email=t@t -c user.name=t commit -q --allow-empty -m wt && git worktree add -q "$SB/wt" -b wt 2>/dev/null
+git -c user.email=t@t -c user.name=t commit -q --allow-empty -m wt && git worktree add -q "$SB/wt" -b wt 2>/dev/null || bad "worktree add failed"
+[ -d "$SB/wt" ] || bad "no worktree at $SB/wt"
 ( cd "$SB/wt" && mkdir -p .flow && echo '{}' >.flow/config.json
   [ "$("$S" show | awk '$1 == "scope" { print $2 }')" = impacted ] || echo "  ✗ worktree: show reads legacy tests.scope"
   "$S" tests scope full --repo >/dev/null

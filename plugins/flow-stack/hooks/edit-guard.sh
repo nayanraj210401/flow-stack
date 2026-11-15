@@ -13,8 +13,9 @@ case "$(flow_norm "$file")" in
   "$(flow_norm "$FLOW_HOME")"/settings.json|"$(flow_norm "$FLOW_HOME")"/config.json) pre_warn "$FLOW_HOOK_OFF_WARN" ;;
   */.claude/settings*.json|.claude/settings*.json|"${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/settings*.json) pre_decide ask "flow guard: writing Claude Code settings can change permissions, hooks, or env (an env block can fake a GitHub runner for --gha), so the human approves." ;;
 esac
-case "$(flow_norm "$file")" in */.flow/config.json|.flow/config.json)
-  grep -q false <<<"$(flow_field '[.tool_input | .content, .new_string, (.edits // [] | .[].new_string)] | map(select(.)) | join(" ")')" && pre_warn "$FLOW_HOOK_OFF_WARN" ;;
+# Only this repo's own config (hook toggles read it first): a nested .flow/config.json is code the fence judges.
+case "$(flow_norm "$file")" in "$(flow_norm "$FLOW_ROOT")"/.flow/config.json|"$(flow_norm "$FLOW_MAIN")"/.flow/config.json)
+  grep -q false <<<"$(flow_field '[.tool_input | .content, .new_string, .repl, (.edits // [] | .[].new_string)] | map(select(.)) | join(" ")')" && pre_warn "$FLOW_HOOK_OFF_WARN" ;;
 esac
 [ -n "$FLOW_TASK_DIR" ] || exit 0
 rel="$(flow_rel "$file")"
