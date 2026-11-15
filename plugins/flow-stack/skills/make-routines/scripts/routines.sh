@@ -334,6 +334,16 @@ safety() { # prints "<path><TAB><glob>[<TAB>@tested]" for each path on the list
   return "$hit"
 }
 
+tested_dirs() { # tested_dirs <ref> < numstat -z: "\n<dir>\n" for each directory holding a non-test @tested change
+  local a d p r out=$'\n'
+  while IFS=$'\t' read -r -d '' a d p; do
+    case "${p##*/}" in *.test.*) continue ;; esac
+    r=0; safety --ref "$1" "$p" >/dev/null || r=$?
+    [ "$r" = 3 ] && out+="$(dirname -- "$p")"$'\n'
+  done
+  printf '%s' "$out"
+}
+
 additive() { # passes when base...head adds a new *.test.sh beside the @tested code it changes and leaves every old test as it was
   local ref="" head=HEAD a d p mb diff added=0 bad=0 dirs=$'\n'
   while [ $# -gt 0 ]; do
@@ -346,11 +356,7 @@ additive() { # passes when base...head adds a new *.test.sh beside the @tested c
   # --no-renames: moving a test file away reads as deleting it; -z keeps unusual names whole
   diff="$(mktemp)"; git diff -z --numstat --no-renames "$ref...$head" >"$diff" || { rm -f "$diff"; die "git diff failed"; }
   # only directories of the change's own @tested hits: a decoy file beside a stray test elsewhere earns nothing
-  local r; while IFS=$'\t' read -r -d '' a d p; do
-    case "${p##*/}" in *.test.*) continue ;; esac
-    r=0; safety --ref "$ref" "$p" >/dev/null || r=$?
-    [ "$r" = 3 ] && dirs+="$(dirname -- "$p")"$'\n'
-  done <"$diff"
+  dirs="$(tested_dirs "$ref" <"$diff")"$'\n'
   # A new test runs in its own process, so it can't switch off an old one; any edit to an existing test file could
   # (an early exit, a no-op helper). A new *.test.sh counts only beside the @tested code it covers, where the
   # list's owner put code its CI tests, not in a directory CI may never run.
@@ -373,10 +379,12 @@ redbase() { # every *.test.sh added in base...HEAD fails when run against the ba
   while [ $# -gt 0 ]; do case "$1" in --ref) [ -n "${2:-}" ] || die "--ref needs a ref"; ref="$2"; shift 2 ;; *) die "redbase: unknown $1" ;; esac; done
   [ -n "$ref" ] || die "redbase needs --ref <base>"
   git rev-parse -q --verify "$ref^{commit}" >/dev/null || die "--ref $ref is not a commit"
-  wt="$(mktemp -d)/base"
+  # only the tests additive counts (beside @tested code): other new tests may pin behaviour that already works
+  local dirs; dirs="$(git diff -z --numstat --no-renames "$ref...HEAD" | tested_dirs "$ref")"$'\n'
+  wt="$(mktemp -d)"
   git worktree add -q --detach "$wt" "$(git merge-base "$ref" HEAD)" >/dev/null 2>&1 || die "could not check out $ref"
   while IFS= read -r -d '' p; do
-    [[ "$p" == *.test.sh ]] || continue
+    [[ "$p" == *.test.sh ]] && [[ "$dirs" == *$'\n'"$(dirname -- "$p")"$'\n'* ]] || continue
     n=$((n + 1)); mkdir -p "$wt/$(dirname -- "$p")"; cp -- "$p" "$wt/$p"
     r=0; (cd "$wt" && bash "$p" >/dev/null 2>&1) || r=$?
     if [ "$r" = 0 ]; then echo "$p: passes on the base too, so it proves nothing new"; bad=1; else echo "$p: fails on the base (exit $r)"; fi

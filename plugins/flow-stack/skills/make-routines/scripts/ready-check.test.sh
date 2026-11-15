@@ -133,6 +133,7 @@ ad() { git switch -qC t "$ab" && eval "$1" && git add -A && git -c user.email=t@
 rb() { git switch -qC t "$ab" && eval "$1" && git add -A && git -c user.email=t@t -c user.name=t commit -qm t && "$H/routines.sh" redbase --ref "$ab" >/dev/null 2>&1; echo $?; }
 [ "$(rb 'echo d >>lib/g.sh; printf "exit 0\n" >lib/h.test.sh')" = 1 ] && ok "redbase: a new test that passes on the base proves nothing" || bad "redbase took a no-op test"
 [ "$(rb 'echo d >>lib/g.sh; printf "grep -qx d \"\$(dirname \"\$0\")/g.sh\"\n" >lib/h.test.sh')" = 0 ] && ok "redbase: a test red on the base and green on head passes" || bad "redbase refused a real test"
+[ "$(rb 'mkdir -p docs; printf "exit 0\n" >docs/cov.test.sh')" = 0 ] && ok "redbase: a coverage test away from @tested code isn't held to it" || bad "redbase reddens a plain coverage PR"
 [ -z "$(git worktree list --porcelain | grep -c '^worktree' | grep -vx 1)" ] && ok "redbase leaves no worktree behind" || bad "redbase left a worktree"
 git switch -qC pr "$base"
 tt="$H/../templates/triage.md"
