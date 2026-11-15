@@ -58,6 +58,9 @@ layers() { [ -z "$repo" ] || echo "$repo"; echo "$global"; echo "$legacy"; }
 # effective <hook>: "on|off<TAB>where"
 effective() {
   local f v
+  case "$1" in ready|pkgcheck) # checked inside guard.sh, after its own flow_enabled guard
+    [ "$(effective guard | cut -f1)" = off ] && { printf 'off\tguard is off\n'; return; } ;;
+  esac
   while IFS= read -r f; do
     v="$(hook_val "$f" "$1")"
     [ -n "$v" ] || continue

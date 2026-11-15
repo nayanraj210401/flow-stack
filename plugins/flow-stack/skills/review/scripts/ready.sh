@@ -92,7 +92,8 @@ for c in lint typecheck; do
   if run "ready:$c" "$cmd"; then pass "$c"; else miss "$c fails: $cmd"; fi
 done
 
-if [ "$(jq -r '.tests.suites // [] | length' "$FLOW_DIR/config.json" 2>/dev/null)" -gt 0 ] 2>/dev/null; then
+tcfg="$FLOW_DIR/config.json"; [ -f "$FLOW_ROOT/.flow/config.json" ] && tcfg="$FLOW_ROOT/.flow/config.json"  # as suites.sh reads it
+if [ "$(jq -r '.tests.suites // [] | length' "$tcfg" 2>/dev/null)" -gt 0 ] 2>/dev/null; then
   scope=(--all); [ -z "$base" ] || scope=(--base "$base")  # no base to diff against: the full suite
   if ( cd "$FLOW_ROOT" && "$sk/verify/scripts/suites.sh" run "${scope[@]}" >/dev/null 2>&1 </dev/null ); then pass "impacted test suites"
   else miss "impacted test suites fail (verify/scripts/suites.sh run ${scope[0]}${base:+ $(echo "$base" | cut -c1-7)})"; fi

@@ -85,6 +85,13 @@ for n in $hook_names; do
   grep -qx "$n" <<<"$cat_names" || bad "hook name '$n' is missing from settings.sh's catalog"
 done
 
+# ready and pkgcheck run inside guard.sh, so guard off turns them off too, and show says so
+rm -f "$FLOW_STACK_HOME/settings.json" "$FLOW_STACK_HOME/real.json"; echo '{"hooks":{"guard":false}}' >"$FLOW_STACK_HOME/settings.json"
+for n in ready pkgcheck; do
+  grep -Eq "^ *$n +off +guard is off" <<<"$("$S" show)" || bad "guard off → show lists $n off (guard is off)"
+done
+rm -f "$FLOW_STACK_HOME/settings.json"
+
 # a symlinked settings.json (dotfiles repo) stays a symlink
 rm -f "$FLOW_STACK_HOME/settings.json"; echo '{}' >"$FLOW_STACK_HOME/real.json"; ln -s real.json "$FLOW_STACK_HOME/settings.json"
 "$S" hook claims off >/dev/null 2>&1
