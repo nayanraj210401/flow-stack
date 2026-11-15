@@ -21,6 +21,8 @@ home="${FLOW_STACK_HOME:-$HOME/.flow-stack}"
 global="$home/settings.json"
 legacy="$home/config.json"
 repo=""; git -C "$PWD" rev-parse --show-toplevel >/dev/null 2>&1 && repo="$FLOW_DIR/config.json"
+# tests.* is read where suites.sh reads it: a linked worktree's own .flow/config.json first, then settings.json
+trepo="$repo"; [ -n "$repo" ] && [ -f "$FLOW_ROOT/.flow/config.json" ] && trepo="$FLOW_ROOT/.flow/config.json"
 
 die() { echo "settings.sh: $*" >&2; exit 2; }
 command -v jq >/dev/null 2>&1 || die "needs jq"
@@ -54,6 +56,7 @@ value() { [ -f "$1" ] || return 0; jq -r "($2) // empty | tostring" "$1" 2>/dev/
 hook_val() { [ -f "$1" ] || return 0; jq -r --arg h "$2" 'if (.hooks // {} | has($h)) then .hooks[$h] | tostring else empty end' "$1" 2>/dev/null || true; }
 short() { case "$1" in "$global") echo settings.json ;; "$legacy") echo "config.json (global)" ;; *) echo "repo .flow/config.json" ;; esac; }
 layers() { [ -z "$repo" ] || echo "$repo"; echo "$global"; echo "$legacy"; }
+tlayers() { [ -z "$trepo" ] || echo "$trepo"; echo "$global"; }
 
 # effective <hook>: "on|off<TAB>where"
 effective() {
@@ -74,7 +77,7 @@ test_setting() { # test_setting <key> <default>: "value<TAB>where"
   while IFS= read -r f; do
     v="$(value "$f" ".tests.$1")"
     [ -n "$v" ] && { printf '%s\t%s\n' "$v" "$(short "$f")"; return; }
-  done < <(layers)
+  done < <(tlayers)
   printf '%s\tdefault\n' "$2"
 }
 
@@ -88,8 +91,8 @@ write() {
   tmp="$(mktemp "$f.XXXXXX")" && cp -p "$f" "$tmp"  # cp -p: mv keeps the file's mode, not mktemp's 0600
   jq "$@" "$f" >"$tmp" && mv "$tmp" "$f" || { rm -f "$tmp"; die "could not write $f"; }
 }
-target() { # target [--repo]
-  if [ "${1:-}" = --repo ]; then [ -n "$repo" ] || die "--repo needs a git repo"; echo "$repo"; else echo "$global"; fi
+target() { # target [--repo] [repo file]
+  if [ "${1:-}" = --repo ]; then [ -n "$repo" ] || die "--repo needs a git repo"; echo "${2:-$repo}"; else echo "$global"; fi
 }
 
 show() {
@@ -106,7 +109,7 @@ show() {
   IFS=$'\t' read -r st where < <(test_setting scope impacted); printf '  %-13s %-8s %s\n' scope "$st" "$where"
   IFS=$'\t' read -r st where < <(test_setting unmatched full); printf '  %-13s %-8s %s\n' unmatched "$st" "$where"
   if [ -n "$repo" ]; then
-    printf '  %-13s %s\n' suites "$(jq -r '.tests.suites // [] | length' "$repo" 2>/dev/null || echo 0) in repo .flow/config.json (suites.sh list)"
+    printf '  %-13s %s\n' suites "$(jq -r '.tests.suites // [] | length' "$trepo" 2>/dev/null || echo 0) in repo .flow/config.json (suites.sh list)"
   fi
 }
 
@@ -134,7 +137,7 @@ case "${1:-show}" in
       scope:impacted|scope:full|unmatched:full|unmatched:skip) ;;
       *) die "usage: settings.sh tests scope impacted|full | tests unmatched full|skip [--repo]" ;;
     esac
-    write "$(target "${4:-}")" --arg k "$key" --arg v "$val" '.tests[$k] = $v'
+    write "$(target "${4:-}" "$trepo")" --arg k "$key" --arg v "$val" '.tests[$k] = $v'
     IFS=$'\t' read -r st where < <(test_setting "$key" x); echo "tests.$key: $st ($where)"
     exit 0 ;;
   init)

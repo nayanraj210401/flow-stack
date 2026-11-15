@@ -125,5 +125,10 @@ grep -q "id 'a b'" <<<"$out" && grep -q "'nope/\*\*' matches no tracked file" <<
   || bad "check: $out"
 jq -n '{tests: {suites: [{id: "auth", paths: ["src/auth/**"], run: "x"}]}}' >.flow/config.json
 "$S" check >/dev/null 2>&1 || bad "check: a good suite passes"
+jq -n '{tests: {suites: [{paths: ["src/auth/**"], run: "x"}]}}' >.flow/config.json
+grep -q 'no id' <<<"$("$S" check 2>&1)" || bad "check: a suite with no id says so: $("$S" check 2>&1)"
+echo '{nope' >.flow/config.json
+"$S" run src/auth/login.sh >/dev/null 2>&1 && bad "run: invalid .flow/config.json should fail, not pass on nothing"
+grep -q 'not valid JSON' <<<"$("$S" check 2>&1)" || bad "check: invalid .flow/config.json is reported"
 
 [ "$FAILS" -eq 0 ] && echo "suites.test: ok" || { echo "suites.test: $FAILS failed"; exit 1; }

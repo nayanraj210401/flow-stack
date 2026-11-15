@@ -98,4 +98,16 @@ rm -f "$FLOW_STACK_HOME/settings.json"; echo '{}' >"$FLOW_STACK_HOME/real.json";
 [ "$(ls -l "$FLOW_STACK_HOME/real.json" | cut -c1-10)" = -rw-r--r-- ] || bad "write changed settings.json's mode"
 [ -L "$FLOW_STACK_HOME/settings.json" ] && [ "$(jq -r .hooks.claims "$FLOW_STACK_HOME/real.json")" = false ] || bad "write replaced the settings.json symlink"
 
+# in a linked worktree, tests.* comes from the files suites.sh reads: the worktree's .flow/config.json, then settings.json
+rm -f "$FLOW_STACK_HOME/settings.json" "$FLOW_STACK_HOME/real.json" "$FLOW_STACK_HOME/config.json" .flow/config.json
+echo '{"tests":{"scope":"full"}}' >"$FLOW_STACK_HOME/config.json"   # legacy: suites.sh never reads it
+git -c user.email=t@t -c user.name=t commit -q --allow-empty -m wt && git worktree add -q "$SB/wt" -b wt 2>/dev/null
+( cd "$SB/wt" && mkdir -p .flow && echo '{}' >.flow/config.json
+  [ "$("$S" show | awk '$1 == "scope" { print $2 }')" = impacted ] || echo "  ✗ worktree: show reads legacy tests.scope"
+  "$S" tests scope full --repo >/dev/null
+  [ "$(jq -r .tests.scope .flow/config.json)" = full ] || echo "  ✗ worktree: tests --repo wrote $(cat .flow/config.json), not the worktree's config"
+  [ "$("$S" show | awk '$1 == "scope" { print $2 }')" = full ] || echo "  ✗ worktree: show after --repo write"
+) | grep . && bad "worktree tests.* layers"
+rm -f "$FLOW_STACK_HOME/config.json"
+
 [ "$FAILS" -eq 0 ] && echo "settings.test: ok" || { echo "settings.test: $FAILS failed"; exit 1; }

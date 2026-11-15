@@ -28,6 +28,7 @@ root="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "suites.sh: needs 
 cd "$root"; flow_roots "$root"
 cfg="$FLOW_DIR/config.json"; [ -f "$FLOW_ROOT/.flow/config.json" ] && cfg="$FLOW_ROOT/.flow/config.json"
 settings="$FLOW_HOME/settings.json"
+[ ! -f "$cfg" ] || jq -e . "$cfg" >/dev/null 2>&1 || { echo "suites.sh: $cfg is not valid JSON" >&2; exit 2; }
 evidence="$here/evidence.sh"
 
 die() { echo "suites.sh: $*" >&2; exit 2; }
@@ -41,7 +42,7 @@ setting() { # setting <key> <default>: repo config, then settings.json, then the
   done
   printf '%s' "$2"
 }
-suites() { jq -r '.tests.suites // [] | to_entries[] | [.key, (.value.id // ""), (.value.paths // [] | join(" "))] | @tsv' "$cfg" 2>/dev/null; }
+suites() { jq -r '.tests.suites // [] | to_entries[] | [.key, (.value.id // ""), (.value.paths // [] | join(" "))] | map(tostring) | join("\u001f")' "$cfg" 2>/dev/null; }  # US, not tab: a tab is IFS whitespace, so an empty id would collapse
 suite_run() { jq -r --argjson i "$1" '.tests.suites[$i].run // ""' "$cfg" 2>/dev/null; }  # by index: @tsv mangles backslashes
 full_cmd() { jq -r '.commands.test // empty' "$cfg" 2>/dev/null; }
 ignored() { # checked after the suites' claims, so a suite can claim *.md
@@ -74,7 +75,7 @@ changed() { # fails when the diff can't be computed (a bad --base)
 full() { # the full suite as id<TAB>index-or-command lines
   local c; c="$(full_cmd)"
   if [ -n "$c" ]; then printf 'test\t-\n'; return; fi
-  suites | while IFS=$'\t' read -r i id _; do [ -n "$id" ] && printf '%s\t%s\n' "$id" "$i"; done
+  suites | while IFS=$'\x1f' read -r i id _; do [ -n "$id" ] && printf '%s\t%s\n' "$id" "$i"; done
 }
 
 # pick_raw: "id<TAB>index" (index - means commands.test), reasons on stderr
@@ -92,7 +93,7 @@ pick_raw() {
       echo "suites: .flow/config.json changed → full suite" >&2; full; return
     fi
     hit=""
-    while IFS=$'\t' read -r i id globs; do
+    while IFS=$'\x1f' read -r i id globs; do
       [ -n "$id" ] && [ -n "$globs" ] || continue
       if flow_is_test "$f" "$globs"; then
         hit=1
@@ -115,7 +116,7 @@ cmd_of() { if [ "$1" = - ]; then full_cmd; else suite_run "$1"; fi; }
 
 case "${1:-}" in
   list)
-    suites | while IFS=$'\t' read -r i id globs; do printf '%s · %s · %s\n' "${id:-?}" "${globs:-(no paths)}" "$(suite_run "$i")"; done
+    suites | while IFS=$'\x1f' read -r i id globs; do printf '%s · %s · %s\n' "${id:-?}" "${globs:-(no paths)}" "$(suite_run "$i")"; done
     [ -z "$(full_cmd)" ] || printf 'test (full) · * · %s\n' "$(full_cmd)" ;;
   pick)
     shift; parse "$@"
@@ -134,7 +135,8 @@ case "${1:-}" in
     [ "$fails" -eq 0 ] || { echo "suites: $fails failed"; exit 1; } ;;
   check)
     bad=0; seen=" "
-    while IFS=$'\t' read -r i id globs; do
+    while IFS=$'\x1f' read -r i id globs; do
+      [ -n "$id" ] || { echo "✗ suite #$i: no id"; bad=1; continue; }
       if ! [[ "$id" =~ ^[A-Za-z0-9._-]+$ ]]; then echo "✗ suite #$i: id '$id' must match [A-Za-z0-9._-]+"; bad=1; continue; fi
       case "$seen" in *" $id "*) echo "✗ $id: declared twice"; bad=1 ;; esac; seen="$seen$id "
       [ -n "$(suite_run "$i")" ] || { echo "✗ $id: no run command"; bad=1; }
