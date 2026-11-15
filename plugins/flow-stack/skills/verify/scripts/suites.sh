@@ -80,7 +80,8 @@ full() { # the full suite as id<TAB>index-or-command lines
 pick_raw() {
   local n; n="$(jq -r '.tests.suites // [] | length' "$cfg" 2>/dev/null || echo 0)"
   if [ "$all" = 1 ]; then echo "suites: --all → full suite" >&2; full; return; fi
-  if [ "$(setting scope impacted)" != impacted ]; then echo "suites: tests.scope full → full suite" >&2; full; return; fi
+  local scope; scope="$(setting scope impacted)"
+  if [ "$scope" != impacted ]; then echo "suites: tests.scope $scope → full suite" >&2; full; return; fi
   if [ "${n:-0}" -eq 0 ]; then echo "suites: no tests.suites in .flow/config.json → full suite" >&2; full; return; fi
   local files f hit i id globs unmatched="" picked=""
   files="$(changed)" || { echo "suites: can't diff against '$base' → full suite" >&2; full; return; }
