@@ -130,6 +130,10 @@ ad() { git switch -qC t "$ab" && eval "$1" && git add -A && git -c user.email=t@
 [ "$(ad 'printf "x\n" >lib/h.test.md')" = 1 ] && ok "additive: a test file CI doesn't run counts for nothing" || bad "additive counted a .test.md"
 [ "$(ad 'git mv lib/g.test.sh lib/h.test.sh')" = 1 ] && ok "additive: a renamed test fails" || bad "additive passed a moved test"
 [ "$(ad ':')" = 1 ] && "$H/routines.sh" additive x >/dev/null 2>&1; [ $? = 2 ] && ok "additive: empty change fails, no --ref is an error" || bad "additive edge cases"
+rb() { git switch -qC t "$ab" && eval "$1" && git add -A && git -c user.email=t@t -c user.name=t commit -qm t && "$H/routines.sh" redbase --ref "$ab" >/dev/null 2>&1; echo $?; }
+[ "$(rb 'echo d >>lib/g.sh; printf "exit 0\n" >lib/h.test.sh')" = 1 ] && ok "redbase: a new test that passes on the base proves nothing" || bad "redbase took a no-op test"
+[ "$(rb 'echo d >>lib/g.sh; printf "grep -qx d \"\$(dirname \"\$0\")/g.sh\"\n" >lib/h.test.sh')" = 0 ] && ok "redbase: a test red on the base and green on head passes" || bad "redbase refused a real test"
+[ -z "$(git worktree list --porcelain | grep -c '^worktree' | grep -vx 1)" ] && ok "redbase leaves no worktree behind" || bad "redbase left a worktree"
 git switch -qC pr "$base"
 tt="$H/../templates/triage.md"
 grep -q 'routines.sh safety <files>` exits 1 or 2 |$' "$tt" && grep -q '\*\*risk:high is never built.\*\* Add `needs-human`, and put a draft INTENT' "$tt" &&
@@ -143,12 +147,14 @@ sh="$H/../templates/self-heal.md"
 grep -q 'take at most 2 of them while an issue candidate is waiting' "$sh" && ok "self-heal: rework never takes every slot" || bad "rework can starve new issues"
 grep -q 'unless triage approved it' "$sh" && grep -q "has that bot as actor and that bot.s comment posted after it" "$sh" &&
   ok "self-heal: triage's risk:low approves a self-create issue" || bad "bot issues still need heal-ok"
-grep -q 'exits 3 and `make-routines/scripts/routines.sh additive --ref origin/<default>` fails' "$sh" && ok "self-heal: an @tested path must be additive" || bad "self-heal skips additive"
+grep -q 'exits 3 and `make-routines/scripts/routines.sh additive --ref origin/<default>` or' "$sh" && ok "self-heal: an @tested path must be additive" || bad "self-heal skips additive"
+grep -q 'routines.sh redbase --ref origin/<default>` fails' "$sh" && ok "self-heal: its new test must be red on the base" || bad "self-heal skips redbase"
 grep -q 'Never add a `triage:`, `size:` or `risk:` label' "$sh" && grep -q 'triage alone sets' "$H/../templates/self-create.md" && ok "only triage sets the approving labels" || bad "other routines may set risk labels"
 grep -q 'no pipe, redirect, `&&` or `;` around a push or PR command' "$sh" && grep -q 'pass `--body-file`' "$sh" && ok "self-heal: commands in the shape the hook passes" || bad "self-heal: no command-shape rule"
 grep -q 'exits 1 or 2 |$' "$tt" && grep -q 'A `safety` exit of 3 means every hit is an `@tested` path' "$tt" && ok "triage: @tested alone is not high" || bad "triage scores @tested high"
 if [ -f "$am" ]; then
   grep -qF 'routines.sh additive --ref origin/<base> FETCH_HEAD' "$am" && grep -q 'Exit 3: every hit is an `@tested` path' "$am" && ok "auto-merge: @tested needs additive" || bad "auto-merge: no additive gate"
+  grep -q '`red-on-base` passed' "$am" && ok "auto-merge: @tested needs the red-on-base check" || bad "auto-merge ignores red-on-base"
   ! grep -q 'A non-zero exit, an error included' "$am" && ok "auto-merge: no step still blocks every exit 3" || bad "auto-merge 2.1 blocks @tested PRs"
   grep -q "self-create's \`self-create\` and \`reproducible\`" "$am" && grep -q 'first line `triage: bug · ready · size S · risk low`' "$am" &&
     ok "auto-merge: a triage-approved bot issue can pass 1b, with triage's comment as proof" || bad "auto-merge 1b bot path"

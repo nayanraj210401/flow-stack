@@ -14,6 +14,8 @@
 #                                                     3 when every hit is on an @tested glob, 2 on an error
 #   routines.sh additive --ref <base> [<head>]        the change base...head (default HEAD) adds a new *.test.sh and
 #                                                     touches no existing test file: exit 0 if so, 1 if not, 2 on an error
+#   routines.sh redbase --ref <base>                  each *.test.sh added in base...HEAD fails on the base's code
+#                                                     (it runs them: CI or self-heal only): exit 0 if so, 1 if not
 # Frontmatter: trigger (schedule | pull_request | mention: an @claude comment from a user with write access), cron and timezone (schedule only; an IANA zone, default UTC), timeout (minutes), labels (must exist;
 # create_labels: true makes missing ones; .github/routines/labels.tsv renames catalog labels to yours on add), auth
 # (oauth | api-key), grants (token scopes it may write: issues pull-requests contents; the rest are read),
@@ -364,13 +366,34 @@ additive() { # passes when base...head adds a new *.test.sh beside the @tested c
   echo "additive: a new test (+$added lines), no existing test touched"
 }
 
+redbase() { # every *.test.sh added in base...HEAD fails when run against the base's code: a test that already
+  # passed there pins nothing the change adds, so it can't stand in for one (a bare `exit 0` file, say). Runs the
+  # tests, so call it only where PR code may run (the read-only test workflow, or self-heal on its own branch).
+  local ref="" wt p r n=0 bad=0
+  while [ $# -gt 0 ]; do case "$1" in --ref) [ -n "${2:-}" ] || die "--ref needs a ref"; ref="$2"; shift 2 ;; *) die "redbase: unknown $1" ;; esac; done
+  [ -n "$ref" ] || die "redbase needs --ref <base>"
+  git rev-parse -q --verify "$ref^{commit}" >/dev/null || die "--ref $ref is not a commit"
+  wt="$(mktemp -d)/base"
+  git worktree add -q --detach "$wt" "$(git merge-base "$ref" HEAD)" >/dev/null 2>&1 || die "could not check out $ref"
+  while IFS= read -r -d '' p; do
+    [[ "$p" == *.test.sh ]] || continue
+    n=$((n + 1)); mkdir -p "$wt/$(dirname -- "$p")"; cp -- "$p" "$wt/$p"
+    r=0; (cd "$wt" && bash "$p" >/dev/null 2>&1) || r=$?
+    if [ "$r" = 0 ]; then echo "$p: passes on the base too, so it proves nothing new"; bad=1; else echo "$p: fails on the base (exit $r)"; fi
+  done < <(git diff -z --name-only --diff-filter=A --no-renames "$ref...HEAD")
+  git worktree remove --force "$wt" >/dev/null 2>&1 || true
+  [ "$bad" = 0 ] || return 1
+  echo "redbase: $n new test(s), each red on the base"
+}
+
 case "${1:-}" in
   list) list ;;
   safety) shift; safety "$@" ;;
   additive) shift; additive "$@" ;;
+  redbase) shift; redbase "$@" ;;
   add) shift; add "$@" ;;
   schedule) shift; schedule "$@" ;;
   render) render ;;
   check) check ;;
-  *) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *) sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

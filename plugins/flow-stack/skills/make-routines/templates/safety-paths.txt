@@ -4,7 +4,7 @@
 # One bash glob per line, matched against "/<path>": a leading / anchors at the repo root, */ matches at any
 # depth, and * crosses directories. Text after the glob is a comment.
 # `@tested` right after a glob marks code its tests cover: a change there is scored like any other, but only when
-# `routines.sh additive` passes (it adds a new *.test.sh and touches no existing test file). A plain glob wins over @tested.
+# `routines.sh additive` passes (it adds a new *.test.sh and touches no existing test file) and the new test fails on the base (`routines.sh redbase`, a CI check). A plain glob wins over @tested.
 /.github/*          the routines, their prompts, this list, and CI
 */.flow/*           gitignored, so a PR that adds one forces it in: ready.sh runs its commands and reads its hook switches
 */.claude/*         gitignored too: forced-in skills, agents or commands load into every later run

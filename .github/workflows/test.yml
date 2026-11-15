@@ -29,3 +29,26 @@ jobs:
             if out="$(bash "$t" 2>&1)"; then echo "ok   $t"; else echo "FAIL $t"; echo "$out" | tail -20; fail=1; fi
           done
           exit "$fail"
+  # Each test a PR adds must fail on the base's code: a test that already passes there can't stand in for one, so
+  # a no-op test file never unlocks an unattended merge. The script comes from the base, so a PR can't weaken it.
+  red-on-base:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.19
+      - name: new tests fail on the base
+        env:
+          BASE: ${{ github.base_ref }}
+        run: |
+          git config --global user.email ci@example.com
+          git config --global user.name ci
+          s="$RUNNER_TEMP/routines.sh"
+          git show "origin/$BASE:plugins/flow-stack/skills/make-routines/scripts/routines.sh" >"$s"
+          if ! grep -q '^redbase()' "$s"; then echo "the base predates redbase: nothing to check"; exit 0; fi
+          bash "$s" redbase --ref "origin/$BASE"
