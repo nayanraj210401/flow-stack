@@ -85,7 +85,7 @@ write() {
   [ -s "$f" ] || echo '{}' >"$f"
   jq -e . "$f" >/dev/null 2>&1 || die "$f is not valid JSON; fix it by hand first"
   local l; while l="$(readlink "$f")"; do case "$l" in /*) f="$l" ;; *) f="$(dirname "$f")/$l" ;; esac; done  # write the link's target
-  tmp="$(mktemp "$f.XXXXXX")"
+  tmp="$(mktemp "$f.XXXXXX")" && cp -p "$f" "$tmp"  # cp -p: mv keeps the file's mode, not mktemp's 0600
   jq "$@" "$f" >"$tmp" && mv "$tmp" "$f" || { rm -f "$tmp"; die "could not write $f"; }
 }
 target() { # target [--repo]

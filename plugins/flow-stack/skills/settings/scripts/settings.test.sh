@@ -93,8 +93,9 @@ done
 rm -f "$FLOW_STACK_HOME/settings.json"
 
 # a symlinked settings.json (dotfiles repo) stays a symlink
-rm -f "$FLOW_STACK_HOME/settings.json"; echo '{}' >"$FLOW_STACK_HOME/real.json"; ln -s real.json "$FLOW_STACK_HOME/settings.json"
+rm -f "$FLOW_STACK_HOME/settings.json"; echo '{}' >"$FLOW_STACK_HOME/real.json"; chmod 644 "$FLOW_STACK_HOME/real.json"; ln -s real.json "$FLOW_STACK_HOME/settings.json"
 "$S" hook claims off >/dev/null 2>&1
+[ "$(ls -l "$FLOW_STACK_HOME/real.json" | cut -c1-10)" = -rw-r--r-- ] || bad "write changed settings.json's mode"
 [ -L "$FLOW_STACK_HOME/settings.json" ] && [ "$(jq -r .hooks.claims "$FLOW_STACK_HOME/real.json")" = false ] || bad "write replaced the settings.json symlink"
 
 [ "$FAILS" -eq 0 ] && echo "settings.test: ok" || { echo "settings.test: $FAILS failed"; exit 1; }
