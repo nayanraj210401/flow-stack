@@ -64,10 +64,14 @@ flow_session() {
 # pid is the one the row names (the same start time; a crashed session's row can outlive its pid).
 # Only the digits are compared (day, time, year), since month and weekday names follow the locale.
 # A row without procStart (older Claude Code) counts as live: the task stays refused, never taken.
+# A zombie has exited but still answers kill -0 until its parent reaps it, which an init that never
+# reaps orphans (some container PID 1s) never does, so state Z counts as gone.
 flow_live() {
   local f st
   f="$(flow_sessions)/$1.json"
   [ -n "$1" ] && [ -f "$f" ] && kill -0 "$1" 2>/dev/null || return 1
+  st="$(ps -o stat= -p "$1" 2>/dev/null | tr -d ' ' || true)"
+  case "$st" in Z*) return 1 ;; esac
   st="$(jq -r '.procStart // empty' "$f" 2>/dev/null | tr -cs '0-9:' ' ' || true)"
   [ -z "${st// /}" ] || [ "$(TZ=UTC ps -o lstart= -p "$1" 2>/dev/null | tr -cs '0-9:' ' ' || true)" = "$st" ]
 }
