@@ -7,5 +7,8 @@
     "run": ""
   },
   "ready": [],
-  "hooks": {}
+  "hooks": {},
+  "tests": {
+    "suites": []
+  }
 }
