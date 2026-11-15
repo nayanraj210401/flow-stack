@@ -1,7 +1,7 @@
 ---
 id: settings
 title: Settings: hook toggles and impacted test suites
-owns: plugins/flow-stack/skills/settings/** plugins/flow-stack/skills/verify/scripts/suites.sh plugins/flow-stack/skills/verify/scripts/suites.test.sh plugins/flow-stack/templates/config.json .claude/skills/verify-flow-stack/scripts/settings.sh
+owns: plugins/flow-stack/skills/settings/** plugins/flow-stack/skills/verify/scripts/suites.sh plugins/flow-stack/skills/verify/scripts/suites.test.sh plugins/flow-stack/skills/review/scripts/ready-suites.test.sh plugins/flow-stack/templates/config.json .claude/skills/verify-flow-stack/scripts/settings.sh
 entries: skill /flow-stack:settings | cli skills/settings/scripts/settings.sh show|hook|tests|init|path | file ~/.flow-stack/settings.json | cli skills/verify/scripts/suites.sh list|pick|run|check | config .flow/config.json tests.suites|tests.ignore|tests.scope|tests.unmatched | cli skills/review/scripts/ready.sh
 scenario: bash .claude/skills/verify-flow-stack/scripts/settings.sh
 status: unverified
