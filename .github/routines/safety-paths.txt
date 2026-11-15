@@ -4,7 +4,8 @@
 # One bash glob per line, matched against "/<path>": a leading / anchors at the repo root, */ matches at any
 # depth, and * crosses directories. Text after the glob is a comment.
 # `@tested` right after a glob marks code its tests cover: a change there is scored like any other, but only when
-# `routines.sh additive` passes (it adds a new *.test.sh and touches no existing test file) and the new test fails on the base (`routines.sh redbase`, a CI check). A plain glob wins over @tested.
+# `routines.sh additive` passes (it adds a new *.test.sh and touches no existing test file) and the new test fails on the base (`routines.sh redbase`, a CI check). The last glob that matches decides, as in .gitignore:
+# list a plain catch-all first and its @tested exceptions after it.
 /.github/*          the routines, their prompts, this list, and CI
 */.flow/*           gitignored, so a PR that adds one forces it in: ready.sh runs its commands and reads its hook switches
 */.claude/*         gitignored too: forced-in skills, agents or commands load into every later run
@@ -13,14 +14,7 @@
 */.mcp.json
 */settings*.json
 */.claude-plugin/*
-/plugins/flow-stack/hooks/hooks.json                  which hooks run, and on what
-/plugins/flow-stack/hooks/*.sh            @tested     the guards: a fix that only tightens one adds a test case
-/plugins/flow-stack/hooks/*.ts                        register.test.ts runs only under herdr's bun tests, which CI skips
-/plugins/flow-stack/hooks/*.tsx
-/plugins/flow-stack/hooks/notify*.sh                  notify-escape.test.sh needs osascript, so on CI it only skips
-/plugins/flow-stack/hooks/*.md                        a plain glob wins: prose and data in hooks/ stay the human's
-/plugins/flow-stack/hooks/*.json
-/plugins/flow-stack/hooks/*.txt
+/plugins/flow-stack/hooks/*                 the hooks, hooks.json and anything new beside them
 /plugins/flow-stack/evals/*                 the harness 13 hook tests source: an edit there can switch tests off
 /plugins/flow-stack/agents/*
 /plugins/flow-stack/templates/*
@@ -28,15 +22,20 @@
 /plugins/flow-stack/skills/principles/*     the rules the review and self-heal routines read
 /plugins/flow-stack/skills/review/*         ready.sh is the bar every push and merge clears
 /plugins/flow-stack/skills/make-routines/*  this list's reader and the additive check
-/plugins/flow-stack/skills/feature-map/*     feature-map/scripts/features.sh runs from ready.sh and the auto-merge re-score
-/plugins/flow-stack/skills/flow/*.md        prompts have no tests, so a prompt change stays the human's
-/plugins/flow-stack/skills/verify/*.md
-/plugins/flow-stack/skills/seal/*.md
+/plugins/flow-stack/skills/feature-map/*    feature-map/scripts/features.sh runs from ready.sh and the auto-merge re-score
+/plugins/flow-stack/skills/flow/*           prompts have no tests, so a prompt change stays the human's
+/plugins/flow-stack/skills/verify/*
+/plugins/flow-stack/skills/seal/*
 /plugins/flow-stack/skills/gate/*
 /plugins/flow-stack/skills/make-gates/*
-/plugins/flow-stack/skills/setup/*.md
-/plugins/flow-stack/skills/flow/scripts/*   @tested
-/plugins/flow-stack/skills/verify/scripts/* @tested
-/plugins/flow-stack/skills/seal/scripts/*   @tested
-/plugins/flow-stack/skills/setup/scripts/*  @tested     setup/scripts/inventory.sh runs at every session start
-*/herdr/*                                  CI skips /herdr/, so a test there proves nothing: never @tested
+/plugins/flow-stack/skills/setup/*
+# @tested exceptions: the bash scripts their *.test.sh files cover, each test in its own process
+/plugins/flow-stack/hooks/*.sh                @tested   the guards: a fix that only tightens one adds a test case
+/plugins/flow-stack/skills/flow/scripts/*.sh  @tested
+/plugins/flow-stack/skills/verify/scripts/*.sh @tested
+/plugins/flow-stack/skills/seal/scripts/*.sh  @tested
+/plugins/flow-stack/skills/setup/scripts/*.sh @tested   setup/scripts/inventory.sh runs at every session start
+# back to plain: code a test could change from inside, or whose tests CI never runs
+/plugins/flow-stack/hooks/lib.sh            glob-match, profile-quotes and redact tests source it in-process
+/plugins/flow-stack/hooks/notify*.sh        notify-escape.test.sh needs osascript, so on CI it only skips
+*/herdr/*                                   CI skips /herdr/, so a test there proves nothing

@@ -312,17 +312,14 @@ safety() { # prints "<path><TAB><glob>[<TAB>@tested]" for each path on the list
   # an @tested glob guards code its tests cover: a change there is unattended-safe only when `additive` passes
   while read -r g t _; do case "$g" in ''|'#'*) ;; *) pats+=("$g"); [ "$t" = @tested ] && tested+=(1) || tested+=(0) ;; esac; done < <(tr -d '\r' <<<"$list")
   [ ${#pats[@]} -gt 0 ] || die "the safety list has no globs"
-  on_list() { # returns 0 on a plain hit, 3 on only @tested hits, 1 off the list; a plain glob wins wherever it sits
-    local i soft=""
+  on_list() { # returns 0 on a plain hit, 3 on an @tested one, 1 off the list; the last matching glob decides
+    local i last=""
     # git quotes a path with unusual bytes unless -z; a quoted path can't be matched, so it counts as a hit
     [[ "$1" != \"* ]] || { printf '%s\tquoted path: list it with git -z and pass -z\n' "$1"; return 0; }
-    for i in "${!pats[@]}"; do
-      [[ "/${1#./}" == ${pats[$i]} ]] || continue
-      [ "${tested[$i]}" = 1 ] || { printf '%s\t%s\n' "$1" "${pats[$i]}"; return 0; }
-      [ -n "$soft" ] || soft="${pats[$i]}"
-    done
-    [ -n "$soft" ] || return 1
-    printf '%s\t%s\t@tested\n' "$1" "$soft"; return 3
+    for i in "${!pats[@]}"; do [[ "/${1#./}" == ${pats[$i]} ]] && last="$i"; done
+    [ -n "$last" ] || return 1
+    [ "${tested[$last]}" = 1 ] && { printf '%s\t%s\t@tested\n' "$1" "${pats[$last]}"; return 3; }
+    printf '%s\t%s\n' "$1" "${pats[$last]}"; return 0
   }
   score() { local r=0; on_list "$1" || r=$?; case "$r" in 0) hit=1 ;; 3) [ "$hit" = 1 ] || hit=3 ;; esac; }
   if [ $# -gt 0 ]; then for p; do n=$((n + 1)); score "$p"; done
@@ -354,7 +351,8 @@ additive() { # passes when base...head adds a new *.test.sh beside the @tested c
   git rev-parse -q --verify "$head^{commit}" >/dev/null || die "$head is not a commit"
   mb="$(git merge-base "$ref" "$head")" || die "$ref and $head share no history"
   # --no-renames: moving a test file away reads as deleting it; -z keeps unusual names whole
-  diff="$(mktemp)"; git diff -z --numstat --no-renames "$ref...$head" >"$diff" || { rm -f "$diff"; die "git diff failed"; }
+  diff="$(mktemp)"; trap "rm -f -- '$diff'" EXIT
+  git diff -z --numstat --no-renames "$ref...$head" >"$diff" || die "git diff failed"
   # only directories of the change's own @tested hits: a decoy file beside a stray test elsewhere earns nothing
   dirs="$(tested_dirs "$ref" <"$diff")"$'\n'
   # A new test runs in its own process, so it can't switch off an old one; any edit to an existing test file could
@@ -372,26 +370,36 @@ additive() { # passes when base...head adds a new *.test.sh beside the @tested c
   echo "additive: a new test (+$added lines), no existing test touched"
 }
 
-redbase() { # every *.test.sh added in base...HEAD fails when run against the base's code: a test that already
-  # passed there pins nothing the change adds, so it can't stand in for one (a bare `exit 0` file, say). Runs the
+redbase() { # every *.test.sh added beside @tested code fails once that code goes back to the base: a test that
+  # still passes pins nothing the change adds, so it can't stand in for one (a bare `exit 0` file, say). Runs the
   # tests, so call it only where PR code may run (the read-only test workflow, or self-heal on its own branch).
-  local ref="" wt p r n=0 bad=0
+  local ref="" mb tmp wt p r n=0 bad=0 dirs code=()
   while [ $# -gt 0 ]; do case "$1" in --ref) [ -n "${2:-}" ] || die "--ref needs a ref"; ref="$2"; shift 2 ;; *) die "redbase: unknown $1" ;; esac; done
   [ -n "$ref" ] || die "redbase needs --ref <base>"
   git rev-parse -q --verify "$ref^{commit}" >/dev/null || die "--ref $ref is not a commit"
-  # only the tests additive counts (beside @tested code): other new tests may pin behaviour that already works
-  local dirs; dirs="$(git diff -z --numstat --no-renames "$ref...HEAD" | tested_dirs "$ref")"$'\n'
-  wt="$(mktemp -d)"
-  git worktree add -q --detach "$wt" "$(git merge-base "$ref" HEAD)" >/dev/null 2>&1 || die "could not check out $ref"
+  mb="$(git merge-base "$ref" HEAD)" || die "$ref and HEAD share no history"
+  dirs="$(git diff -z --numstat --no-renames "$ref...HEAD" | tested_dirs "$ref")"$'\n'
+  # the change's own @tested code (not its tests, helpers or fixtures) is what goes back to the base
+  while IFS= read -r -d '' p; do
+    case "${p##*/}" in *.test.*) continue ;; esac
+    r=0; safety --ref "$ref" "$p" >/dev/null || r=$?; [ "$r" = 3 ] && code+=("$p")
+  done < <(git diff -z --name-only --no-renames "$ref...HEAD")
+  # a full clone, not a worktree: inside it `.git` is a directory, as in the CI checkout
+  tmp="$(mktemp -d)"; wt="$tmp/$RANDOM$RANDOM"
+  git clone -q --no-checkout "$(git rev-parse --show-toplevel)" "$wt" && git -C "$wt" checkout -q --detach "$(git rev-parse HEAD)" \
+    || { rm -rf "$tmp"; die "could not clone HEAD"; }
+  for p in ${code[@]+"${code[@]}"}; do
+    if git cat-file -e "$mb:$p" 2>/dev/null; then git -C "$wt" checkout -q "$mb" -- "$p"; else rm -f -- "$wt/$p"; fi
+  done
   while IFS= read -r -d '' p; do
     [[ "$p" == *.test.sh ]] && [[ "$dirs" == *$'\n'"$(dirname -- "$p")"$'\n'* ]] || continue
-    n=$((n + 1)); mkdir -p "$wt/$(dirname -- "$p")"; cp -- "$p" "$wt/$p"
-    r=0; (cd "$wt" && bash "$p" >/dev/null 2>&1) || r=$?
-    if [ "$r" = 0 ]; then echo "$p: passes on the base too, so it proves nothing new"; bad=1; else echo "$p: fails on the base (exit $r)"; fi
+    n=$((n + 1)); r=0; (cd "$wt" && bash "$p" </dev/null >/dev/null 2>&1) || r=$?
+    if [ "$r" = 0 ]; then echo "$p: passes with the change's code reverted, so it proves nothing new"; bad=1
+    else echo "$p: fails on the base's code (exit $r)"; fi
   done < <(git diff -z --name-only --diff-filter=A --no-renames "$ref...HEAD")
-  git worktree remove --force "$wt" >/dev/null 2>&1 || true
+  rm -rf "$tmp"
   [ "$bad" = 0 ] || return 1
-  echo "redbase: $n new test(s), each red on the base"
+  echo "redbase: $n new test(s), each red on the base's code"
 }
 
 case "${1:-}" in

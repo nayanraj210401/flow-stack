@@ -114,7 +114,11 @@ nolist="$(git -c user.email=t@t -c user.name=t commit-tree "$(git mktree </dev/n
 "$H/routines.sh" safety --ref '' .github/x.yml >/dev/null 2>&1; [ $? = 2 ] && ok "an empty --ref is an error" || bad "empty --ref read the working tree"
 printf '' | "$H/routines.sh" safety -z >/dev/null 2>&1; [ $? = 2 ] && printf '\n' | "$H/routines.sh" safety >/dev/null 2>&1; [ $? = 2 ] &&
   ok "no paths (a failed git diff upstream) is an error, not clean" || bad "empty input passed"
-# -- @tested globs exit 3, a plain glob wins wherever it sits; additive passes only test-adding changes
+# -- @tested globs exit 3, the last matching glob decides; additive passes only test-adding changes
+printf '/lib/*.sh @tested\n/lib/*.json @tested\n/lib/hooks.json  which hooks run\n' >.github/routines/safety-paths.txt
+printf '/lib/*\n/lib/*.sh @tested\n/lib/own.sh\n' >"$SB/last.txt"
+( cp "$SB/last.txt" .github/routines/safety-paths.txt; "$H/routines.sh" safety lib/x.py >/dev/null; a=$?; "$H/routines.sh" safety lib/g.sh >/dev/null; b=$?
+  "$H/routines.sh" safety lib/own.sh >/dev/null; c=$?; [ "$a$b$c" = 131 ] ) && ok "last match wins: plain catch-all, @tested exception, plain exception" || bad "last-match precedence"
 printf '/lib/*.sh @tested\n/lib/*.json @tested\n/lib/hooks.json  which hooks run\n' >.github/routines/safety-paths.txt
 "$H/routines.sh" safety lib/g.sh src/a >/dev/null; [ $? = 3 ] && ok "only @tested hits exit 3" || bad "@tested hit not 3"
 "$H/routines.sh" safety lib/hooks.json >/dev/null; [ $? = 1 ] && ok "a plain glob after @tested still wins" || bad "@tested shadowed a plain glob"
@@ -133,11 +137,14 @@ ad() { git switch -qC t "$ab" && eval "$1" && git add -A && git -c user.email=t@
 rb() { git switch -qC t "$ab" && eval "$1" && git add -A && git -c user.email=t@t -c user.name=t commit -qm t && "$H/routines.sh" redbase --ref "$ab" >/dev/null 2>&1; echo $?; }
 [ "$(rb 'echo d >>lib/g.sh; printf "exit 0\n" >lib/h.test.sh')" = 1 ] && ok "redbase: a new test that passes on the base proves nothing" || bad "redbase took a no-op test"
 [ "$(rb 'echo d >>lib/g.sh; printf "grep -qx d \"\$(dirname \"\$0\")/g.sh\"\n" >lib/h.test.sh')" = 0 ] && ok "redbase: a test red on the base and green on head passes" || bad "redbase refused a real test"
+[ "$(rb 'echo d >>lib/g.sh; printf "d\n" >lib/want.txt; printf "cmp -s \"\$(dirname \"\$0\")/want.txt\" <(tail -n 1 \"\$(dirname \"\$0\")/g.sh\")\n" >lib/h.test.sh')" = 0 ] && ok "redbase: a new fixture stays in place; only the code goes back" || bad "redbase lost the test's fixture"
+[ "$(rb 'echo d >>lib/g.sh; printf "d\n" >lib/only.txt; printf "[ -f \"\$(dirname \"\$0\")/only.txt\" ]\n" >lib/h.test.sh')" = 1 ] && ok "redbase: a test red on base only for a missing fixture proves nothing" || bad "redbase took a fixture-only test"
+[ "$(rb 'echo d >>lib/g.sh; printf "cat >/dev/null; exit 1\n" >lib/a.test.sh; printf "exit 0\n" >lib/b.test.sh')" = 1 ] && ok "redbase: a test that reads stdin can't hide the next one" || bad "redbase: stdin swallowed a test"
 [ "$(rb 'mkdir -p docs; printf "exit 0\n" >docs/cov.test.sh')" = 0 ] && ok "redbase: a coverage test away from @tested code isn't held to it" || bad "redbase reddens a plain coverage PR"
 [ -z "$(git worktree list --porcelain | grep -c '^worktree' | grep -vx 1)" ] && ok "redbase leaves no worktree behind" || bad "redbase left a worktree"
 git switch -qC pr "$base"
 tt="$H/../templates/triage.md"
-grep -q 'routines.sh safety <files>` exits 1 or 2 |$' "$tt" && grep -q '\*\*risk:high is never built.\*\* Add `needs-human`, and put a draft INTENT' "$tt" &&
+grep -q 'routines.sh safety <files>` exits anything but 0 or 3 |$' "$tt" && grep -q '\*\*risk:high is never built.\*\* Add `needs-human`, and put a draft INTENT' "$tt" &&
   ok "triage: a safety path is risk:high, which gets a draft INTENT and needs-human" || bad "triage contract"
 grep -q 'When `.github/routines/triage.md` exists' "$H/../templates/self-heal.md" && grep -q '`risk:high` is never built' "$H/../templates/self-heal.md" &&
   grep -q 'triage miss: predicted' "$H/../templates/self-heal.md" && ok "self-heal: triage picks, never high, re-scores the diff" || bad "self-heal ignores triage"
@@ -152,13 +159,13 @@ grep -q 'exits 3 and `make-routines/scripts/routines.sh additive --ref origin/<d
 grep -q 'routines.sh redbase --ref origin/<default>` fails' "$sh" && ok "self-heal: its new test must be red on the base" || bad "self-heal skips redbase"
 grep -q 'Never add a `triage:`, `size:` or `risk:` label' "$sh" && grep -q 'triage alone sets' "$H/../templates/self-create.md" && ok "only triage sets the approving labels" || bad "other routines may set risk labels"
 grep -q 'no pipe, redirect, `&&` or `;` around a push or PR command' "$sh" && grep -q 'pass `--body-file`' "$sh" && ok "self-heal: commands in the shape the hook passes" || bad "self-heal: no command-shape rule"
-grep -q 'exits 1 or 2 |$' "$tt" && grep -q 'A `safety` exit of 3 means every hit is an `@tested` path' "$tt" && ok "triage: @tested alone is not high" || bad "triage scores @tested high"
+grep -q 'exits anything but 0 or 3 |$' "$tt" && grep -q 'A `safety` exit of 3 means every hit is an `@tested` path' "$tt" && ok "triage: @tested alone is not high" || bad "triage scores @tested high"
 if [ -f "$am" ]; then
   grep -qF 'routines.sh additive --ref origin/<base> FETCH_HEAD' "$am" && grep -q 'Exit 3: every hit is an `@tested` path' "$am" && ok "auto-merge: @tested needs additive" || bad "auto-merge: no additive gate"
   grep -q '`red-on-base` passed' "$am" && ok "auto-merge: @tested needs the red-on-base check" || bad "auto-merge ignores red-on-base"
   ! grep -q 'A non-zero exit, an error included' "$am" && ok "auto-merge: no step still blocks every exit 3" || bad "auto-merge 2.1 blocks @tested PRs"
-  grep -q "self-create's \`self-create\` and \`reproducible\`" "$am" && grep -q 'first line `triage: bug · ready · size S · risk low`' "$am" &&
-    ok "auto-merge: a triage-approved bot issue can pass 1b, with triage's comment as proof" || bad "auto-merge 1b bot path"
+  grep -q "A bot's label is never an approval here" "$am" && ! grep -q "it is self-create's:" "$am" &&
+    ok "auto-merge: a bot-approved issue merges only with a human label" || bad "auto-merge 1b trusts a bot's approval"
 fi
 
 # -- ideate: one cited proposal, issues only; self-heal skips a proposal without a human accept
