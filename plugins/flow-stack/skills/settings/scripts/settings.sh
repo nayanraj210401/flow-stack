@@ -81,8 +81,9 @@ write() {
   mkdir -p "$(dirname "$f")"
   [ -s "$f" ] || echo '{}' >"$f"
   jq -e . "$f" >/dev/null 2>&1 || die "$f is not valid JSON; fix it by hand first"
+  local l; while l="$(readlink "$f")"; do case "$l" in /*) f="$l" ;; *) f="$(dirname "$f")/$l" ;; esac; done  # write the link's target
   tmp="$(mktemp "$f.XXXXXX")"
-  jq "$@" "$f" >"$tmp" && cat "$tmp" >"$f" && rm -f "$tmp" || { rm -f "$tmp"; die "could not write $f"; }  # cat: a symlinked file stays a symlink
+  jq "$@" "$f" >"$tmp" && mv "$tmp" "$f" || { rm -f "$tmp"; die "could not write $f"; }
 }
 target() { # target [--repo]
   if [ "${1:-}" = --repo ]; then [ -n "$repo" ] || die "--repo needs a git repo"; echo "$repo"; else echo "$global"; fi

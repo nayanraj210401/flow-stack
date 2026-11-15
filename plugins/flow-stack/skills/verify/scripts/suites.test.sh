@@ -82,9 +82,10 @@ jq --arg m "$SB/ran" '.tests.suites += [{id: "docs", paths: ["docs/**/*.md"], ru
 git commit -qam docs-suite; c2="$(git rev-parse HEAD)"
 echo x >docs/new.md
 go; [ "$(ran)" = "docs " ] || bad "a suite claiming *.md beats the built-in ignore (ran: $(ran); $out)"
-rm docs/new.md; rm -f "$FLOW_STACK_HOME/settings.json"
+rm docs/new.md
 jq '.tests.ignore += ["x/**"]' .flow/config.json >c && mv c .flow/config.json
-go; [ "$(ran)" = "full " ] || bad ".flow/config.json change → full suite (ran: $(ran); $out)"
+go; [ "$(ran)" = "full " ] || bad ".flow/config.json change → full suite, even with unmatched skip (ran: $(ran); $out)"
+rm -f "$FLOW_STACK_HOME/settings.json"
 jq '.tests.unmatched = "ful"' .flow/config.json >c && mv c .flow/config.json
 grep -q "tests.unmatched 'ful'" <<<"$("$S" check 2>&1)" || bad "check flags tests.unmatched 'ful'"
 echo x >>src/shared/util.sh

@@ -19,7 +19,7 @@
 # scope and unmatched may also be set for every repo in ~/.flow-stack/settings.json "tests"; the repo wins.
 # The full suite is commands.test, or every suite when there is none. Changed files: uncommitted and
 # untracked vs HEAD, or with --base everything since REF (a ref git can't diff → full suite). Explicit
-# paths replace both. A suite's paths win over the ignores, and .flow/config.json is never ignored.
+# paths replace both. A suite's paths win over the ignores; a .flow/config.json change runs the full suite.
 set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/../../../hooks/lib.sh"
@@ -45,7 +45,7 @@ suite_run() { jq -r --argjson i "$1" '.tests.suites[$i].run // ""' "$cfg" 2>/dev
 full_cmd() { jq -r '.commands.test // empty' "$cfg" 2>/dev/null; }
 ignored() { # checked after the suites' claims, so a suite can claim *.md
   local p="$1" g
-  case "$p" in .flow/config.json) return 1 ;; .flow/*|*.md|LICENSE*|.gitignore|.gitattributes|.editorconfig) return 0 ;; esac
+  case "$p" in .flow/*|*.md|LICENSE*|.gitignore|.gitattributes|.editorconfig) return 0 ;; esac
   while IFS= read -r g; do
     [ -n "$g" ] && glob_match "$p" "$g" && return 0
   done < <(jq -r '.tests.ignore // [] | .[]' "$cfg" 2>/dev/null)
@@ -87,6 +87,7 @@ pick_raw() {
   files="$(changed)" || { echo "suites: can't diff against '$base' → full suite" >&2; full; return; }
   while IFS= read -r f; do
     [ -n "$f" ] || continue
+    [ "$f" = .flow/config.json ] && { echo "suites: .flow/config.json changed → full suite" >&2; full; return; }
     hit=""
     while IFS=$'\t' read -r i id globs; do
       [ -n "$id" ] && [ -n "$globs" ] || continue
