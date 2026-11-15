@@ -39,3 +39,7 @@
 /plugins/flow-stack/hooks/lib.sh            glob-match, profile-quotes and redact tests source it in-process
 /plugins/flow-stack/hooks/notify*.sh        notify-escape.test.sh needs osascript, so on CI it only skips
 */herdr/*                                   CI skips /herdr/, so a test there proves nothing
+*/.flow/*                                   repeated from the top: no @tested exception may reach into these
+*/.claude/*
+*/.claude-plugin/*
+*/settings*

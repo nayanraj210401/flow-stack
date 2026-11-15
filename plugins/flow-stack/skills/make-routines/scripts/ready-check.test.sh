@@ -195,6 +195,9 @@ if [ -f "$am" ] && [ -f "$sp" ]; then
   for p in plugins/flow-stack/hooks/hooks.json plugins/flow-stack/skills/feature-map/scripts/features.sh README.md plugins/flow-stack/skills/make-routines/templates/triage.md plugins/flow-stack/skills/flow/SKILL.md plugins/flow-stack/skills/review/scripts/ready.sh; do
     "$H/routines.sh" safety "$p" >/dev/null; [ $? = 1 ] && ok "this repo flags $p" || bad "this repo missed $p"
   done
+  for p in plugins/flow-stack/hooks/.claude/x.sh plugins/flow-stack/hooks/.flow/x.sh plugins/flow-stack/hooks/settings.sh plugins/flow-stack/hooks/lib.sh; do
+    "$H/routines.sh" safety "$p" >/dev/null; [ $? = 1 ] && ok "this repo: no @tested exception reaches $p" || bad "$p scored @tested"
+  done
   "$H/routines.sh" safety plugins/flow-stack/hooks/herdr/y.sh >/dev/null; [ $? = 1 ] && ok "this repo: a path CI skips (/herdr/) is never @tested" || bad "hooks/herdr is @tested"
   for p in plugins/flow-stack/hooks/guard.sh plugins/flow-stack/skills/flow/scripts/task.sh; do
     "$H/routines.sh" safety "$p" >/dev/null; [ $? = 3 ] && ok "this repo scores $p as @tested" || bad "$p is not @tested"
