@@ -60,10 +60,11 @@ flow_init() {
   fi
 }
 
-# flow_enabled <hook-name>: repo .flow/config.json wins, then ~/.flow-stack/config.json, default on.
+# flow_enabled <hook-name>: repo .flow/config.json wins, then ~/.flow-stack/settings.json (the global
+# settings), then ~/.flow-stack/config.json (older global toggles), default on. settings.sh edits them.
 flow_enabled() {
   local v cfg
-  for cfg in "$FLOW_DIR/config.json" "$FLOW_HOME/config.json"; do
+  for cfg in "$FLOW_DIR/config.json" "$FLOW_HOME/settings.json" "$FLOW_HOME/config.json"; do
     [ -f "$cfg" ] || continue
     v="$(jq -r --arg h "$1" 'if (.hooks // {} | has($h)) then .hooks[$h] | tostring else empty end' "$cfg" 2>/dev/null)"
     [ -n "$v" ] && { [ "$v" != false ]; return; }

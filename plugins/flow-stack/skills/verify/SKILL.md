@@ -12,7 +12,17 @@ Principle: `principle-evidence-over-claims`. "It compiles", "the tests I wrote p
 0. A `verify-driver` line in the profile's `# Toolchain` (for example gstack `/qa` for UI): use that tool to drive the app, then record its result through `scripts/evidence.sh` so it counts as evidence.
 1. A repo driver at `.claude/skills/verify-<repo>/` (made by `make-verifier`) or `.claude/skills/verify/` (for example from pstack's create-verification-skill): use it for any user-visible behavior. It knows how to launch the app and exercise features.
 2. A user driver in `~/.claude/skills/`: use it when present.
-3. Neither: fall back to the repo's test, lint, and typecheck commands (`.flow/config.json` → `commands`). For UI or API changes, say in one line that no driver exists and suggest `/flow-stack:make-verifier`.
+3. Neither: fall back to the repo's tests (`scripts/suites.sh run`, below), lint, and typecheck commands (`.flow/config.json` → `commands`). For UI or API changes, say in one line that no driver exists and suggest `/flow-stack:make-verifier`.
+
+## Run the tests a change touches, not the whole suite
+
+```bash
+scripts/suites.sh run               # the sub-suites the uncommitted change touches (labels test:<id>)
+scripts/suites.sh run --base main   # everything since main; --all for the full suite
+scripts/suites.sh pick              # what would run, and why, without running it
+```
+
+Sub-suites are declared in `.flow/config.json` `tests.suites` (`{"id", "paths": [globs], "run"}`). A changed file no suite claims runs the full suite (`commands.test`) unless `tests.unmatched` is `skip`; `tests.scope: full` (repo, or `~/.flow-stack/settings.json`) always runs it. With no suites declared, `run` is the full suite. Each run goes through `evidence.sh`, so it counts as evidence. `ready.sh` runs the impacted suites when any are declared. When a repo's full suite is slow and has none, offer to declare them (`scripts/suites.sh check` lints them).
 
 ## Record every check
 

@@ -50,7 +50,7 @@ bash .claude/skills/verify-flow-stack/scripts/<feature-id>.sh   # one feature, v
 | `seal.sh` · `slice.fence.sh` · `slice.gate.sh` | sealed checks need the human; edits stay in the fence; `done` needs proofs |
 | `task.lifecycle.sh` · `evidence.record.sh` · `probe.teeth.sh` · `blind.checks.sh` | task folders, evidence rows and sigs, TEETH/TOOTHLESS, held-out checks |
 | `session.context.sh` · `trail.circuit.sh` · `claims.stop.sh` | primer, anchor, handoff; redacted trail and circuit breaker; claims check and ntfy |
-| `feature.map.sh` · `profile.sh` · `setup.toolchain.sh` · `budget.statusline.sh` · `plugin.install.sh` | the remaining CLIs and the install surface |
+| `settings.sh` · `feature.map.sh` · `profile.sh` · `setup.toolchain.sh` · `budget.statusline.sh` · `plugin.install.sh` | hook toggles in settings.json and impacted test suites; the remaining CLIs and the install surface |
 
 To add a scenario: copy the closest script, `. lib.sh; sandbox <id>`, then assert with `expect <hook> <json> <allow|deny|ask|block> <label>`, `check`, `fails`, `sees`, or `ok`/`bad`. End with `finish`. Set `scenario:` in the feature file.
 

@@ -8,7 +8,8 @@ The single source of truth for file locations and formats. Skills and hooks both
 |---|---|---|
 | `~/.flow-stack/profile.md` | you, all repos; its `# Board` section styles the board for every lead | no (personal) |
 | `~/.flow-stack/hooks.log` | hook warnings | no |
-| `<repo>/.flow/config.json` | repo settings, hook toggles | yes |
+| `~/.flow-stack/settings.json` | your settings, every repo: `hooks` toggles (`{"claims": false}`) and `tests` (`scope`, `unmatched`). The repo's `.flow/config.json` wins; the older `~/.flow-stack/config.json` toggles are read after it. Edit with `settings/scripts/settings.sh` | no (personal) |
+| `<repo>/.flow/config.json` | repo settings, hook toggles, test sub-suites (`"tests": {"suites": [{"id", "paths": [globs], "run"}], "ignore": [globs]}`, run by `verify/scripts/suites.sh`) | yes |
 | `<repo>/.flow/taste.md` | repo/team taste, overrides personal taste | yes |
 | `<repo>/.flow/gates.md` | repo irreversible actions (from `make-gates`) | yes |
 | `<repo>/.flow/lessons.md` | mistakes worth not repeating | yes |
