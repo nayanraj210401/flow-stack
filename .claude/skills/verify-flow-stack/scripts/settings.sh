@@ -38,7 +38,7 @@ echo "-- impacted test suites"
 mkdir -p src/auth src/billing; echo a >src/auth/a.sh; echo b >src/billing/b.sh
 jq -n --arg m "$SB/ran" '{commands:{test:("echo full >>"+$m)}, tests:{suites:[
   {id:"auth", paths:["src/auth/**"], run:("echo auth >>"+$m)},
-  {id:"billing", paths:["src/billing/**"], run:("echo billing >>"+$m)}]}}' >.flow/config.json
+  {id:"billing", paths:["src/billing/**"], run:("echo billing >>"+$m+"; exit 1")}]}}' >.flow/config.json
 git add -A && git commit -qm suites
 ran() { sort -u "$SB/ran" 2>/dev/null | tr '\n' ' '; }
 echo x >>src/auth/a.sh; rm -f "$SB/ran"
@@ -55,8 +55,6 @@ rm -f "$FLOW_STACK_HOME/settings.json"; git checkout -q -- .
 echo "-- ready.sh runs the impacted suites"
 b0="$(git rev-parse HEAD)"; git checkout -qb feat
 echo x >>src/billing/b.sh; git commit -qam billing
-jq --arg m "$SB/ran" '.tests.suites[1].run = "echo billing >>"+$m+"; exit 1"' .flow/config.json >c && mv c .flow/config.json
-git commit -qam "billing suite fails"
 rm -f "$SB/ran"
 sees "a failing impacted suite blocks the stamp" "impacted test suites fail" "$S/review/scripts/ready.sh" --base "$b0"
 [ "$(ran)" = "billing " ] && ok "ready.sh ran only billing (vs the base)" || bad "ready ran: $(ran)"
