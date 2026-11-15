@@ -205,6 +205,7 @@ FLOW_AUTO_QUEUE="Add it to .flow/tasks/<slug>/GATES.md (question, options, recom
 
 pre_decide() {
   # pre_decide <allow|deny|ask> <reason>. In auto mode nobody can answer an ask, so it is queued instead.
+  [ -z "${FLOW_HOOK_OFF:-}" ] || set -- "$1" "$2 Also: $FLOW_HOOK_OFF"
   if [ "$1" = ask ] && flow_auto; then
     set -- deny "flow auto: the human is away, so this waits. $2 $FLOW_AUTO_QUEUE"
   fi

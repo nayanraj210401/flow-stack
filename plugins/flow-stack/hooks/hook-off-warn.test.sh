@@ -31,6 +31,13 @@ warns "redirect into settings.json" "$(run guard.sh Bash "$(sh_in "echo '{\"hook
 warns "jq rewrite of config.json via mv" "$(run guard.sh Bash "$(sh_in "jq . x > t && mv t ~/.flow-stack/config.json")")"
 warns "Write settings.json" "$(run edit-guard.sh Write "$(jq -nc --arg f "$FLOW_STACK_HOME/settings.json" '{file_path:$f,content:"{}"}')")"
 
+mkdir -p .flow
+warns "settings.sh hook guard default" "$(run guard.sh Bash "$(sh_in "$S hook guard default --repo")")"
+warns "redirect into repo .flow/config.json" "$(run guard.sh Bash "$(sh_in "echo '{\"hooks\":{\"guard\":false}}' > .flow/config.json")")"
+warns "jq + mv of repo .flow/config.json" "$(run guard.sh Bash "$(sh_in "jq '.hooks.guard = false' .flow/config.json > t && mv t .flow/config.json")")"
+warns "Edit repo .flow/config.json to false" "$(run edit-guard.sh Edit "$(jq -nc --arg f "$PWD/.flow/config.json" '{file_path:$f,old_string:"true",new_string:"\"guard\": false"}')")"
+silent "Edit repo .flow/config.json commands" "$(run edit-guard.sh Edit "$(jq -nc --arg f "$PWD/.flow/config.json" '{file_path:$f,old_string:"a",new_string:"\"test\": \"npm test\""}')")"
+silent "jq rewrite of repo commands" "$(run guard.sh Bash "$(sh_in "jq '.commands.test = \"x\"' .flow/config.json > t && mv t .flow/config.json")")"
 silent "settings.sh hook guard on" "$(run guard.sh Bash "$(sh_in "$S hook guard on")")"
 silent "settings.sh show" "$(run guard.sh Bash "$(sh_in "$S show")")"
 silent "reading settings.json" "$(run guard.sh Bash "$(sh_in "cat $FLOW_STACK_HOME/settings.json")")"
@@ -38,6 +45,10 @@ silent "reading settings.json" "$(run guard.sh Bash "$(sh_in "cat $FLOW_STACK_HO
 # a later check still fires: the warning doesn't end guard early
 out="$(run guard.sh Bash "$(sh_in "$S hook guard off && git push --force origin main")")"
 [ -n "$(jq -r '.hookSpecificOutput.permissionDecision // empty' <<<"$out")" ] || bad "hook off && force push → still decided by guard: $out"
+
+# an earlier check that decides still names the hook going off
+out="$(run guard.sh Bash "$(sh_in "$S hook seal off && git reset --hard")")"
+grep -q 'turns off the seal hook' <<<"$(jq -r '.hookSpecificOutput.permissionDecisionReason // empty' <<<"$out")" || bad "hook off && reset --hard → the decision names the hook: $out"
 
 # --auto: still a warning, not a queued deny
 echo on >"$FLOW_STACK_HOME/auto/s"

@@ -16,6 +16,27 @@ cmd="$(flow_field .tool_input.command)"
 
 has() { grep -Eiq -- "$1" <<<"$cmd"; }
 
+# Write targets (2b and 2c): the path must follow a write verb (a whole word, or a redirect) in the same
+# segment, so reading these files stays allowed. Interpreter one-liners (python -c, node -e) are a known gap.
+cfg="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"; c2="${cmd//"$FLOW_HOME"/FLOW_HOME}"; c2="${c2//"$cfg"/CLAUDE_CONFIG_DIR}"
+wr='(>|(^|[[:space:];&|(])(tee|cp|mv|ln|install|dd|truncate|rm|sponge|sed[[:space:]]+-[A-Za-z]*i|perl[[:space:]]+-[A-Za-z]*i)([[:space:]]|$))[^;&|]*'
+home='(\.flow-stack|FLOW_STACK_HOME\}?|FLOW_HOME\}?)'; conf='(\.claude|CLAUDE_CONFIG_DIR\}?)'
+end='([/"'\''[:space:]]|$)'; sett='settings[^/[:space:]"'\'']*\.json'
+cdin() { grep -Eq -- "(^|[;&|(][[:space:]]*)cd[[:space:]]+[^;&|]*$1" <<<"$c2"; }
+
+# 2c. Turning a hook off is allowed, but never silent. Found up front so a check that decides first names
+# it too (pre_decide appends FLOW_HOOK_OFF); otherwise warned at the end. A repo .flow/config.json write
+# warns only when it writes a false: commands and suites edits there are routine.
+FLOW_HOOK_OFF=""
+if [[ "$cmd" =~ settings\.sh[[:space:]]+hook[[:space:]]+([a-z-]+)[[:space:]]+(off|default) ]]; then
+  FLOW_HOOK_OFF="flow guard: this turns off the ${BASH_REMATCH[1]} hook"
+  [ "${BASH_REMATCH[2]}" = off ] || FLOW_HOOK_OFF="$FLOW_HOOK_OFF if a lower layer sets it false"
+  FLOW_HOOK_OFF="$FLOW_HOOK_OFF. Allowed (your call); say what that check stops catching."
+elif grep -Eq -- "$wr$home/(settings|config)\.json$end" <<<"$c2" || { cdin "$home" && grep -Eq -- "$wr[\"']?(\./)?(settings|config)\.json$end" <<<"$c2"; } \
+  || { has false && grep -Eq -- "$wr\.flow/config\.json$end" <<<"$c2"; }; then
+  FLOW_HOOK_OFF="$FLOW_HOOK_OFF_WARN"
+fi
+
 # Literal text can't run, so the hard stops below skip it: the bodies of heredocs fed to cat, tee,
 # git or gh that have a terminator line (an unquoted one only without $( or backticks), and quoted
 # -m/--message/--title/--body values and the words of an echo/printf command that have neither and
@@ -138,24 +159,11 @@ fi
 # could fake a GitHub runner for --gha), would let the model grant itself a mode. The path must follow a
 # write verb (a whole word, or a redirect) in the same segment, so reading these files stays allowed.
 # Interpreter one-liners (python -c, node -e) are a known gap; --gha still re-checks the runner itself.
-cfg="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"; c2="${cmd//"$FLOW_HOME"/FLOW_HOME}"; c2="${c2//"$cfg"/CLAUDE_CONFIG_DIR}"
-wr='(>|(^|[[:space:];&|(])(tee|cp|mv|ln|install|dd|truncate|rm|sponge|sed[[:space:]]+-[A-Za-z]*i|perl[[:space:]]+-[A-Za-z]*i)([[:space:]]|$))[^;&|]*'
-home='(\.flow-stack|FLOW_STACK_HOME\}?|FLOW_HOME\}?)'; conf='(\.claude|CLAUDE_CONFIG_DIR\}?)'
-end='([/"'\''[:space:]]|$)'; sett='settings[^/[:space:]"'\'']*\.json'
-cdin() { grep -Eq -- "(^|[;&|(][[:space:]]*)cd[[:space:]]+[^;&|]*$1" <<<"$c2"; }
 if grep -Eq -- "$wr$home/auto$end" <<<"$c2" || { cdin "$home" && grep -Eq -- "$wr[\"']?(\./)?auto$end" <<<"$c2"; }; then
   pre_decide deny "flow guard: \$FLOW_STACK_HOME/auto/ holds the session's mode (--auto, ship, --gha). Only the human's prompt sets it."
 fi
 if grep -Eq -- "$wr$conf/$sett" <<<"$c2" || { cdin "$conf" && grep -Eq -- "$wr[\"']?(\./)?$sett" <<<"$c2"; }; then
   pre_decide ask "flow guard: writing Claude Code settings can change permissions, hooks, or env (an env block can fake a GitHub runner for --gha), so the human approves."
-fi
-
-# 2c. Turning a hook off is allowed, but never silent: warned at the end, after every other check.
-hook_off=""
-if [[ "$cmd" =~ settings\.sh[[:space:]]+hook[[:space:]]+([a-z-]+)[[:space:]]+off ]]; then
-  hook_off="flow guard: this turns off the ${BASH_REMATCH[1]} hook. Allowed (your call); say what that check stops catching."
-elif grep -Eq -- "$wr$home/(settings|config)\.json$end" <<<"$c2" || { cdin "$home" && grep -Eq -- "$wr[\"']?(\./)?(settings|config)\.json$end" <<<"$c2"; }; then
-  hook_off="$FLOW_HOOK_OFF_WARN"
 fi
 
 # 3. Writes to sealed checks via the shell.
@@ -601,5 +609,5 @@ if flow_enabled pkgcheck && command -v curl >/dev/null 2>&1; then
   done <<<"$pkgs"
 fi
 
-[ -z "$hook_off" ] || pre_warn "$hook_off"
+[ -z "$FLOW_HOOK_OFF" ] || pre_warn "$FLOW_HOOK_OFF"
 exit 0

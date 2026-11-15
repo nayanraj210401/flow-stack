@@ -13,6 +13,9 @@ case "$(flow_norm "$file")" in
   "$(flow_norm "$FLOW_HOME")"/settings.json|"$(flow_norm "$FLOW_HOME")"/config.json) pre_warn "$FLOW_HOOK_OFF_WARN" ;;
   */.claude/settings*.json|.claude/settings*.json|"${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/settings*.json) pre_decide ask "flow guard: writing Claude Code settings can change permissions, hooks, or env (an env block can fake a GitHub runner for --gha), so the human approves." ;;
 esac
+case "$(flow_norm "$file")" in */.flow/config.json|.flow/config.json)
+  grep -q false <<<"$(flow_field '.tool_input | del(.file_path) | tostring')" && pre_warn "$FLOW_HOOK_OFF_WARN" ;;
+esac
 [ -n "$FLOW_TASK_DIR" ] || exit 0
 rel="$(flow_rel "$file")"
 # The repo the file belongs to. In a multi-repo task a file in another task repo (or the
