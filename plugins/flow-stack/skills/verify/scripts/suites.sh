@@ -19,7 +19,8 @@
 # scope and unmatched may also be set for every repo in ~/.flow-stack/settings.json "tests"; the repo wins.
 # The full suite is commands.test, or every suite when there is none. Changed files: uncommitted and
 # untracked vs HEAD, or with --base everything since REF (a ref git can't diff → full suite). Explicit
-# paths replace both. A suite's paths win over the ignores; a .flow/config.json change runs the full suite.
+# paths replace both. A suite's paths win over the ignores; a change to a tracked .flow/config.json runs
+# the full suite.
 set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/../../../hooks/lib.sh"
@@ -87,7 +88,9 @@ pick_raw() {
   files="$(changed)" || { echo "suites: can't diff against '$base' → full suite" >&2; full; return; }
   while IFS= read -r f; do
     [ -n "$f" ] || continue
-    [ "$f" = .flow/config.json ] && { echo "suites: .flow/config.json changed → full suite" >&2; full; return; }
+    if [ "$f" = .flow/config.json ] && git ls-files --error-unmatch -- "$f" >/dev/null 2>&1; then
+      echo "suites: .flow/config.json changed → full suite" >&2; full; return
+    fi
     hit=""
     while IFS=$'\t' read -r i id globs; do
       [ -n "$id" ] && [ -n "$globs" ] || continue
@@ -124,7 +127,7 @@ case "${1:-}" in
     fails=0
     while IFS=$'\t' read -r id i; do
       c="$(cmd_of "$i")"
-      [ -n "$c" ] || { echo "suites: $id has no command; skipped" >&2; continue; }
+      [ -n "$c" ] || { echo "suites: $id has no run command" >&2; fails=$((fails + 1)); continue; }
       label="test:$id"; [ "$i" = - ] && label=test
       "$evidence" "$label" "$c" </dev/null || fails=$((fails + 1))
     done <<<"$rows"
@@ -148,6 +151,6 @@ case "${1:-}" in
     done
     [ "$bad" = 0 ] && echo "suites: $(jq -r '.tests.suites // [] | length' "$cfg" 2>/dev/null || echo 0) ok"
     exit "$bad" ;;
-  -h|--help|help|"") sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; [ -n "${1:-}" ] || exit 2 ;;
+  -h|--help|help|"") sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; [ -n "${1:-}" ] || exit 2 ;;
   *) die "unknown command '$1' (list | pick | run | check)" ;;
 esac

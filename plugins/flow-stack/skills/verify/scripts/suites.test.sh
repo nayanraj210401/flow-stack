@@ -86,10 +86,19 @@ rm docs/new.md
 jq '.tests.ignore += ["x/**"]' .flow/config.json >c && mv c .flow/config.json
 go; [ "$(ran)" = "full " ] || bad ".flow/config.json change → full suite, even with unmatched skip (ran: $(ran); $out)"
 rm -f "$FLOW_STACK_HOME/settings.json"
-jq '.tests.unmatched = "ful"' .flow/config.json >c && mv c .flow/config.json
+jq '.tests.unmatched = "ful"' .flow/config.json >c && mv c .flow/config.json && git commit -qm ful .flow/config.json
 grep -q "tests.unmatched 'ful'" <<<"$("$S" check 2>&1)" || bad "check flags tests.unmatched 'ful'"
 echo x >>src/shared/util.sh
 go; [ "$(ran)" = "full " ] || bad "an unknown tests.unmatched acts as full (ran: $(ran))"
+git reset -q --hard "$c0"; git clean -qfd
+# a suite picked with no run command fails the run instead of passing on nothing
+jq '.tests.suites[0] |= del(.run)' .flow/config.json >c && mv c .flow/config.json && git commit -qm norun .flow/config.json
+go src/auth/login.sh; [ "$rc" != 0 ] || bad "picked suite with no run → non-zero (rc=$rc; $out)"
+git reset -q --hard "$c0"
+# an untracked .flow/config.json isn't a change, so it doesn't force the full suite
+git rm -q --cached .flow/config.json && git commit -qm untrack
+echo x >>src/auth/login.sh
+go; [ "$(ran)" = "auth " ] || bad "untracked .flow/config.json → still only auth (ran: $(ran); $out)"
 git reset -q --hard "$c0"; git clean -qfd
 
 # a failing suite fails the run and records FAIL

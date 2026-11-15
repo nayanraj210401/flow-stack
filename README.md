@@ -394,7 +394,7 @@ Hooks fail open: if `jq` is missing or a script errors, the action is allowed an
 }
 ```
 
-`skills/verify/scripts/suites.sh run` runs only the suites whose `paths` the change touches, each through `evidence.sh`. A changed file no suite claims runs the full suite (`commands.test`), unless `unmatched` is `skip`. `scope: full` always runs the full suite. `ready.sh` runs the impacted suites whenever a repo declares any.
+`skills/verify/scripts/suites.sh run` runs only the suites whose `paths` the change touches, each through `evidence.sh`. A changed file no suite claims runs the full suite (`commands.test`), unless `unmatched` is `skip`. `ignore` lists unclaimed files that need no test (`*.md`, `LICENSE` and `.flow/` are built in); a suite's `paths` win over it. `scope: full` always runs the full suite. `ready.sh` runs the impacted suites whenever a repo declares any.
 
 ## Mods (UI inside Claude Code)
 
