@@ -12,12 +12,14 @@
 #   "tests": {
 #     "suites": [{"id": "auth", "paths": ["src/auth/**", "test/auth/**"], "run": "npm test -- test/auth"}],
 #     "ignore": ["docs/**"],        changed files that need no test (beyond *.md, LICENSE, .gitignore, .flow/)
-#     "scope": "impacted",          impacted (default) | full: always run the full suite
+#     "scope": "impacted",          impacted (default) | full: always run the full suite (any other value: full)
 #     "unmatched": "full"           a changed file no suite claims: full (default) runs the full suite, skip ignores it
+#                                   (any other value: full)
 #   }
 # scope and unmatched may also be set for every repo in ~/.flow-stack/settings.json "tests"; the repo wins.
 # The full suite is commands.test, or every suite when there is none. Changed files: uncommitted and
-# untracked vs HEAD, or with --base everything since REF. Explicit paths replace both.
+# untracked vs HEAD, or with --base everything since REF (a ref git can't diff → full suite). Explicit
+# paths replace both. A suite's paths win over the ignores, and .flow/config.json is never ignored.
 set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/../../../hooks/lib.sh"
@@ -41,18 +43,13 @@ setting() { # setting <key> <default>: repo config, then settings.json, then the
 suites() { jq -r '.tests.suites // [] | to_entries[] | [.key, (.value.id // ""), (.value.paths // [] | join(" "))] | @tsv' "$cfg" 2>/dev/null; }
 suite_run() { jq -r --argjson i "$1" '.tests.suites[$i].run // ""' "$cfg" 2>/dev/null; }  # by index: @tsv mangles backslashes
 full_cmd() { jq -r '.commands.test // empty' "$cfg" 2>/dev/null; }
-ignored() {
+ignored() { # checked after the suites' claims, so a suite can claim *.md
   local p="$1" g
-  case "$p" in .flow/*|*.md|LICENSE*|.gitignore|.gitattributes|.editorconfig) return 0 ;; esac
+  case "$p" in .flow/config.json) return 1 ;; .flow/*|*.md|LICENSE*|.gitignore|.gitattributes|.editorconfig) return 0 ;; esac
   while IFS= read -r g; do
     [ -n "$g" ] && glob_match "$p" "$g" && return 0
   done < <(jq -r '.tests.ignore // [] | .[]' "$cfg" 2>/dev/null)
   return 1
-}
-claims() { # claims <path> <space-separated globs>
-  local g; set -f
-  for g in $2; do glob_match "$1" "$g" && { set +f; return 0; }; done
-  set +f; return 1
 }
 
 base=""; all=0; paths=()
@@ -67,9 +64,11 @@ parse() {
     shift
   done
 }
-changed() {
+git_() { git -c core.quotePath=false "$@"; }  # unquoted non-ASCII paths, so globs match them
+changed() { # fails when the diff can't be computed (a bad --base)
   if [ "${#paths[@]}" -gt 0 ]; then printf '%s\n' "${paths[@]}"; return; fi
-  { git diff --name-only "${base:-HEAD}" -- 2>/dev/null; git ls-files --others --exclude-standard; } | sort -u
+  local d; d="$(git_ diff --name-only --no-renames "${base:-HEAD}" -- 2>/dev/null)" || return 1
+  { [ -z "$d" ] || printf '%s\n' "$d"; git_ ls-files --others --exclude-standard; } | sort -u
 }
 full() { # the full suite as id<TAB>index-or-command lines
   local c; c="$(full_cmd)"
@@ -81,24 +80,24 @@ full() { # the full suite as id<TAB>index-or-command lines
 pick_raw() {
   local n; n="$(jq -r '.tests.suites // [] | length' "$cfg" 2>/dev/null || echo 0)"
   if [ "$all" = 1 ]; then echo "suites: --all → full suite" >&2; full; return; fi
-  if [ "$(setting scope impacted)" = full ]; then echo "suites: tests.scope full → full suite" >&2; full; return; fi
+  if [ "$(setting scope impacted)" != impacted ]; then echo "suites: tests.scope full → full suite" >&2; full; return; fi
   if [ "${n:-0}" -eq 0 ]; then echo "suites: no tests.suites in .flow/config.json → full suite" >&2; full; return; fi
-  local f hit i id globs unmatched="" picked=""
+  local files f hit i id globs unmatched="" picked=""
+  files="$(changed)" || { echo "suites: can't diff against '$base' → full suite" >&2; full; return; }
   while IFS= read -r f; do
     [ -n "$f" ] || continue
-    ignored "$f" && continue
     hit=""
     while IFS=$'\t' read -r i id globs; do
-      [ -n "$id" ] || continue
-      if claims "$f" "$globs"; then
+      [ -n "$id" ] && [ -n "$globs" ] || continue
+      if flow_is_test "$f" "$globs"; then
         hit=1
         case " $picked " in *" $i "*) ;; *) picked="$picked $i"; echo "suites: $f → $id" >&2 ;; esac
       fi
     done < <(suites)
-    [ -n "$hit" ] || unmatched="$unmatched $f"
-  done < <(changed)
+    [ -n "$hit" ] || ignored "$f" || unmatched="$unmatched $f"
+  done <<<"$files"
   if [ -n "$unmatched" ]; then
-    if [ "$(setting unmatched full)" = full ]; then
+    if [ "$(setting unmatched full)" != skip ]; then
       echo "suites: no suite claims$unmatched → full suite (tests.unmatched skip ignores such files)" >&2
       full; return
     fi
@@ -137,10 +136,14 @@ case "${1:-}" in
       [ -n "$globs" ] || { echo "✗ $id: no paths"; bad=1; }
       set -f
       for g in $globs; do
-        git ls-files | while IFS= read -r f; do glob_match "$f" "$g" && { echo y; break; }; done | grep -q y || { echo "✗ $id: '$g' matches no tracked file"; bad=1; }
+        git_ ls-files | while IFS= read -r f; do glob_match "$f" "$g" && { echo y; break; }; done | grep -q y || { echo "✗ $id: '$g' matches no tracked file"; bad=1; }
       done
       set +f
     done < <(suites)
+    for k in scope:impacted:full unmatched:full:skip; do
+      IFS=: read -r key a b <<<"$k"; v="$(setting "$key" "$a")"
+      [ "$v" = "$a" ] || [ "$v" = "$b" ] || { echo "✗ tests.$key '$v' must be $a or $b"; bad=1; }
+    done
     [ "$bad" = 0 ] && echo "suites: $(jq -r '.tests.suites // [] | length' "$cfg" 2>/dev/null || echo 0) ok"
     exit "$bad" ;;
   -h|--help|help|"") sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; [ -n "${1:-}" ] || exit 2 ;;

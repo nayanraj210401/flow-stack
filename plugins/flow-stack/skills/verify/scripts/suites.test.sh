@@ -55,7 +55,7 @@ git checkout -q -- .
 echo x >>src/billing/pay.sh
 echo '{"tests":{"scope":"full"}}' >"$FLOW_STACK_HOME/settings.json"
 go; [ "$(ran)" = "full " ] || bad "settings.json scope full → full suite (ran: $(ran))"
-jq '.tests.scope = "impacted"' .flow/config.json >c && mv c .flow/config.json
+jq '.tests.scope = "impacted"' .flow/config.json >c && mv c .flow/config.json && git commit -qm scope .flow/config.json
 go; [ "$(ran)" = "billing " ] || bad "repo scope impacted beats settings.json full (ran: $(ran))"
 rm -f "$FLOW_STACK_HOME/settings.json"
 go --all; [ "$(ran)" = "full " ] || bad "--all → full suite (ran: $(ran))"
@@ -67,6 +67,29 @@ go; [ -z "$(ran)" ] || bad "committed change, no --base → nothing (ran: $(ran)
 go --base "$b"; [ "$(ran)" = "auth " ] || bad "--base → the committed auth change (ran: $(ran))"
 # explicit paths replace the diff
 go src/billing/pay.sh; [ "$(ran)" = "billing " ] || bad "explicit path → billing (ran: $(ran))"
+
+# edge cases that used to skip a suite silently (unmatched skip makes a miss visible)
+c0="$(git rev-parse HEAD)"
+echo '{"tests":{"unmatched":"skip"}}' >"$FLOW_STACK_HOME/settings.json"
+go --base no-such-ref; [ "$(ran)" = "full " ] || bad "a bad --base → full suite, not nothing (ran: $(ran); $out)"
+echo x >"src/auth/é.sh"
+go; [ "$(ran)" = "auth " ] || bad "untracked non-ASCII path → auth (ran: $(ran); $out)"
+git add -A && git commit -qm e
+go --base "$c0"; [ "$(ran)" = "auth " ] || bad "committed non-ASCII path → auth (ran: $(ran); $out)"
+c1="$(git rev-parse HEAD)"; git mv src/billing/pay.sh src/shared/pay.sh && git commit -qm mv
+go --base "$c1"; [ "$(ran)" = "billing " ] || bad "file moved out of billing → billing (ran: $(ran); $out)"
+jq --arg m "$SB/ran" '.tests.suites += [{id: "docs", paths: ["docs/**/*.md"], run: ("echo docs >>" + $m)}]' .flow/config.json >c && mv c .flow/config.json
+git commit -qam docs-suite; c2="$(git rev-parse HEAD)"
+echo x >docs/new.md
+go; [ "$(ran)" = "docs " ] || bad "a suite claiming *.md beats the built-in ignore (ran: $(ran); $out)"
+rm docs/new.md; rm -f "$FLOW_STACK_HOME/settings.json"
+jq '.tests.ignore += ["x/**"]' .flow/config.json >c && mv c .flow/config.json
+go; [ "$(ran)" = "full " ] || bad ".flow/config.json change → full suite (ran: $(ran); $out)"
+jq '.tests.unmatched = "ful"' .flow/config.json >c && mv c .flow/config.json
+grep -q "tests.unmatched 'ful'" <<<"$("$S" check 2>&1)" || bad "check flags tests.unmatched 'ful'"
+echo x >>src/shared/util.sh
+go; [ "$(ran)" = "full " ] || bad "an unknown tests.unmatched acts as full (ran: $(ran))"
+git reset -q --hard "$c0"; git clean -qfd
 
 # a failing suite fails the run and records FAIL
 jq --arg m "$SB/ran" '.tests.suites[1].run = "echo billing >>" + $m + "; exit 3"' .flow/config.json >c && mv c .flow/config.json

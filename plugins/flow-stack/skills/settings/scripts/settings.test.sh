@@ -79,8 +79,15 @@ rm -f "$FLOW_STACK_HOME/config.json" .flow/config.json
 
 # every name a hook checks is in the catalog, so show lists every toggle there is
 cat_names="$(sed -n '/^catalog()/,/^}/p' "$S" | awk -F'\t' 'NF > 1 { print $1 }' | sort -u)"
-for n in $(grep -ho 'flow_enabled [a-z-]*' "$H"/*.sh | awk '{ print $2 }' | sort -u); do
+hook_names="$(grep -ho 'flow_enabled [a-z-]*' "$H"/*.sh | awk '{ print $2 }' | sort -u)"
+[ "$(grep -c . <<<"$hook_names")" -ge 10 ] || bad "found only $(grep -c . <<<"$hook_names") flow_enabled names in $H"
+for n in $hook_names; do
   grep -qx "$n" <<<"$cat_names" || bad "hook name '$n' is missing from settings.sh's catalog"
 done
+
+# a symlinked settings.json (dotfiles repo) stays a symlink
+rm -f "$FLOW_STACK_HOME/settings.json"; echo '{}' >"$FLOW_STACK_HOME/real.json"; ln -s real.json "$FLOW_STACK_HOME/settings.json"
+"$S" hook claims off >/dev/null 2>&1
+[ -L "$FLOW_STACK_HOME/settings.json" ] && [ "$(jq -r .hooks.claims "$FLOW_STACK_HOME/real.json")" = false ] || bad "write replaced the settings.json symlink"
 
 [ "$FAILS" -eq 0 ] && echo "settings.test: ok" || { echo "settings.test: $FAILS failed"; exit 1; }

@@ -93,8 +93,10 @@ for c in lint typecheck; do
 done
 
 if [ "$(jq -r '.tests.suites // [] | length' "$FLOW_DIR/config.json" 2>/dev/null)" -gt 0 ] 2>/dev/null; then
-  if ( cd "$FLOW_ROOT" && "$sk/verify/scripts/suites.sh" run ${base:+--base "$base"} >/dev/null 2>&1 </dev/null ); then pass "impacted test suites"
-  else miss "impacted test suites fail (verify/scripts/suites.sh run${base:+ --base $(echo "$base" | cut -c1-7)})"; fi
+  scope="--all"; [ -z "$base" ] || scope="--base $base"  # no base to diff against: the full suite
+  # shellcheck disable=SC2086
+  if ( cd "$FLOW_ROOT" && "$sk/verify/scripts/suites.sh" run $scope >/dev/null 2>&1 </dev/null ); then pass "impacted test suites"
+  else miss "impacted test suites fail (verify/scripts/suites.sh run $(cut -c1-15 <<<"$scope"))"; fi
 fi
 
 while IFS=$'\t' read -r id kind body; do
