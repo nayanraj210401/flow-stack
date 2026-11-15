@@ -37,6 +37,8 @@ warns "redirect into repo .flow/config.json" "$(run guard.sh Bash "$(sh_in "echo
 warns "jq + mv of repo .flow/config.json" "$(run guard.sh Bash "$(sh_in "jq '.hooks.guard = false' .flow/config.json > t && mv t .flow/config.json")")"
 warns "Edit repo .flow/config.json to false" "$(run edit-guard.sh Edit "$(jq -nc --arg f "$PWD/.flow/config.json" '{file_path:$f,old_string:"true",new_string:"\"guard\": false"}')")"
 silent "Edit repo .flow/config.json commands" "$(run edit-guard.sh Edit "$(jq -nc --arg f "$PWD/.flow/config.json" '{file_path:$f,old_string:"a",new_string:"\"test\": \"npm test\""}')")"
+silent "Edit repo .flow/config.json, replace_all false" "$(run edit-guard.sh Edit "$(jq -nc --arg f "$PWD/.flow/config.json" '{file_path:$f,old_string:"a",new_string:"\"run\": \"x\"",replace_all:false}')")"
+silent "Edit repo .flow/config.json false → true" "$(run edit-guard.sh Edit "$(jq -nc --arg f "$PWD/.flow/config.json" '{file_path:$f,old_string:"\"fence\": false",new_string:"\"fence\": true"}')")"
 silent "jq rewrite of repo commands" "$(run guard.sh Bash "$(sh_in "jq '.commands.test = \"x\"' .flow/config.json > t && mv t .flow/config.json")")"
 silent "settings.sh hook guard on" "$(run guard.sh Bash "$(sh_in "$S hook guard on")")"
 silent "settings.sh show" "$(run guard.sh Bash "$(sh_in "$S show")")"
