@@ -150,6 +150,14 @@ if grep -Eq -- "$wr$conf/$sett" <<<"$c2" || { cdin "$conf" && grep -Eq -- "$wr[\
   pre_decide ask "flow guard: writing Claude Code settings can change permissions, hooks, or env (an env block can fake a GitHub runner for --gha), so the human approves."
 fi
 
+# 2c. Turning a hook off is allowed, but never silent: warned at the end, after every other check.
+hook_off=""
+if [[ "$cmd" =~ settings\.sh[[:space:]]+hook[[:space:]]+([a-z-]+)[[:space:]]+off ]]; then
+  hook_off="flow guard: this turns off the ${BASH_REMATCH[1]} hook. Allowed (your call); say what that check stops catching."
+elif grep -Eq -- "$wr$home/(settings|config)\.json$end" <<<"$c2" || { cdin "$home" && grep -Eq -- "$wr[\"']?(\./)?(settings|config)\.json$end" <<<"$c2"; }; then
+  hook_off="$FLOW_HOOK_OFF_WARN"
+fi
+
 # 3. Writes to sealed checks via the shell.
 if [ -n "$FLOW_TASK_DIR" ] && [ -f "$FLOW_TASK_DIR/SEALS" ]; then
   if has 'seal\.sh[[:space:]]+(reseal|rm)'; then
@@ -593,4 +601,5 @@ if flow_enabled pkgcheck && command -v curl >/dev/null 2>&1; then
   done <<<"$pkgs"
 fi
 
+[ -z "$hook_off" ] || pre_warn "$hook_off"
 exit 0

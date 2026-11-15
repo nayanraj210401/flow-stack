@@ -213,6 +213,14 @@ pre_decide() {
   exit 0
 }
 
+# pre_warn <message>: tell the human (systemMessage) and the agent (additionalContext); decide nothing, so the
+# normal permission flow runs, and --auto proceeds. For settings the user may change but should know about.
+pre_warn() {
+  jq -n --arg m "$1" '{systemMessage:$m,hookSpecificOutput:{hookEventName:"PreToolUse",additionalContext:$m}}'
+  exit 0
+}
+FLOW_HOOK_OFF_WARN="flow guard: a write to flow-stack's settings turns off any hook it sets to false, for every session that reads them. Allowed (your call); say which check goes off and why."
+
 redact() {
   perl -pe '
     s/(sk-[A-Za-z0-9_-]{4})[A-Za-z0-9_-]{8,}/$1-REDACTED/g;
