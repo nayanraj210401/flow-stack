@@ -10,7 +10,10 @@
 #   routines.sh check [-v]                       every routine's workflow matches a fresh render; no orphans
 #   routines.sh safety [-z] [--ref <ref>] [path ...]  the paths (args, else stdin lines, or NUL-separated with -z) on
 #                                                     .github/routines/safety-paths.txt (at <ref> with --ref; the
-#                                                     repo's own list without one, the plugin default only if it has none): exit 1 on any, 2 on an error
+#                                                     repo's own list without one, the plugin default only if it has none): exit 1 on any,
+#                                                     3 when every hit is on an @tested glob, 2 on an error
+#   routines.sh additive --ref <base> [<head>]        the change base...head (default HEAD) adds a new *.test.sh and
+#                                                     touches no existing test file: exit 0 if so, 1 if not, 2 on an error
 # Frontmatter: trigger (schedule | pull_request | mention: an @claude comment from a user with write access), cron and timezone (schedule only; an IANA zone, default UTC), timeout (minutes), labels (must exist;
 # create_labels: true makes missing ones; .github/routines/labels.tsv renames catalog labels to yours on add), auth
 # (oauth | api-key), grants (token scopes it may write: issues pull-requests contents; the rest are read),
@@ -289,8 +292,8 @@ check() {
   return "$bad"
 }
 
-safety() { # prints "<path><TAB><glob>" for each path on the list
-  local z="" ref="" list p g pats=() hit=0 n=0
+safety() { # prints "<path><TAB><glob>[<TAB>@tested]" for each path on the list
+  local z="" ref="" list p g t pats=() tested=() hit=0 n=0
   while [ $# -gt 0 ]; do
     case "$1" in -z) z=1; shift ;; --ref) [ -n "${2:-}" ] || die "--ref needs a ref"; ref="$2"; shift 2 ;; --) shift; break ;; *) break ;; esac
   done
@@ -304,29 +307,60 @@ safety() { # prints "<path><TAB><glob>" for each path on the list
     local own; own="$(git rev-parse --show-toplevel 2>/dev/null || echo .)/$dir/safety-paths.txt"
     if [ -f "$own" ]; then list="$(cat "$own")"; else list="$(cat "$tpl/safety-paths.txt")"; fi
   fi
-  while read -r g _; do case "$g" in ''|'#'*) ;; *) pats+=("$g") ;; esac; done < <(tr -d '\r' <<<"$list")
+  # an @tested glob guards code its tests cover: a change there is unattended-safe only when `additive` passes
+  while read -r g t _; do case "$g" in ''|'#'*) ;; *) pats+=("$g"); [ "$t" = @tested ] && tested+=(1) || tested+=(0) ;; esac; done < <(tr -d '\r' <<<"$list")
   [ ${#pats[@]} -gt 0 ] || die "the safety list has no globs"
-  on_list() {
+  on_list() { # returns 0 on a plain hit, 3 on only @tested hits, 1 off the list; a plain glob wins wherever it sits
+    local i soft=""
     # git quotes a path with unusual bytes unless -z; a quoted path can't be matched, so it counts as a hit
     [[ "$1" != \"* ]] || { printf '%s\tquoted path: list it with git -z and pass -z\n' "$1"; return 0; }
-    for g in "${pats[@]}"; do [[ "/${1#./}" == $g ]] && { printf '%s\t%s\n' "$1" "$g"; return 0; }; done
-    return 1
+    for i in "${!pats[@]}"; do
+      [[ "/${1#./}" == ${pats[$i]} ]] || continue
+      [ "${tested[$i]}" = 1 ] || { printf '%s\t%s\n' "$1" "${pats[$i]}"; return 0; }
+      [ -n "$soft" ] || soft="${pats[$i]}"
+    done
+    [ -n "$soft" ] || return 1
+    printf '%s\t%s\t@tested\n' "$1" "$soft"; return 3
   }
-  if [ $# -gt 0 ]; then for p; do n=$((n + 1)); on_list "$p" && hit=1; done
+  score() { local r=0; on_list "$1" || r=$?; case "$r" in 0) hit=1 ;; 3) [ "$hit" = 1 ] || hit=3 ;; esac; }
+  if [ $# -gt 0 ]; then for p; do n=$((n + 1)); score "$p"; done
   # `|| [ -n "$p" ]` keeps a last path that has no trailing separator; an empty -z entry means a broken feed
-  elif [ -n "$z" ]; then while IFS= read -r -d '' p || [ -n "$p" ]; do [ -n "$p" ] || die "an empty path in -z input"; n=$((n + 1)); on_list "$p" && hit=1; done
-  else while IFS= read -r p || [ -n "$p" ]; do [ -z "$p" ] && continue; n=$((n + 1)); on_list "$p" && hit=1; done; fi
+  elif [ -n "$z" ]; then while IFS= read -r -d '' p || [ -n "$p" ]; do [ -n "$p" ] || die "an empty path in -z input"; n=$((n + 1)); score "$p"; done
+  else while IFS= read -r p || [ -n "$p" ]; do [ -z "$p" ] && continue; n=$((n + 1)); score "$p"; done; fi
   # a change always has a path, so none means the command feeding this failed: that must not read as clean
   [ "$n" -gt 0 ] || die "no paths to check"
   return "$hit"
 }
 
+additive() { # passes when base...head adds a new *.test.sh and leaves every existing test file as it was
+  local ref="" head=HEAD a d p added=0 bad=0
+  while [ $# -gt 0 ]; do
+    case "$1" in --ref) [ -n "${2:-}" ] || die "--ref needs a ref"; ref="$2"; shift 2 ;; *) head="$1"; shift ;; esac
+  done
+  [ -n "$ref" ] || die "additive needs --ref <base>"
+  git rev-parse -q --verify "$ref^{commit}" >/dev/null || die "--ref $ref is not a commit"
+  git rev-parse -q --verify "$head^{commit}" >/dev/null || die "$head is not a commit"
+  git merge-base "$ref" "$head" >/dev/null || die "$ref and $head share no history"
+  # A new test runs in its own process, so it can't switch off an old one; any edit to an existing test file could
+  # (an early exit, a no-op helper). Only *.test.sh counts as added: it is what CI runs.
+  # --no-renames: moving a test file away reads as deleting it; -z keeps unusual names whole
+  while IFS=$'\t' read -r -d '' a d p; do
+    case "${p##*/}" in *.test.*) ;; *) continue ;; esac
+    if git cat-file -e "$(git merge-base "$ref" "$head"):$p" 2>/dev/null; then echo "$p: changes an existing test file"; bad=1
+    elif [[ "$p" == *.test.sh ]] && [ "$a" != - ]; then added=$((added + a)); fi
+  done < <(git diff -z --numstat --no-renames "$ref...$head")
+  [ "$bad" = 0 ] || return 1
+  [ "$added" -gt 0 ] || { echo "no new *.test.sh file"; return 1; }
+  echo "additive: a new test (+$added lines), no existing test touched"
+}
+
 case "${1:-}" in
   list) list ;;
   safety) shift; safety "$@" ;;
+  additive) shift; additive "$@" ;;
   add) shift; add "$@" ;;
   schedule) shift; schedule "$@" ;;
   render) render ;;
   check) check ;;
-  *) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

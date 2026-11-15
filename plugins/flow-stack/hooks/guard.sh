@@ -411,7 +411,7 @@ if grep -Eiq "$lead"'(git'"$gopt"'[[:space:]]+push|gh'"$gopt"'[[:space:]]+(pr[[:
    && ! undo_only "$(sed -E 's/^[[:space:]]+|[[:space:]]+$//g' <<<"$cmd")"; then
   if ! flow_auto_ship || ! ship_allowed "$(sed -E 's/^[[:space:]]+|[[:space:]]+$//g' <<<"$cmd")" \
      || ! (cd "$FLOW_ROOT" && "$(dirname "$0")/../skills/review/scripts/ready.sh" stamped) 2>/dev/null; then
-    pre_decide ask "flow: outward-facing action$(flow_auto_gha && echo ". --gha adds only gh release create <tag> --target <current branch> (plain flags) to the --auto ship set.")$(flow_auto_ship && echo ". --auto ship allows only \`git push [-u] <remote> <current branch>\` (not main), gh pr create/ready (body via --body-file or --fill, no shell expansions), and gh pr merge of the current branch's PR, once review/scripts/ready.sh has stamped HEAD")."
+    pre_decide ask "flow: outward-facing action$(flow_auto_gha && echo ". --gha adds only gh release create <tag> --target <current branch> (plain flags) to the --auto ship set.")$(flow_auto_ship && echo ". --auto ship allows only \`git push [-u] <remote> <current branch>\` (not main), gh pr create/ready (body via --body-file or --fill, no shell expansions), and gh pr merge of the current branch's PR, once review/scripts/ready.sh has stamped HEAD. Run it as its own command: no pipe, redirect, chain, or substitution")."
   fi
 fi
 # 4c. Off a runner, auto mode also holds the GitHub writes the rule above can't see: gh api with a write method,
