@@ -38,3 +38,4 @@
 /plugins/flow-stack/skills/verify/scripts/* @tested
 /plugins/flow-stack/skills/seal/scripts/*   @tested
 /plugins/flow-stack/skills/setup/scripts/*  @tested     setup/scripts/inventory.sh runs at every session start
+*/herdr/*                                  CI skips /herdr/, so a test there proves nothing: never @tested
