@@ -103,7 +103,7 @@ rm -f "$FLOW_STACK_HOME/settings.json" "$FLOW_STACK_HOME/real.json" "$FLOW_STACK
 echo '{"tests":{"scope":"full"}}' >"$FLOW_STACK_HOME/config.json"   # legacy: suites.sh never reads it
 git -c user.email=t@t -c user.name=t commit -q --allow-empty -m wt && git worktree add -q "$SB/wt" -b wt 2>/dev/null || bad "worktree add failed"
 [ -d "$SB/wt" ] || bad "no worktree at $SB/wt"
-( cd "$SB/wt" && mkdir -p .flow && echo '{}' >.flow/config.json
+( cd "$SB/wt" || exit 1; mkdir -p .flow && echo '{}' >.flow/config.json
   [ "$("$S" show | awk '$1 == "scope" { print $2 }')" = impacted ] || echo "  ✗ worktree: show reads legacy tests.scope"
   "$S" tests scope full --repo >/dev/null
   [ "$(jq -r .tests.scope .flow/config.json)" = full ] || echo "  ✗ worktree: tests --repo wrote $(cat .flow/config.json), not the worktree's config"

@@ -40,6 +40,8 @@ silent "Edit repo .flow/config.json commands" "$(run edit-guard.sh Edit "$(jq -n
 silent "Edit repo .flow/config.json, replace_all false" "$(run edit-guard.sh Edit "$(jq -nc --arg f "$PWD/.flow/config.json" '{file_path:$f,old_string:"a",new_string:"\"run\": \"x\"",replace_all:false}')")"
 silent "Edit repo .flow/config.json false → true" "$(run edit-guard.sh Edit "$(jq -nc --arg f "$PWD/.flow/config.json" '{file_path:$f,old_string:"\"fence\": false",new_string:"\"fence\": true"}')")"
 silent "Edit a nested .flow/config.json (fence and tdd judge it)" "$(run edit-guard.sh Edit "$(jq -nc --arg f "$PWD/packages/api/.flow/config.json" '{file_path:$f,old_string:"a",new_string:"\"guard\": false"}')")"
+ln -s "$PWD" "$SB/link"
+warns "Edit .flow/config.json via a symlinked repo path" "$(run edit-guard.sh Edit "$(jq -nc --arg f "$SB/link/.flow/config.json" '{file_path:$f,old_string:"a",new_string:"\"guard\": false"}')")"
 warns "serena replace_content into .flow/config.json" "$(run edit-guard.sh mcp__serena__replace_content '{"relative_path":".flow/config.json","needle":"true","repl":"false","mode":"literal"}')"
 silent "commit message naming the command" "$(run guard.sh Bash "$(sh_in 'git commit -m "docs: settings.sh hook guard off now warns"')")"
 silent "jq rewrite of repo commands" "$(run guard.sh Bash "$(sh_in "jq '.commands.test = \"x\"' .flow/config.json > t && mv t .flow/config.json")")"
