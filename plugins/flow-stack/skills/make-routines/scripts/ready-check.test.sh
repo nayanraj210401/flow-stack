@@ -125,6 +125,7 @@ ad() { git switch -qC t "$ab" && eval "$1" && git add -A && git -c user.email=t@
 [ "$(ad 'echo c >>lib/g.test.sh; printf "x\n" >lib/h.test.sh')" = 1 ] && ok "additive: appending to an old test fails" || bad "additive passed an edited old test"
 [ "$(ad 'printf "exit 0\na\nb\n" >lib/g.test.sh; printf "x\n" >lib/h.test.sh')" = 1 ] && ok "additive: an early exit in an old test fails" || bad "additive passed a neutered test"
 [ "$(ad 'echo d >>lib/g.sh')" = 1 ] && ok "additive: code without a new test fails" || bad "additive passed with no test"
+[ "$(ad 'echo d >>lib/g.sh; mkdir -p scratch; printf "x\n" >scratch/x.test.sh')" = 1 ] && ok "additive: a new test away from the changed code counts for nothing" || bad "additive counted a test CI may never run"
 [ "$(ad 'printf "x\n" >lib/h.test.md')" = 1 ] && ok "additive: a test file CI doesn't run counts for nothing" || bad "additive counted a .test.md"
 [ "$(ad 'git mv lib/g.test.sh lib/h.test.sh')" = 1 ] && ok "additive: a renamed test fails" || bad "additive passed a moved test"
 [ "$(ad ':')" = 1 ] && "$H/routines.sh" additive x >/dev/null 2>&1; [ $? = 2 ] && ok "additive: empty change fails, no --ref is an error" || bad "additive edge cases"
@@ -139,7 +140,7 @@ grep -q 'When `.github/routines/triage.md` exists' "$H/../templates/self-heal.md
 #    @tested paths pass through the additive check, and push/PR commands run alone
 sh="$H/../templates/self-heal.md"
 grep -q 'take at most 2 of them while an issue candidate is waiting' "$sh" && ok "self-heal: rework never takes every slot" || bad "rework can starve new issues"
-grep -q 'unless triage approved it' "$sh" && grep -q 'last `labeled` event for `risk:low` has the actor `github-actions\[bot\]`' "$sh" &&
+grep -q 'unless triage approved it' "$sh" && grep -q "has that bot as actor and that bot.s comment posted after it" "$sh" &&
   ok "self-heal: triage's risk:low approves a self-create issue" || bad "bot issues still need heal-ok"
 grep -q 'exits 3 and `make-routines/scripts/routines.sh additive --ref origin/<default>` fails' "$sh" && ok "self-heal: an @tested path must be additive" || bad "self-heal skips additive"
 grep -q 'Never add a `triage:`, `size:` or `risk:` label' "$sh" && grep -q 'triage alone sets' "$H/../templates/self-create.md" && ok "only triage sets the approving labels" || bad "other routines may set risk labels"

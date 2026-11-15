@@ -332,25 +332,30 @@ safety() { # prints "<path><TAB><glob>[<TAB>@tested]" for each path on the list
   return "$hit"
 }
 
-additive() { # passes when base...head adds a new *.test.sh and leaves every existing test file as it was
-  local ref="" head=HEAD a d p added=0 bad=0
+additive() { # passes when base...head adds a new *.test.sh beside the code it changes and leaves every old test as it was
+  local ref="" head=HEAD a d p mb diff added=0 bad=0 dirs=$'\n'
   while [ $# -gt 0 ]; do
     case "$1" in --ref) [ -n "${2:-}" ] || die "--ref needs a ref"; ref="$2"; shift 2 ;; *) head="$1"; shift ;; esac
   done
   [ -n "$ref" ] || die "additive needs --ref <base>"
   git rev-parse -q --verify "$ref^{commit}" >/dev/null || die "--ref $ref is not a commit"
   git rev-parse -q --verify "$head^{commit}" >/dev/null || die "$head is not a commit"
-  git merge-base "$ref" "$head" >/dev/null || die "$ref and $head share no history"
-  # A new test runs in its own process, so it can't switch off an old one; any edit to an existing test file could
-  # (an early exit, a no-op helper). Only *.test.sh counts as added: it is what CI runs.
+  mb="$(git merge-base "$ref" "$head")" || die "$ref and $head share no history"
   # --no-renames: moving a test file away reads as deleting it; -z keeps unusual names whole
+  diff="$(mktemp)"; git diff -z --numstat --no-renames "$ref...$head" >"$diff" || { rm -f "$diff"; die "git diff failed"; }
+  while IFS=$'\t' read -r -d '' a d p; do case "${p##*/}" in *.test.*) ;; *) dirs+="$(dirname -- "$p")"$'\n' ;; esac; done <"$diff"
+  # A new test runs in its own process, so it can't switch off an old one; any edit to an existing test file could
+  # (an early exit, a no-op helper). A new *.test.sh counts only beside code the change touches, where the repo's
+  # convention (and so its CI) puts it, not in a directory CI never runs.
   while IFS=$'\t' read -r -d '' a d p; do
     case "${p##*/}" in *.test.*) ;; *) continue ;; esac
-    if git cat-file -e "$(git merge-base "$ref" "$head"):$p" 2>/dev/null; then echo "$p: changes an existing test file"; bad=1
-    elif [[ "$p" == *.test.sh ]] && [ "$a" != - ]; then added=$((added + a)); fi
-  done < <(git diff -z --numstat --no-renames "$ref...$head")
+    if git cat-file -e "$mb:$p" 2>/dev/null; then echo "$p: changes an existing test file"; bad=1
+    elif [[ "$p" == *.test.sh ]] && [ "$a" != - ] && [[ "$dirs" == *$'\n'"$(dirname -- "$p")"$'\n'* ]]; then added=$((added + a))
+    elif [[ "$p" == *.test.sh ]]; then echo "$p: not beside any code this change touches"; fi
+  done <"$diff"
+  rm -f "$diff"
   [ "$bad" = 0 ] || return 1
-  [ "$added" -gt 0 ] || { echo "no new *.test.sh file"; return 1; }
+  [ "$added" -gt 0 ] || { echo "no new *.test.sh beside the changed code"; return 1; }
   echo "additive: a new test (+$added lines), no existing test touched"
 }
 
