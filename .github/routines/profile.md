@@ -8,7 +8,6 @@ budget:
   subagent_model: haiku           # exploration, bulk reads, summaries
   build_model: sonnet             # implementation workers
   design_model: opus              # intent, architecture, review
-  handoff_at_context_pct: 60
 notify: off                 # osascript | ntfy:<topic> | off
 notify_on: blocked                # blocked | all
 dojo: off                         # off | light (explain-back) | on (TODO(you))

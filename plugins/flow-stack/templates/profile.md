@@ -8,8 +8,7 @@ budget:
   subagent_model: haiku           # exploration, bulk reads, summaries
   build_model: sonnet             # implementation workers
   design_model: opus              # intent, architecture, review
-  handoff_at_context_pct: 60
-  handoff_at_tokens: 150000        # absolute backstop: a hook nudges handoff once the context passes this
+  handoff_at_tokens: 100000        # a hook nudges handoff past this context size, and at every slice done while past it
   delegate_after_turns: 7          # once a session hits this many human turns (or tokens), bulk reads get nudged to a subagent
   delegate_after_tokens: 120000
 notify: osascript                 # osascript | ntfy:<topic> | off

@@ -19,7 +19,7 @@ Principle: `principle-spend-cheap-save-expensive`. Tokens are cheap but capped p
 
 ## Handoff threshold
 
-When the status line or `/context` shows usage past the profile's `budget.handoff_at_context_pct` (default 60%), finish the current slice, then run `handoff`. The hook `handoff-nudge.sh` also nudges once the latest request's context passes `budget.handoff_at_tokens` (default 150K) — once per crossing, so a large-window model that never reaches 60% is still nudged. Past 80% of the window, handoff immediately. A compaction mid-slice loses reasoning that files don't hold.
+Every request re-sends the whole context, so a session costs roughly its average context size times its requests. Past the profile's `budget.handoff_at_tokens` (default 100K) a fresh session is cheaper. `handoff-nudge.sh` says so once per crossing when a prompt arrives, and again at every `task.sh slice <id> done` while past it: the slice boundary is the clean place to stop. Under `--auto` it says to write the handoff and end the turn, so the next session resumes from files. A compaction mid-slice loses reasoning that files don't hold, so hand off before Claude Code's auto-compact window (`autoCompactWindow` in settings.json) is reached.
 
 ## /budget
 

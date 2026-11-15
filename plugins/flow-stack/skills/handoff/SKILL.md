@@ -17,7 +17,7 @@ Fill `.flow/tasks/<slug>/HANDOFF.md` from the template (it replaces any previous
 - **Traps**: what cost time this session. Wrong assumptions, flaky commands, misleading files. This is the most valuable section.
 - **Pointers**: `file:line` references the next session needs. Nothing else.
 
-Then tell the human in 2 lines: the handoff is written, and they should start a new session with `/flow resume` (or `/clear` then `/flow resume`).
+Then tell the human in 2 lines: the handoff is written, and they should start a new session with `/flow resume` (or `/clear` then `/flow resume`). Under `--auto`, end your turn there: the context only grows if you keep going, and a fresh session resumes from the handoff.
 
 The PreCompact hook writes `HANDOFF.auto.md` (a mechanical snapshot) automatically. Your hand-written HANDOFF.md is better. Write it before compaction when you can.
 
