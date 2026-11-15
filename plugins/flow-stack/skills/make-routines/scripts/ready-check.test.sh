@@ -126,6 +126,7 @@ ad() { git switch -qC t "$ab" && eval "$1" && git add -A && git -c user.email=t@
 [ "$(ad 'printf "exit 0\na\nb\n" >lib/g.test.sh; printf "x\n" >lib/h.test.sh')" = 1 ] && ok "additive: an early exit in an old test fails" || bad "additive passed a neutered test"
 [ "$(ad 'echo d >>lib/g.sh')" = 1 ] && ok "additive: code without a new test fails" || bad "additive passed with no test"
 [ "$(ad 'echo d >>lib/g.sh; mkdir -p scratch; printf "x\n" >scratch/x.test.sh')" = 1 ] && ok "additive: a new test away from the changed code counts for nothing" || bad "additive counted a test CI may never run"
+[ "$(ad 'echo d >>lib/g.sh; mkdir -p scratch; echo y >scratch/x.sh; printf "x\n" >scratch/x.test.sh')" = 1 ] && ok "additive: a decoy file beside a stray test earns nothing" || bad "additive counted a decoyed stray test"
 [ "$(ad 'printf "x\n" >lib/h.test.md')" = 1 ] && ok "additive: a test file CI doesn't run counts for nothing" || bad "additive counted a .test.md"
 [ "$(ad 'git mv lib/g.test.sh lib/h.test.sh')" = 1 ] && ok "additive: a renamed test fails" || bad "additive passed a moved test"
 [ "$(ad ':')" = 1 ] && "$H/routines.sh" additive x >/dev/null 2>&1; [ $? = 2 ] && ok "additive: empty change fails, no --ref is an error" || bad "additive edge cases"
