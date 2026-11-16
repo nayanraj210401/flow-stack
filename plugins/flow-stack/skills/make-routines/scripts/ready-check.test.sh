@@ -76,7 +76,7 @@ if grep -q 'heal-ok' "$am"; then
   grep -q '`auto_merge: low-risk`' "$am" && grep -q 'head branch starts with `self-heal/<i>-`' "$am" && grep -q 'lastEditedAt' "$am" &&
     ok "auto-merge: the heal-ok path is opt-in, branch-bound, and edit-checked" || bad "auto-merge trusts an agent-chosen issue link"
   b1="$(sed -n '/^## 1b\./,/^## 2\./p' "$am")"
-  for bar in 'Filter first, re-score included' 'is `admin`, `maintain`, or `write`' 'exactly one `labeled` event for `heal-ok` and no `unlabeled`' 'no `labeled` event for `rework`' 'comes before the `heal-ok` approval' 'that a non-`User` added' '`reviewDecision` is not `CHANGES_REQUESTED`' 'every changed path appears in one of those rows' 'non-empty `scenario:`' 'check-runs?check_name=flow/ready' 'no HTML comment' 'link-reference comment'; do
+  for bar in 'Filter first, re-score included' 'is `admin`, `maintain`, or `write`' 'exactly one `labeled` event for `heal-ok` and no `unlabeled`' 'no `labeled` event for `rework`' 'three is at or before A' 'that a non-`User` added' '`reviewDecision` is not `CHANGES_REQUESTED`' 'every changed path appears in one of those rows' 'non-empty `scenario:`' 'check-runs?check_name=flow/ready' 'no HTML comment' 'link-reference comment'; do
     grep -qF "$bar" <<<"$b1" && ok "1b bar: $bar" || bad "1b lost a bar: $bar"
   done
   grep -qF 'For a step 1b PR, also run every 1b bullet' "$am" && ok "1b re-checked before the merge" || bad "1b not re-checked before the merge"
@@ -114,11 +114,59 @@ nolist="$(git -c user.email=t@t -c user.name=t commit-tree "$(git mktree </dev/n
 "$H/routines.sh" safety --ref '' .github/x.yml >/dev/null 2>&1; [ $? = 2 ] && ok "an empty --ref is an error" || bad "empty --ref read the working tree"
 printf '' | "$H/routines.sh" safety -z >/dev/null 2>&1; [ $? = 2 ] && printf '\n' | "$H/routines.sh" safety >/dev/null 2>&1; [ $? = 2 ] &&
   ok "no paths (a failed git diff upstream) is an error, not clean" || bad "empty input passed"
+# -- @tested globs exit 3, the last matching glob decides; additive passes only test-adding changes
+printf '/lib/*.sh @tested\n/lib/*.json @tested\n/lib/hooks.json  which hooks run\n' >.github/routines/safety-paths.txt
+printf '/lib/*\n/lib/*.sh @tested\n/lib/own.sh\n' >"$SB/last.txt"
+( cp "$SB/last.txt" .github/routines/safety-paths.txt; "$H/routines.sh" safety lib/x.py >/dev/null; a=$?; "$H/routines.sh" safety lib/g.sh >/dev/null; b=$?
+  "$H/routines.sh" safety lib/own.sh >/dev/null; c=$?; [ "$a$b$c" = 131 ] ) && ok "last match wins: plain catch-all, @tested exception, plain exception" || bad "last-match precedence"
+printf '/lib/*.sh @tested\n/lib/*.json @tested\n/lib/hooks.json  which hooks run\n' >.github/routines/safety-paths.txt
+"$H/routines.sh" safety lib/g.sh src/a >/dev/null; [ $? = 3 ] && ok "only @tested hits exit 3" || bad "@tested hit not 3"
+"$H/routines.sh" safety lib/hooks.json >/dev/null; [ $? = 1 ] && ok "a plain glob after @tested still wins" || bad "@tested shadowed a plain glob"
+"$H/routines.sh" safety lib/g.sh lib/hooks.json >/dev/null; [ $? = 1 ] && ok "a plain hit beside an @tested one exits 1" || bad "mixed hits not 1"
+git switch -qc add "$base" && mkdir -p lib && printf 'a\nb\n' >lib/g.test.sh && echo c >lib/g.sh && git add -A && git -c user.email=t@t -c user.name=t commit -qm b && ab="$(git rev-parse HEAD)"
+ad() { git switch -qC t "$ab" && eval "$1" && git add -A && git -c user.email=t@t -c user.name=t commit -qm t --allow-empty && "$H/routines.sh" additive --ref "$ab" >/dev/null 2>&1; echo $?; }
+[ "$(ad 'printf "x\n" >lib/h.test.sh; echo d >>lib/g.sh')" = 0 ] && ok "additive: a new test file passes" || bad "additive refused a new test file"
+[ "$(ad 'echo c >>lib/g.test.sh; printf "x\n" >lib/h.test.sh')" = 1 ] && ok "additive: appending to an old test fails" || bad "additive passed an edited old test"
+[ "$(ad 'printf "exit 0\na\nb\n" >lib/g.test.sh; printf "x\n" >lib/h.test.sh')" = 1 ] && ok "additive: an early exit in an old test fails" || bad "additive passed a neutered test"
+[ "$(ad 'echo d >>lib/g.sh')" = 1 ] && ok "additive: code without a new test fails" || bad "additive passed with no test"
+[ "$(ad 'echo d >>lib/g.sh; mkdir -p scratch; printf "x\n" >scratch/x.test.sh')" = 1 ] && ok "additive: a new test away from the changed code counts for nothing" || bad "additive counted a test CI may never run"
+[ "$(ad 'echo d >>lib/g.sh; mkdir -p scratch; echo y >scratch/x.sh; printf "x\n" >scratch/x.test.sh')" = 1 ] && ok "additive: a decoy file beside a stray test earns nothing" || bad "additive counted a decoyed stray test"
+[ "$(ad 'printf "x\n" >lib/h.test.md')" = 1 ] && ok "additive: a test file CI doesn't run counts for nothing" || bad "additive counted a .test.md"
+[ "$(ad 'git mv lib/g.test.sh lib/h.test.sh')" = 1 ] && ok "additive: a renamed test fails" || bad "additive passed a moved test"
+[ "$(ad ':')" = 1 ] && "$H/routines.sh" additive x >/dev/null 2>&1; [ $? = 2 ] && ok "additive: empty change fails, no --ref is an error" || bad "additive edge cases"
+rb() { git switch -qC t "$ab" && eval "$1" && git add -A && git -c user.email=t@t -c user.name=t commit -qm t && "$H/routines.sh" redbase --ref "$ab" >/dev/null 2>&1; echo $?; }
+[ "$(rb 'echo d >>lib/g.sh; printf "exit 0\n" >lib/h.test.sh')" = 1 ] && ok "redbase: a new test that passes on the base proves nothing" || bad "redbase took a no-op test"
+[ "$(rb 'echo d >>lib/g.sh; printf "grep -qx d \"\$(dirname \"\$0\")/g.sh\"\n" >lib/h.test.sh')" = 0 ] && ok "redbase: a test red on the base and green on head passes" || bad "redbase refused a real test"
+[ "$(rb 'echo d >>lib/g.sh; printf "d\n" >lib/want.txt; printf "cmp -s \"\$(dirname \"\$0\")/want.txt\" <(tail -n 1 \"\$(dirname \"\$0\")/g.sh\")\n" >lib/h.test.sh')" = 0 ] && ok "redbase: a new fixture stays in place; only the code goes back" || bad "redbase lost the test's fixture"
+[ "$(rb 'echo d >>lib/g.sh; printf "d\n" >lib/only.txt; printf "[ -f \"\$(dirname \"\$0\")/only.txt\" ]\n" >lib/h.test.sh')" = 1 ] && ok "redbase: a test red on base only for a missing fixture proves nothing" || bad "redbase took a fixture-only test"
+[ "$(rb 'echo d >>lib/g.sh; printf "cat >/dev/null; exit 1\n" >lib/a.test.sh; printf "exit 0\n" >lib/b.test.sh')" = 1 ] && ok "redbase: a test that reads stdin can't hide the next one" || bad "redbase: stdin swallowed a test"
+[ "$(rb 'mkdir -p docs; printf "exit 0\n" >docs/cov.test.sh')" = 0 ] && ok "redbase: a coverage test away from @tested code isn't held to it" || bad "redbase reddens a plain coverage PR"
+[ -z "$(git worktree list --porcelain | grep -c '^worktree' | grep -vx 1)" ] && ok "redbase leaves no worktree behind" || bad "redbase left a worktree"
+git switch -qC pr "$base"
 tt="$H/../templates/triage.md"
-grep -q 'routines.sh safety <files>` exits non-zero |$' "$tt" && grep -q '\*\*risk:high is never built.\*\* Add `needs-human`, and put a draft INTENT' "$tt" &&
+grep -q 'routines.sh safety <files>` exits anything but 0 or 3 |$' "$tt" && grep -q '\*\*risk:high is never built.\*\* Add `needs-human`, and put a draft INTENT' "$tt" &&
   ok "triage: a safety path is risk:high, which gets a draft INTENT and needs-human" || bad "triage contract"
 grep -q 'When `.github/routines/triage.md` exists' "$H/../templates/self-heal.md" && grep -q '`risk:high` is never built' "$H/../templates/self-heal.md" &&
   grep -q 'triage miss: predicted' "$H/../templates/self-heal.md" && ok "self-heal: triage picks, never high, re-scores the diff" || bad "self-heal ignores triage"
+
+# -- nothing waits on a human by construction: stuck PRs can't take every slot, triage approves its own low bugs,
+#    @tested paths pass through the additive check, and push/PR commands run alone
+sh="$H/../templates/self-heal.md"
+grep -q 'take at most 2 of them while an issue candidate is waiting' "$sh" && ok "self-heal: rework never takes every slot" || bad "rework can starve new issues"
+grep -q 'unless triage approved it' "$sh" && grep -q "has that bot as actor and that bot.s comment posted after it" "$sh" &&
+  ok "self-heal: triage's risk:low approves a self-create issue" || bad "bot issues still need heal-ok"
+grep -q 'exits 3 and `make-routines/scripts/routines.sh additive --ref origin/<default>` or' "$sh" && ok "self-heal: an @tested path must be additive" || bad "self-heal skips additive"
+grep -q 'routines.sh redbase --ref origin/<default>` fails' "$sh" && ok "self-heal: its new test must be red on the base" || bad "self-heal skips redbase"
+grep -q 'Never add a `triage:`, `size:` or `risk:` label' "$sh" && grep -q 'triage alone sets' "$H/../templates/self-create.md" && ok "only triage sets the approving labels" || bad "other routines may set risk labels"
+grep -q 'no pipe, redirect, `&&` or `;` around a push or PR command' "$sh" && grep -q 'pass `--body-file`' "$sh" && ok "self-heal: commands in the shape the hook passes" || bad "self-heal: no command-shape rule"
+grep -q 'exits anything but 0 or 3 |$' "$tt" && grep -q 'A `safety` exit of 3 means every hit is an `@tested` path' "$tt" && ok "triage: @tested alone is not high" || bad "triage scores @tested high"
+if [ -f "$am" ]; then
+  grep -qF 'routines.sh additive --ref origin/<base> FETCH_HEAD' "$am" && grep -q 'Exit 3: every hit is an `@tested` path' "$am" && ok "auto-merge: @tested needs additive" || bad "auto-merge: no additive gate"
+  grep -q '`red-on-base` passed' "$am" && ok "auto-merge: @tested needs the red-on-base check" || bad "auto-merge ignores red-on-base"
+  ! grep -q 'A non-zero exit, an error included' "$am" && ok "auto-merge: no step still blocks every exit 3" || bad "auto-merge 2.1 blocks @tested PRs"
+  grep -q "A bot's label is never an approval here" "$am" && ! grep -q "it is self-create's:" "$am" &&
+    ok "auto-merge: a bot-approved issue merges only with a human label" || bad "auto-merge 1b trusts a bot's approval"
+fi
 
 # -- ideate: one cited proposal, issues only; self-heal skips a proposal without a human accept
 "$H/routines.sh" add ideate >/dev/null || bad "add ideate failed"
@@ -144,8 +192,15 @@ if [ -f "$am" ] && [ -f "$sp" ]; then
   diff <(grep -v '^#' "$H/../templates/safety-paths.txt") <(head -n "$(grep -vc '^#' "$H/../templates/safety-paths.txt")" < <(grep -v '^#' "$sp")) >/dev/null &&
     ok "this repo's list starts with the plugin default" || bad "this repo's list dropped a default glob"
   cd "$(dirname "$sp")/../.."
-  for p in plugins/flow-stack/hooks/guard.sh plugins/flow-stack/skills/feature-map/scripts/features.sh README.md plugins/flow-stack/skills/make-routines/templates/triage.md; do
+  for p in plugins/flow-stack/hooks/hooks.json plugins/flow-stack/skills/feature-map/scripts/features.sh README.md plugins/flow-stack/skills/make-routines/templates/triage.md plugins/flow-stack/skills/flow/SKILL.md plugins/flow-stack/skills/review/scripts/ready.sh; do
     "$H/routines.sh" safety "$p" >/dev/null; [ $? = 1 ] && ok "this repo flags $p" || bad "this repo missed $p"
+  done
+  for p in plugins/flow-stack/hooks/.claude/x.sh plugins/flow-stack/hooks/.flow/x.sh plugins/flow-stack/hooks/settings.sh plugins/flow-stack/hooks/lib.sh; do
+    "$H/routines.sh" safety "$p" >/dev/null; [ $? = 1 ] && ok "this repo: no @tested exception reaches $p" || bad "$p scored @tested"
+  done
+  "$H/routines.sh" safety plugins/flow-stack/hooks/herdr/y.sh >/dev/null; [ $? = 1 ] && ok "this repo: a path CI skips (/herdr/) is never @tested" || bad "hooks/herdr is @tested"
+  for p in plugins/flow-stack/hooks/guard.sh plugins/flow-stack/skills/flow/scripts/task.sh; do
+    "$H/routines.sh" safety "$p" >/dev/null; [ $? = 3 ] && ok "this repo scores $p as @tested" || bad "$p is not @tested"
   done
   "$H/routines.sh" safety plugins/flow-stack/skills/brief/SKILL.md >/dev/null && ok "this repo passes a plain skill doc" || bad "brief/SKILL.md flagged"
 fi

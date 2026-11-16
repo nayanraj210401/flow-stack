@@ -124,4 +124,12 @@ expect ask -- 'cp /tmp/x .flow/ready.tsv'
 w="$(jq -nc --arg c "$PWD" --arg f "$PWD/.flow/ready.tsv" '{hook_event_name:"PreToolUse",session_id:"s",cwd:$c,tool_name:"Write",tool_input:{file_path:$f,content:"x"}}' | "$H/edit-guard.sh" | jq -r '.hookSpecificOutput.permissionDecision // "allow"')"
 [ "$w" = ask ] && ok "ask: Write .flow/ready.tsv" || bad "Write .flow/ready.tsv → ${w:-allow}, want ask"
 
+# -- a piped push under --auto ship is held, and the reason says how to run it (a routine retried the pipe twice)
+prompt "${RUNNER[@]}" -- '/flow-stack:flow --auto ship Run the routine' >/dev/null; stamp
+why="$(jq -nc --arg c "$PWD" --arg cmd 'git push -u origin feat/x 2>&1 | tail -3' '{hook_event_name:"PreToolUse",session_id:"s",cwd:$c,tool_name:"Bash",tool_input:{command:$cmd}}' |
+  env "${RUNNER[@]}" "$H/guard.sh" | jq -r '.hookSpecificOutput.permissionDecisionReason // ""')"
+[[ "$why" == *"Run it as its own command"* ]] && ok "piped push: the reason names the shape" || bad "piped push reason: $why"
+expect allow "${RUNNER[@]}" -- 'git push -u origin feat/x'
+prompt -- '--no-auto' >/dev/null
+
 [ "$FAILS" -eq 0 ] && echo "gha: $PASSES passed" || { echo "gha: $FAILS failed"; exit 1; }
