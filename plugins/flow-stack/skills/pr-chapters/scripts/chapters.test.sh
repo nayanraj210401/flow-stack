@@ -20,8 +20,10 @@ cat >"$F/pr9.json" <<'J'
  "body":"Login had no limit, so a script could try passwords forever.\n\nAdds a token bucket per account.",
  "closingIssuesReferences":[{"number":5}],
  "commits":[{"oid":"aaa1111","messageHeadline":"add token bucket","messageBody":"5 tries a minute, refill 1 per 12s","committedDate":"2026-03-02T10:05:00Z","authors":[{"login":"ana"}]},
-            {"oid":"bbb2222","messageHeadline":"wire limiter into login","messageBody":"","committedDate":"2026-03-02T11:00:00Z","authors":[{"login":"ana"}]}],
- "reviews":[{"id":"R1","author":{"login":"bo"},"state":"CHANGES_REQUESTED","body":"What happens when the clock goes backwards?","submittedAt":"2026-03-02T15:00:00Z"},
+            {"oid":"bbb2222","messageHeadline":"wire limiter into login","messageBody":"","committedDate":"2026-03-02T11:00:00Z","authors":[{"login":"ana"}]},
+            {"oid":"ddd4444","messageHeadline":"use a monotonic clock for refill","messageBody":"answers the clock-skew review","committedDate":"2026-03-02T17:00:00Z","authors":[{"login":"ana"}]},
+            {"oid":"eee5555","messageHeadline":"Merge remote-tracking branch 'origin/main' into HEAD","messageBody":"","committedDate":"2026-03-02T18:00:00Z","authors":[{"login":"ana"}]}],
+ "reviews":[{"id":"R1","author":{"login":"bo"},"state":"CHANGES_REQUESTED","body":"Verdict: fix\nWhat happens when the clock goes backwards? Also the bucket size is hard-coded.","submittedAt":"2026-03-02T15:00:00Z"},
             {"id":"R2","author":{"login":"bo"},"state":"APPROVED","body":"","submittedAt":"2026-03-03T11:00:00Z"}],
  "comments":[{"id":"C1","author":{"login":"ana"},"body":"Monotonic clock now.","createdAt":"2026-03-02T16:00:00Z"}],
  "statusCheckRollup":[{"name":"test","conclusion":"SUCCESS"}]}
@@ -45,6 +47,8 @@ echo '[]' >"$F/pr7.comments.json"
 echo '["src/limit.ts"]' >"$F/commit-aaa1111.json"
 echo '["src/limit.ts","src/login.ts","dist/bundle.js"]' >"$F/commit-bbb2222.json"
 echo '["db/lockout.sql"]' >"$F/commit-ccc3333.json"
+echo '["src/limit.ts"]' >"$F/commit-ddd4444.json"
+echo '["src/limit.ts","README.md"]' >"$F/commit-eee5555.json"
 # PR 11 closes an issue in another repo, other/lib#5 (not acme/app#5)
 jq '.number=11 | .url="https://github.com/acme/app/pull/11" | .closingIssuesReferences=[{"number":5,"repository":{"name":"lib","owner":{"login":"other"}}}]' "$F/pr7.json" >"$F/pr11.json"
 cp "$F/pr7.files.json" "$F/pr11.files.json"; echo '[]' >"$F/pr11.comments.json"
@@ -112,7 +116,11 @@ story() {
        question: "Why throw instead of returning 429 from the route?",
        refs: [{pr: 9, file: "src/login.ts"}]},
       {id: "gen", title: "Generated bundle", pr: 9, tier: "skip", what: "Rebuilt bundle.", why: null,
-       question: "Is dist/bundle.js meant to be committed?", refs: [{pr: 9, file: "dist/bundle.js"}]}]}'
+       question: "Is dist/bundle.js meant to be committed?", refs: [{pr: 9, file: "dist/bundle.js"}]}],
+    rounds: [{review: "R1", findings: [
+      {text: "Refill breaks if the clock goes backwards", quote: "What happens when the clock goes backwards?", status: "fixed",
+       source: {kind: "commit", ref: "ddd4444", quote: "monotonic clock"}},
+      {text: "Bucket size is hard-coded", quote: "the bucket size is hard-coded", status: "unknown"}]}]}'
 }
 render() { "$H/render.sh" "$@"; }
 
@@ -136,14 +144,20 @@ if on refuse; then
   ck "blank question counts as none" 'bad x ".story.chapters[2].question=\"  \"" "gen"'
   ck "ref listing no hunks: refused" 'bad x ".story.chapters[0].refs[0].hunks=[]" "lists no hunks"'
   ck "a hunk in no chapter: refused, names it" 'bad x ".story.chapters[0].refs[0].hunks=[0]" "hunk 1 is in no chapter"'
+  ck "round on a review that doesn't exist: refused" 'bad x ".story.rounds[0].review=\"R9\"" "no such review"'
+  ck "finding not quoted from its review: refused" 'bad x ".story.rounds[0].findings[1].quote=\"the code is slow\"" "is not in that review"'
+  ck "a status with no source: refused (use unknown)" 'bad x "del(.story.rounds[0].findings[0].source)" "by whose word"'
+  ck "a status settled by a commit from before the review: refused" 'bad x ".story.rounds[0].findings[0].source={kind: \"commit\", ref: \"aaa1111\", quote: \"add token bucket\"}" "came before the review"'
+  ck "a status source quote not in it: refused" 'bad x ".story.rounds[0].findings[0].source.quote=\"all good\"" "all good"'
+  ck "unknown status word: refused" 'bad x ".story.rounds[0].findings[0].status=\"done\"" "is not fixed, partly, open or unknown"'
   ck "unknown source kind: refused" 'bad x ".story.chapters[0].why.sources[0].kind=\"vibes\"" "vibes"'
 fi
 
 if on render; then
   at() { grep -bo "id=\"$2\"" "$1" | head -1 | cut -d: -f1; }  # byte offset: the page body is one line
   story >"$SB/ok.json"
-  for fmt in scroll slides timeline; do
-    jq --arg f "$fmt" '.format=$f' "$SB/ok.json" >"$SB/$fmt.json"; render "$SB/$fmt.json" "$SB/$fmt.html" >/dev/null 2>&1
+  for fmt in scroll slides rounds; do
+    jq --arg f "$fmt" '.format=$f' "$SB/ok.json" >"$SB/$fmt.json"; render "$SB/$fmt.json" "$SB/$fmt.html" >/dev/null 2>"$SB/$fmt.err" || echo "  ✗ $fmt render: $(head -3 "$SB/$fmt.err")"
     ck "$fmt: page carries its format" 'grep -q "data-format=\"$fmt\"" "$SB/$fmt.html"'
     ck "$fmt: chapters in story order" 'h="$SB/$fmt.html"; a=$(at "$h" ch-core); b=$(at "$h" ch-wire); c=$(at "$h" ch-gen); [ -n "$a" ] && [ "$a" -lt "$b" ] && [ "$b" -lt "$c" ]'
   done
@@ -152,21 +166,23 @@ if on render; then
   ck "hunks drawn with numbered added/removed lines" 'grep -q "<span class=\"ln add\"><span class=\"no\"></span><span class=\"no\">1</span><span class=\"sg\">+</span><span class=\"tx\">export class Bucket" "$h" && grep -q "<span class=\"ln del\"><span class=\"no\">10</span><span class=\"no\"></span><span class=\"sg\">−</span><span class=\"tx\">  old()" "$h"'
   ck "only the referenced hunks of a file" 'grep -q "@@ -10,2 +13,3 @@ refill" "$h"'
   ck "omitted patch says so" 'grep -q "patch not shown" "$h"'
-  ck "sources cited with links: commit, review, issue, quote" 'grep -q "https://github.com/acme/app/commit/aaa1111" "$h" && grep -q "href=\"https://github.com/acme/app/pull/9#discussion_r77\"" "$h" && grep -q "review by bo · changes requested" "$h" && grep -q "https://github.com/acme/app/issues/5" "$h" && grep -q "a script could try passwords forever" "$h"'
+  ck "sources cited with links: commit, review, issue, quote" 'grep -q "https://github.com/acme/app/commit/aaa1111" "$h" && grep -q "href=\"https://github.com/acme/app/pull/9#discussion_r77\"" "$h" && grep -q "review by bo · fix" "$h" && grep -q "https://github.com/acme/app/issues/5" "$h" && grep -q "a script could try passwords forever" "$h"'
   ck "questions for the author collected, both of them" '[ "$(grep -o "class=\"question\"" "$h" | wc -l)" -ge 2 ] && grep -q "Is dist/bundle.js meant to be committed?" "$h" && grep -q "Questions for the author" "$h"'
   ck "tiers shown" 'grep -q "tier-read" "$h" && grep -q "tier-skip" "$h"'
   ck "values escaped" '! grep -q "<b>x</b>" "$h" && ! grep -q "never says no </script>" "$h"'
-  ck "timeline: PR events (opened, commits, review, merged)" 'grep -q "class=\"ev" "$SB/timeline.html" && grep -q "CHANGES_REQUESTED\|changes requested" "$SB/timeline.html" && grep -q "merged" "$SB/timeline.html"'
   ck "footer links to the skill" 'grep -q "Built by <a href=\"https://github.com/nayanraj210401/flow-stack/tree/main/plugins/flow-stack/skills/pr-chapters\">flow-stack pr-chapters</a>" "$h"'
-  s="$SB/slides.html"; t="$SB/timeline.html"
+  s="$SB/slides.html"; t="$SB/rounds.html"
   ck "slides: a claim slide per chapter" '[ "$(grep -o "class=\"chapter slide claim" "$s" | wc -l)" -eq 3 ]'
   ck "slides: one slide per shown hunk (2 + 1 + omitted 1)" '[ "$(grep -o "class=\"slide hs " "$s" | wc -l)" -eq 4 ] && grep -q "hunk 2 of 2" "$s"'
   ck "slides: hunk slides show the whole hunk, captioned" 'grep -q "<p class=\"cap\">A token bucket that refills one try per 12s.</p>" "$s"'
   ck "slides: questions are a checklist" '[ "$(grep -o "type=\"checkbox\"" "$s" | wc -l)" -eq 2 ] && ! grep -q "type=\"checkbox\"" "$h"'
-  ck "timeline: metrics from real times" 'grep -q "<dt>First review</dt><dd>5h after opening</dd>" "$t" && grep -q "<dt>Open → merged</dt><dd>1d 2h</dd>" "$t" && grep -q "<dt>Reviews</dt><dd>2</dd>" "$t"'
-  ck "timeline: a lane per PR on a to-scale axis, quiet gaps labeled" 'grep -q "lane-label\">PR #9<" "$t" && grep -q "mk review r-changes_requested\" style=\"left:" "$t" && grep -q "19h quiet" "$t"'
-  ck "timeline: each chapter sits under the commit that first touched its files" 'a=$(at "$t" ch-core); w=$(at "$t" ch-wire); c1=$(grep -bo "aaa1111</code>" "$t" | head -1 | cut -d: -f1); c2=$(grep -bo "bbb2222</code>" "$t" | head -1 | cut -d: -f1); [ "$c1" -lt "$a" ] && [ "$a" -lt "$c2" ] && [ "$c2" -lt "$w" ]'
-  ck "timeline: read chapters open, others folded" 'grep -q "<details class=\"fold chapter tier-read\" id=\"ch-core\" open>" "$t" && grep -q "<details class=\"fold chapter tier-skip\" id=\"ch-gen\"><summary>" "$t"'
+  ck "rounds: one round per review with its verdict (body's Verdict line, else state)" '[ "$(grep -o "<b>Round [0-9]</b>" "$t" | wc -l)" -eq 2 ] && grep -q "<b>Round 1</b><span class=\"vd\">fix</span><span>by bo</span>" "$t" && grep -q "<b>Round 2</b><span class=\"vd\">approved</span>" "$t"'
+  ck "rounds: commits before the first review, then the ones each review got" 'grep -q "2 commits before the first review" "$t" && grep -q "Then 1 commit</p><ul class=\"commits\"><li><a href=\"https://github.com/acme/app/commit/ddd4444\">" "$t"'
+  ck "rounds: merge commits hidden" '! grep -q "eee5555\|Merge remote-tracking" "$t"'
+  ck "rounds: a finding shows its quote, status, and the commit that settled it" 'grep -q "fs-fixed\">fixed</span><div><p>Refill breaks if the clock goes backwards</p><q>What happens when the clock goes backwards?</q><p class=\"by\"><a href=\"https://github.com/acme/app/commit/ddd4444\">commit ddd4444 ↗</a> <q>monotonic clock</q>" "$t"'
+  ck "rounds: unsettled findings listed as not settled" 'grep -q "Not settled on the current head</h3><ul><li><span class=\"fs fs-unknown\">no later word</span>Bucket size is hard-coded" "$t"'
+  ck "rounds: a review with no findings written says so, and chapters follow" 'grep -q "<b>Round 2</b>.*No comments.\|<b>Round 2</b>.*Findings not summarized" "$t" && [ "$(at "$t" rounds)" -lt "$(at "$t" ch-core)" ]'
+  ck "scroll: no rounds section" '! grep -q "id=\"rounds\"" "$h"'
   ck "a story.jq in the working directory doesn't hijack render" '(cd "$SB" && echo ". = 1" >story.jq && "$H/render.sh" "$SB/ok.json" "$SB/cwd.html" >/dev/null 2>&1) && grep -q "id=\"ch-core\"" "$SB/cwd.html"'
   ck "slides: nav present" 'grep -q "id=\"slide-nav\"" "$SB/slides.html"'
 fi
@@ -177,7 +193,7 @@ if on format; then
   ck "collect carries the setting" 'collect 9 | jq -e ".format==\"slides\"" >/dev/null'
   ck "settings.sh chapters format prints it" '(cd "$R" && FLOW_STACK_HOME="$SB/home" "$SETTINGS" chapters format) | grep -q slides'
   ck "unknown format refused" '! (cd "$R" && FLOW_STACK_HOME="$SB/home" "$SETTINGS" chapters format poster) 2>/dev/null'
-  ck "--format overrides the setting" 'collect 9 --format timeline | jq -e ".format==\"timeline\"" >/dev/null'
+  ck "--format overrides the setting" 'collect 9 --format rounds | jq -e ".format==\"rounds\"" >/dev/null'
 fi
 
 [ $fail = 0 ] && echo "chapters ($want): $pass passed" || exit 1

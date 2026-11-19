@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # collect.sh: the raw material for a PR story, as one JSON document on stdout.
-#   collect.sh <ref> [<ref> ...] [--task <slug>] [--format scroll|slides|timeline]
+#   collect.sh <ref> [<ref> ...] [--task <slug>] [--format scroll|slides|rounds]
 #
 # A ref is a PR or issue: 12, #12, owner/repo#12, or its github.com URL. One PR is a story of
 # its own; one issue is the story of the PRs that close it; several refs are one story, PRs in
@@ -22,9 +22,9 @@ while [ $# -gt 0 ]; do
     *) refs+=("$1") ;;
   esac; shift
 done
-[ "${#refs[@]}" -gt 0 ] || die "usage: collect.sh <pr|issue> [<pr> ...] [--task <slug>] [--format scroll|slides|timeline]"
+[ "${#refs[@]}" -gt 0 ] || die "usage: collect.sh <pr|issue> [<pr> ...] [--task <slug>] [--format scroll|slides|rounds]"
 [ -n "$format" ] || format="$("$here/../../settings/scripts/settings.sh" chapters format 2>/dev/null)"
-case "${format:-scroll}" in scroll|slides|timeline) format="${format:-scroll}" ;; *) die "format '$format': want scroll, slides or timeline" ;; esac
+case "${format:-scroll}" in scroll|slides|rounds) format="${format:-scroll}" ;; *) die "format '$format': want scroll, slides or rounds" ;; esac
 
 here_repo=""
 for r in "${refs[@]}"; do
@@ -54,7 +54,7 @@ pr_json() {
   view="$(gh pr view "$2" -R "$1" --json "$PR_FIELDS" 2>"$tmp/err")" || return 1
   files="$(gh api "repos/$1/pulls/$2/files" --paginate | jq -s 'add // []')" || die "could not read the files of $1#$2"
   comments="$(gh api "repos/$1/pulls/$2/comments" --paginate | jq -s 'add // []')" || die "could not read the review comments of $1#$2"
-  # the files each commit touched, so the timeline can pin a chapter to the commit that wrote it (first 60)
+  # the files each commit touched, so the rounds view can say what changed after each review (first 60)
   local cf="{}" sha fl
   for sha in $(jq -r '.commits[]?.oid' <<<"$view" | head -60); do
     fl="$(gh api "repos/$1/commits/$sha" --jq '[.files[]?.filename]' 2>/dev/null)" || fl=null

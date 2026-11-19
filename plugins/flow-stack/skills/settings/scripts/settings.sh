@@ -7,7 +7,7 @@
 #                                                 impacted: run only the suites a change touches (suites.sh)
 #   settings.sh tests unmatched full|skip [--repo]
 #                                                 a changed file no suite claims: run the full suite, or skip it
-#   settings.sh chapters format [scroll|slides|timeline] [--repo]
+#   settings.sh chapters format [scroll|slides|rounds] [--repo]
 #                                                 the pr-chapters page: print the format, or set it (default scroll)
 #   settings.sh init                              create ~/.flow-stack/settings.json, carrying over config.json toggles
 #   settings.sh path                              the files read, highest precedence first
@@ -146,11 +146,11 @@ case "${1:-show}" in
     IFS=$'\t' read -r st where < <(test_setting "$key" x); echo "tests.$key: $st ($where)"
     exit 0 ;;
   chapters)
-    [ "${2:-}" = format ] || die "usage: settings.sh chapters format [scroll|slides|timeline] [--repo]"
+    [ "${2:-}" = format ] || die "usage: settings.sh chapters format [scroll|slides|rounds] [--repo]"
     case "${3:-}" in
       ''|--repo) setting chapters format scroll | cut -f1; exit 0 ;;
-      scroll|slides|timeline) ;;
-      *) die "chapters format: want scroll, slides or timeline (got '$3')" ;;
+      scroll|slides|rounds) ;;
+      *) die "chapters format: want scroll, slides or rounds (got '$3')" ;;
     esac
     write "$(target "${4:-}" "$trepo")" --arg v "$3" '.chapters.format = $v'
     IFS=$'\t' read -r st where < <(setting chapters format scroll); echo "chapters.format: $st ($where)"

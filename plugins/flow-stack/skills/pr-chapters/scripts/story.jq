@@ -7,6 +7,8 @@ def norm: ascii_downcase | gsub("\\s+"; " ");
 def blank: (. // "") | tostring | test("^\\s*$");
 # long sources a why must quote from, so the link proves the claim
 def needs_quote($s): (["pr-body", "issue"] | index($s.kind)) != null or ($s.kind == "task" and ($s.ref // "INTENT.md") == "INTENT.md");
+# a review's verdict: its body's "Verdict: x" first line, else its GitHub state
+def verdict: ((.body // "") | (split("\n")[0] // "") | gsub("\\*"; "") | capture("(?i)^\\s*verdict:?\\s*(?<v>[a-z]+)")?.v | ascii_downcase) // (.state | ascii_downcase | gsub("_"; " "));
 def kinds: ["pr-body", "commit", "review", "review-comment", "comment", "issue", "task"];
 
 # the text and link a source points at, or null when it points at nothing that was collected
@@ -27,13 +29,20 @@ def resolve($s; $ch; $root): [
       ($p.commits[] | select(($s.ref | tostring | length) >= 7 and (.sha | startswith($s.ref | tostring))))
       | {text: "\(.headline)\n\(.body)", url: "https://github.com/\($p.repo)/commit/\(.sha)", label: "commit \(.sha[0:7])"}
     elif $s.kind == "review" then
-      ($p.reviews[] | select(.id == $s.ref)) | {text: .body, url: $p.url, label: "review by \(.author) · \(.state | ascii_downcase | gsub("_"; " "))"}
+      ($p.reviews[] | select(.id == $s.ref)) | {text: .body, url: $p.url, label: "review by \(.author) · \(verdict)"}
     elif $s.kind == "review-comment" then
       ($p.review_comments[] | select((.id | tostring) == ($s.ref | tostring)))
       | {text: .body, url: "\($p.url)#discussion_r\(.id)", label: "\(.author) on \(.path)"}
     elif $s.kind == "comment" then
       ($p.comments[] | select(.id == $s.ref)) | {text: .body, url: $p.url, label: "comment by \(.author)"}
     else null end ] | .[0];
+
+# when a status source was written: a commit's date, a review's or a comment's time; null for anything else
+def when_of($p): . as $s | [
+  if $s.kind == "commit" then ($p.commits[] | select(($s.ref | tostring | length) >= 7 and (.sha | startswith($s.ref | tostring))) | .date)
+  elif $s.kind == "review" then ($p.reviews[] | select(.id == $s.ref) | .submittedAt)
+  elif $s.kind == "comment" then ($p.comments[] | select(.id == $s.ref) | .createdAt)
+  else empty end] | .[0];
 
 def errors:
   . as $root | (prs_by_n) as $by
@@ -64,7 +73,25 @@ def errors:
          | [$root.story.chapters[] | .pr as $cp | .refs[]? | select((.pr // $cp) == $p.number and .file == $path)] as $rs
          | if ($rs | length) == 0 then "\($path) (PR #\($p.number)) is in no chapter; every changed file goes in one, tests and generated files in a skip chapter"
            elif any($rs[]; .hunks == null) then empty
-           else ([range($nh)] - [$rs[].hunks[]]) | .[] | "\($path) (PR #\($p.number)): hunk \(.) is in no chapter" end) ]
+           else ([range($nh)] - [$rs[].hunks[]]) | .[] | "\($path) (PR #\($p.number)): hunk \(.) is in no chapter" end),
+        # rounds: a finding quotes its review; a status other than unknown quotes a later commit, review or comment that says so
+        ((.story.rounds // [])[] as $rd | ($rd.pr // $root.prs[0].number) as $n | $by[$n | tostring] as $p
+         | ([$p.reviews[]? | select(.id == $rd.review)] | .[0]) as $rv | "round \($rd.review)" as $at
+         | if $p == null then "\($at): PR \($n) is not in this story"
+           elif $rv == null then "\($at): no such review on PR #\($n)"
+           else ($rd.findings // [])[] as $f
+             | if ($f.text | blank) then "\($at): a finding needs text"
+               elif ($f.quote | blank) then "\($at): finding \"\($f.text)\" needs the sentence from the review that raises it"
+               elif (($rv.body | norm) | contains($f.quote | norm) | not) then "\($at): quote \"\($f.quote)\" is not in that review"
+               elif (["fixed", "partly", "open", "unknown"] | index($f.status)) == null then "\($at): status '\($f.status)' is not fixed, partly, open or unknown"
+               elif $f.status == "unknown" then empty
+               elif $f.source == null then "\($at): \"\($f.text)\" is \($f.status) by whose word? cite the later commit, review or comment that says so, or use unknown"
+               else ([$f.source] | map(when_of($p)) | .[0]) as $t | resolve($f.source; {pr: $n}; $root) as $r
+                 | if $r == null or $t == null then "\($at): \($f.source.kind) \($f.source.ref // "") was not collected, or can't settle a finding (use a commit, review or comment)"
+                   elif $t <= $rv.submittedAt then "\($at): \($r.label) came before the review, so it can't settle \"\($f.text)\""
+                   elif ($f.source.quote | blank) then "\($at): add the words from \($r.label) that settle \"\($f.text)\""
+                   elif (($r.text | norm) | contains($f.source.quote | norm) | not) then "\($at): quote \"\($f.source.quote)\" is not in \($r.label)"
+                   else empty end end end) ]
     end;
 
 # ---- drawing
@@ -146,63 +173,41 @@ def slides($root; $num):
           + "<div><p class=\"ch-meta\"><span>\($ch.title | e)</span><span>hunk \($x.k + 1) of \($x.n)</span></p><p class=\"cap\">\(($x.f.note // $ch.what) | e)</p></div></div>"
           + "<figure class=\"file\">" + figcap($x.file) + (if $x.h == null then omitted($x.p) else ($x.h | hunk("full")) end) + "</figure></section>"] | join(""));
 
-# ---- timeline: real time, to scale
-def secs: sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601;
-def dur: (. / 60 | floor) as $m
-  | if $m < 60 then "\($m)m" elif $m < 1440 then "\($m / 60 | floor)h" + when($m % 60 > 0 and $m < 600; " \($m % 60)m")
-    else "\($m / 1440 | floor)d" + when(($m % 1440) >= 60; " \(($m % 1440) / 60 | floor)h") end;
-def evs($p):
-  ([{t: $p.createdAt, k: "open", s: "Opened by \($p.author)"}]
-   + [$p.commits[] | {t: .date, k: "commit", s: .headline, sha: .sha}]
-   + [$p.reviews[] | {t: .submittedAt, k: "review", st: (.state | ascii_downcase), s: "\(.author) \(.state | ascii_downcase | gsub("_"; " "))"}]
-   + [$p.comments[] | {t: .createdAt, k: "comment", s: "\(.author) commented"}]
-   + (if $p.mergedAt then [{t: $p.mergedAt, k: "merged", s: "Merged into \($p.base)"}] else [] end))
-  | map(select(.t != null) | .x = (.t | secs)) | sort_by(.x);
-# the first commit that touched any file of the chapter: where its code was written
-def pin($p): [.refs[]?.file] as $fs
-  | [$p.commits[] | select((.files // []) as $cf | any($fs[]; . as $x | $cf | index($x) != null))] | sort_by(.date) | (.[0].sha // null);
-def gaps: sort_by(.x) | [range(1; length) as $i | {a: .[$i - 1].x, b: .[$i].x}];
-def axis($root):
-  ([$root.prs[] | evs(.)[]] + [$root.issues[] | select(.createdAt) | {x: (.createdAt | secs), k: "issue"}]) as $all
-  | ($all | map(.x) | min) as $t0
-  | ([$all[].x] + (if any($root.prs[]; .mergedAt == null) then [now] else [] end) | max) as $t1
-  | ([$t1 - $t0, 1] | max) as $span
-  | def pos($x): ((($x - $t0) / $span * 1000) | round) / 10;
-    def mk($cls; $x; $title): "<i class=\"mk \($cls)\" style=\"left:\(pos($x))%\" title=\"\($title | e)\"></i>";
-  ($all | gaps | map(select(.b - .a > ([43200, $span * 0.15] | max)))) as $quiet
-  | "<section class=\"tl-axis\" aria-label=\"Time to scale\"><div class=\"tl-scale\"><span>\(ago($t0 | todate) | e)</span><span>\(($t1 - $t0) | dur) end to end</span><span>\(ago($t1 | todate) | e)</span></div><div class=\"lanes\">"
-    + ([$root.issues[] | select(.createdAt) | "<div class=\"lane\"><span class=\"lane-label\">Issue #\(.number)</span><div class=\"track\">" + mk("issue"; .createdAt | secs; "Issue #\(.number) opened") + "</div></div>"] | join(""))
-    + ([$root.prs[] as $p | evs($p) as $ev | ($p.createdAt | secs) as $a | (if $p.mergedAt then $p.mergedAt | secs else $t1 end) as $b
-        | "<div class=\"lane\"><span class=\"lane-label\">PR #\($p.number)</span><div class=\"track\">"
-          + "<span class=\"bar\(when($p.mergedAt == null; " open"))\" style=\"left:\(pos($a))%;width:\([pos($b) - pos($a), 0.6] | max)%\"></span>"
-          + ([$ev[] | select(.k != "open") | mk(.k + when(.st; " r-" + .st); .x; "\(ago(.t)) · \(.s)")] | join(""))
-          + "</div></div>"] | join(""))
-    + when(($quiet | length) > 0; "<div class=\"lane quiet\"><span class=\"lane-label\"></span><div class=\"track\">"
-        + ($quiet | map("<span class=\"gap\" style=\"left:\(pos(.a))%;width:\(pos(.b) - pos(.a))%\"><b>\((.b - .a) | dur) quiet</b></span>") | join("")) + "</div></div>")
-    + "</div><p class=\"tl-key\"><span><i class=\"mk commit\"></i>commit</span><span><i class=\"mk review r-commented\"></i>review</span><span><i class=\"mk review r-changes_requested\"></i>changes requested</span><span><i class=\"mk review r-approved\"></i>approved</span><span><i class=\"mk merged\"></i>merged</span></p></section>";
-def metrics($root):
-  ([$root.prs[].createdAt | secs] | min) as $open
-  | ([$root.prs[].reviews[].submittedAt | select(.) | secs] | min) as $first
-  | ([$root.prs[] | evs(.)[]] | gaps | map(.b - .a) | max) as $quiet
-  | def m($label; $value): "<div><dt>\($label)</dt><dd>\($value | e)</dd></div>";
-  "<dl class=\"stats metrics\">"
-  + m("Open → merged"; if all($root.prs[]; .mergedAt) then (([$root.prs[].mergedAt | secs] | max) - $open | dur) else "still open" end)
-  + m("First review"; if $first then ($first - $open | dur) + " after opening" else "none yet" end)
-  + m("Reviews"; [$root.prs[].reviews[]] | length | tostring)
-  + m("Commits after first review"; if $first then [$root.prs[].commits[] | select((.date | secs) > $first)] | length | tostring else "–" end)
-  + when($quiet != null; m("Longest quiet"; $quiet | dur))
-  + "</dl>";
-def tlpr($root; $chs; $p):
-  [$chs[] | select(.pr == $p.number) | . + {pin: pin($p)}] as $mine
-  | evs($p) as $ev | [$ev[] | select(.k == "review" and .st == "changes_requested") | .x] as $crs
-  | def fold: "<details class=\"fold chapter tier-\(.tier | e)\" id=\"ch-\(.id | e)\"\(when(.tier == "read"; " open"))><summary>" + chhead($root; .num) + "</summary>" + chgrid($root) + "</details>";
-  "<section class=\"pr-group\">" + prhead($p) + "<ol class=\"rail\">"
-  + ([$ev[] | . as $v
-      | "<li class=\"ev \(.k)\(when(.st; " r-" + .st))\"><time>\(ago(.t) | e)</time><span>\(when(.sha; "<code>\(.sha[0:7] | e)</code> "))\(.s | e)"
-        + when(.k == "commit" and any($crs[]; . < $v.x); "<em class=\"tag\">after changes requested</em>") + "</span></li>"
-        + ([$mine[] | select(.pin != null and .pin == $v.sha) | "<li class=\"ev-ch\">" + fold + "</li>"] | join(""))] | join(""))
-  + ([$mine[] | select(.pin == null)] | when(length > 0; "<li class=\"ev-ch loose\"><p class=\"loose-h\">Not tied to one commit</p>" + (map(fold) | join("")) + "</li>"))
-  + "</ol></section>";
+# ---- rounds: each review, what it found, what each finding became, and the commits that followed
+def vclass: if test("ship|approved") then "ok" elif test("block|changes") then "bad" elif test("fix") then "warn" else "mute" end;
+def stlabel: {fixed: "fixed", partly: "partly fixed", open: "still open", unknown: "no later word"}[.] // .;
+def realcommits($p): [$p.commits[] | select(.headline | startswith("Merge ") | not)];
+def commitlist($p):
+  if length == 0 then "" else "<ul class=\"commits\">" + (map("<li><a href=\"https://github.com/\($p.repo)/commit/\(.sha)\"><code>\(.sha[0:7])</code></a><span class=\"hl\">\(.headline | e)</span>"
+    + when(.files != null; "<span class=\"nf\">\(plural(.files | length; "file"))</span>") + "</li>") | join("")) + "</ul>" end;
+def rounds($root):
+  ($root.story.rounds // []) as $notes
+  | [$root.prs[] as $p
+     | ([$p.reviews[] | select(.submittedAt != null and ((.body | blank | not) or .state != "COMMENTED"))] | sort_by(.submittedAt)) as $rvs
+     | realcommits($p) as $cs
+     | when(($root.prs | length) > 1; prhead($p))
+       + "<ol class=\"rd-list\">"
+       + "<li class=\"rd start\"><span class=\"rd-mark\"></span><div class=\"rd-body\"><p class=\"rd-h\"><b>Opened</b><span>by \($p.author | e)</span><time>\(ago($p.createdAt) | e)</time></p>"
+         + ([$cs[] | select(($rvs | length) == 0 or .date < $rvs[0].submittedAt)] | if length > 0 then "<p class=\"rd-then\">\(plural(length; "commit")) before the first review</p>" + commitlist($p) else "" end) + "</div></li>"
+       + ([$rvs | to_entries[] | .key as $i | .value as $rv | ($rvs[$i + 1].submittedAt // null) as $next
+           | ($rv | verdict) as $v
+           | ([$notes[] | select(.review == $rv.id)] | .[0].findings // null) as $fs
+           | [$cs[] | select(.date > $rv.submittedAt and ($next == null or .date <= $next))] as $after
+           | "<li class=\"rd v-\($v | vclass)\"><span class=\"rd-mark\">\($i + 1)</span><div class=\"rd-body\"><p class=\"rd-h\"><b>Round \($i + 1)</b><span class=\"vd\">\($v | e)</span><span>by \($rv.author | e)</span><time>\(ago($rv.submittedAt) | e)</time><a href=\"\($p.url | e)\">review ↗</a></p>"
+             + (if $fs != null and ($fs | length) > 0 then
+                 "<ul class=\"findings\">" + ([$fs[] | . as $f | (if .source then resolve(.source; {pr: $p.number}; $root) else null end) as $r
+                   | "<li><span class=\"fs fs-\(.status | e)\">\(.status | stlabel | e)</span><div><p>\(.text | e)</p><q>\(.quote | e)</q>"
+                     + when($r != null; "<p class=\"by\">" + (if $r.url then "<a href=\"\($r.url | e)\">\($r.label | e) ↗</a>" else ($r.label | e) end) + when((.source.quote | blank | not); " <q>\(.source.quote | e)</q>") + "</p>")
+                     + "</div></li>"] | join("")) + "</ul>"
+               elif ($rv.body | blank) then "<p class=\"rd-none\">No comments.</p>"
+               else "<p class=\"rd-none\">Findings not summarized here. <a href=\"\($p.url | e)\">Read the review ↗</a></p>" end)
+             + when(($after | length) > 0; "<p class=\"rd-then\">Then \(plural($after | length; "commit"))</p>" + ($after | commitlist($p)))
+             + "</div></li>"] | join(""))
+       + "</ol>"] | join("") as $body
+  | ([$notes[] | .review as $id | .findings[]? | select(.status == "open" or .status == "unknown") | . + {review: $id}]) as $open
+  | "<section class=\"rounds\" id=\"rounds\"><h2 class=\"sec-h\">Review rounds</h2>" + $body
+    + when(($open | length) > 0; "<div class=\"still-open\"><h3>Not settled on the current head</h3><ul>" + ($open | map("<li><span class=\"fs fs-\(.status | e)\">\(.status | stlabel | e)</span>\(.text | e)</li>") | join("")) + "</ul></div>")
+    + "</section>";
 
 def page:
   . as $root | .story as $s | ($s.chapters | to_entries | map(.value + {num: (.key + 1)})) as $chs
@@ -230,13 +235,11 @@ def page:
     + when(($qs | length) > 0; "<a class=\"qjump\" href=\"#questions\"><b>\($qs | length)</b> \(when(($qs | length) == 1; "question"))\(when(($qs | length) > 1; "questions")) the PR doesn’t answer →</a>")
     + "</nav></div></header>"
     + "<main class=\"chapters\">"
-    + (if .format == "timeline" then
-        "<section class=\"tl-top\"><h2 class=\"tl-h\">How it unfolded</h2>" + metrics($root) + axis($root) + "</section>"
-        + ([.prs[] as $p | tlpr($root; $chs; $p)] | join(""))
-       elif .format == "slides" then
+    + (if .format == "slides" then
         ([$chs[] | slides($root; .num)] | join(""))
        else
-        ([$chs | to_entries[] | .value as $c | (if .key == 0 then null else $chs[.key - 1].pr end) as $prev
+        when(.format == "rounds"; rounds($root) + "<h2 class=\"sec-h\">The change, chapter by chapter</h2>")
+        + ([$chs | to_entries[] | .value as $c | (if .key == 0 then null else $chs[.key - 1].pr end) as $prev
           | when(($root.prs | length) > 1 and $c.pr != $prev; prhead(($root | prs_by_n)[$c.pr | tostring]))
             + ($c | chapter($root; $c.num))] | join(""))
        end)

@@ -120,7 +120,7 @@ Type a skill yourself when you want a specific thing: `/flow-stack:challenge`, `
 | "What changed?" / catching up | `/flow-stack:what` | the shape of a diff, PR, or the agent's session in about 8 lines |
 | Prove it works | `/flow-stack:verify` | evidence recorded from the real app, not "it compiles" |
 | Before you review a diff | `/flow-stack:tour` | what to read, skim, or skip, and why |
-| Onboard a reviewer to a PR or issue | `/flow-stack:pr-chapters <pr> \| <issue> \| <pr> <pr>…` | one private artifact page telling the change core-first, in chapters with their hunks; every why links to the PR, commit, review, issue, or flow task that says it, and anything unexplained becomes a question for the author. Scroll, slides, or timeline (`settings.sh chapters format`) |
+| Onboard a reviewer to a PR or issue | `/flow-stack:pr-chapters <pr> \| <issue> \| <pr> <pr>…` | one private artifact page telling the change core-first, in chapters with their hunks; every why links to the PR, commit, review, issue, or flow task that says it, and anything unexplained becomes a question for the author. Scroll to read alone, slides to walk a team through it, or rounds to re-review: each review's findings, which are fixed by whose word, and what's still open (`settings.sh chapters format`) |
 | Reply too long | `/flow-stack:brief` | the last reply in 3 plain lines |
 | Clean up a diff / prose | `/flow-stack:deslop` / `/flow-stack:unslop` | slop removed, graded against your taste |
 | Context filling up / stopping for the day | `/flow-stack:handoff` | HANDOFF.md; the next session starts with `/flow resume` |

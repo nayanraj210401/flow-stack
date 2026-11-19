@@ -14,8 +14,9 @@ The user runs /flow-stack:pr-chapters on a PR, a GitHub issue, or several PRs an
 ## Sub-features
 - pr.chapters.collect · collect.sh turns a PR (12, #12, owner/repo#12, URL), an issue (its closing PRs), or a PR list into one JSON: PRs in time order, commits, files with hunks, reviews, inline comments, closed issues, the flow task named by TICKET or --task
 - pr.chapters.check · render.sh refuses an uncited why with no question, an uncovered file, a hunk/file/commit/review/issue/task the story didn't collect, and a quote that isn't in its source
-- pr.chapters.render · the page in scroll, slides (one chapter per screen), or timeline (each PR's real events); values escaped
-- pr.chapters.format · settings.sh chapters format scroll|slides|timeline; collect --format overrides
+- pr.chapters.render · the page in scroll, slides (claim slide per chapter, a slide per hunk, progress bar, question checklist), or rounds (each review's verdict, findings with sourced status, the commits after it; merge commits hidden); values escaped
+- pr.chapters.rounds · render.sh refuses a finding not quoted from its review, and a status other than unknown without a later commit, review or comment quoting it
+- pr.chapters.format · settings.sh chapters format scroll|slides|rounds; collect --format overrides
 - pr.chapters.artifact · the skill publishes one artifact per story, its link kept in ~/.flow-stack/chapters/urls.tsv (model-only; not driven)
 
 ## How to get to it
