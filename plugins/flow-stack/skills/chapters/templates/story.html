@@ -44,7 +44,6 @@ code{font:500 .86em var(--mono)}
 h1,h2,h3{margin:0;text-wrap:balance}
 h3{font:600 11px/1 var(--sans);text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
 .plus{color:var(--add-bar)} .minus{color:var(--del-bar)}
-.wrap{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 .story{display:flex;flex-direction:column}
 
 /* hero */
@@ -195,8 +194,7 @@ h1{font:700 clamp(30px,4.4vw,52px)/1.04 var(--display);letter-spacing:-.025em;ma
 .rd-none{margin:0;color:var(--muted);font-size:14px}
 .rd-then{margin:0;font:600 11px var(--sans);text-transform:uppercase;letter-spacing:.09em;color:var(--muted)}
 .commits{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:14px}
-.commits li{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:baseline}
-.commits .nf{font:12px var(--mono);color:var(--muted)}
+.commits li{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:baseline}
 .still-open{max-width:900px;padding:16px 18px;border-radius:12px;background:var(--read-soft);display:flex;flex-direction:column;gap:10px}
 .still-open h3{color:var(--read)}
 .still-open ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
@@ -258,8 +256,6 @@ h1{font:700 clamp(30px,4.4vw,52px)/1.04 var(--display);letter-spacing:-.025em;ma
   .question{grid-template-columns:1fr;gap:4px}
   .rd{gap:10px}
   .findings li{grid-template-columns:1fr;gap:6px}
-  .commits li{grid-template-columns:auto 1fr}
-  .commits .nf{display:none}
   .hs-cap{grid-template-columns:1fr;gap:6px}
   .ln{grid-template-columns:2.8em 2.8em 1.4em auto}
 }

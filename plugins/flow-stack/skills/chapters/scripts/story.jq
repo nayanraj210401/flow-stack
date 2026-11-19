@@ -5,6 +5,8 @@
 def prs_by_n: reduce .prs[] as $p ({}; .[$p.number | tostring] = $p);
 def norm: ascii_downcase | gsub("\\s+"; " ");
 def blank: (. // "") | tostring | test("^\\s*$");
+# a quote that can carry a claim: three words or more, so "the" or "a" can't match anything
+def short: (. // "") | tostring | [splits("\\s+") | select(length > 0)] | length < 3;
 # long sources a why must quote from, so the link proves the claim
 def needs_quote($s): (["pr-body", "issue"] | index($s.kind)) != null or ($s.kind == "task" and ($s.ref // "INTENT.md") == "INTENT.md");
 # a review's verdict: its body's "Verdict: x" first line, else its GitHub state
@@ -48,7 +50,9 @@ def errors:
   . as $root | (prs_by_n) as $by
   | if (.story | type) != "object" or ((.story.chapters // []) | length) == 0 then ["no story: fill .story with a title, a summary and chapters (see SKILL.md)"]
     else
-      [ (.story.chapters | map(.id) | group_by(.)[] | select(length > 1) | "chapter id \(.[0]) is used twice"),
+      [ (if (.story.title | blank) or (.story.summary | blank) then "the story needs a title and a summary" else empty end),
+        (.story.chapters | map(.id) | group_by(.)[] | select(length > 1) | "chapter id \(.[0]) is used twice"),
+        ((.story.rounds // []) | map(.review) | group_by(.)[] | select(length > 1) | "round \(.[0]) is listed twice; put all its findings in one entry"),
         (.story.chapters[] as $ch | ($ch.id // "?") as $id
          | ( (if ($id | tostring | test("^[a-z0-9-]+$")) then empty else "chapter \($id): id must be lowercase letters, digits and dashes" end),
              (if $by[$ch.pr | tostring] then empty else "chapter \($id): PR \($ch.pr) is not in this story" end),
@@ -56,12 +60,14 @@ def errors:
              (if ($ch.title | type) == "string" and ($ch.what | type) == "string" then empty else "chapter \($id): needs a title and a what" end),
              (if (($ch.why.sources // []) | length) > 0 or ($ch.question | blank | not) then empty
               else "chapter \($id): the why has no source and there is no question for the author; cite where the why is written, or ask" end),
+             (if (($ch.why.sources // []) | length) == 0 and ($ch.why.text | blank | not) then "chapter \($id): the why text has no source; cite it, or drop it and ask the author" else empty end),
              ($ch.why.sources[]? as $s
               | if (kinds | index($s.kind)) == null then "chapter \($id): source kind '\($s.kind)' is not one of \(kinds | join(", "))"
                 else (resolve($s; $ch; $root)) as $r
                 | if $r == null then "chapter \($id): \($s.kind) \($s.ref // "") was not collected for this story"
                   elif ($r.text | blank) then "chapter \($id): \($r.label) is empty, so it can't carry a why"
                   elif needs_quote($s) and ($s.quote | blank) then "chapter \($id): \($r.label) is long; add the quote that carries the why"
+                  elif ($s.quote | blank | not) and ($s.quote | short) then "chapter \($id): quote \"\($s.quote)\" is too short to prove anything; quote at least three words"
                   elif ($s.quote | blank | not) and (($r.text | norm) | contains($s.quote | norm) | not) then "chapter \($id): quote \"\($s.quote)\" is not in \($r.label)"
                   else empty end end),
              ($ch.refs[]? as $f | ($by[($f.pr // $ch.pr) | tostring]) as $p
@@ -81,7 +87,7 @@ def errors:
            elif $rv == null then "\($at): no such review on PR #\($n)"
            else ($rd.findings // [])[] as $f
              | if ($f.text | blank) then "\($at): a finding needs text"
-               elif ($f.quote | blank) then "\($at): finding \"\($f.text)\" needs the sentence from the review that raises it"
+               elif ($f.quote | short) then "\($at): finding \"\($f.text)\" needs the review's words that raise it (three or more)"
                elif (($rv.body | norm) | contains($f.quote | norm) | not) then "\($at): quote \"\($f.quote)\" is not in that review"
                elif (["fixed", "partly", "open", "unknown"] | index($f.status)) == null then "\($at): status '\($f.status)' is not fixed, partly, open or unknown"
                elif $f.status == "unknown" then empty
@@ -89,7 +95,7 @@ def errors:
                else ([$f.source] | map(when_of($p)) | .[0]) as $t | resolve($f.source; {pr: $n}; $root) as $r
                  | if $r == null or $t == null then "\($at): \($f.source.kind) \($f.source.ref // "") was not collected, or can't settle a finding (use a commit, review or comment)"
                    elif $t <= $rv.submittedAt then "\($at): \($r.label) came before the review, so it can't settle \"\($f.text)\""
-                   elif ($f.source.quote | blank) then "\($at): add the words from \($r.label) that settle \"\($f.text)\""
+                   elif ($f.source.quote | short) then "\($at): add the words from \($r.label) that settle \"\($f.text)\" (three or more)"
                    elif (($r.text | norm) | contains($f.source.quote | norm) | not) then "\($at): quote \"\($f.source.quote)\" is not in \($r.label)"
                    else empty end end end) ]
     end;
@@ -144,7 +150,7 @@ def chtext($root):
   | "<div class=\"ch-text\"><p class=\"what\">\(.what | e)</p>"
     + (if ((.why.sources // []) | length) > 0 then
         "<section class=\"why\"><h3>Why</h3><p>\(.why.text // "" | e)</p>" + sources($ch; $root) + "</section>"
-       else "<section class=\"why missing\"><h3>Why</h3><p>\(when((.why.text // "") != ""; (.why.text | e) + " "))Nobody wrote the reason down in the PR, its commits, its reviews, or its ticket.</p></section>" end)
+       else "<section class=\"why missing\"><h3>Why</h3><p>Nobody wrote the reason down in the PR, its commits, its reviews, or its ticket.</p></section>" end)
     + when((.question // "") != ""; "<aside class=\"ask\"><h3>Ask the author</h3><p>\(.question | e)</p></aside>")
     + "</div>";
 def chgrid($root):
@@ -179,7 +185,7 @@ def stlabel: {fixed: "fixed", partly: "partly fixed", open: "still open", unknow
 def realcommits($p): [$p.commits[] | select(.headline | startswith("Merge ") | not)];
 def commitlist($p):
   if length == 0 then "" else "<ul class=\"commits\">" + (map("<li><a href=\"https://github.com/\($p.repo)/commit/\(.sha)\"><code>\(.sha[0:7])</code></a><span class=\"hl\">\(.headline | e)</span>"
-    + when(.files != null; "<span class=\"nf\">\(plural(.files | length; "file"))</span>") + "</li>") | join("")) + "</ul>" end;
+    + "</li>") | join("")) + "</ul>" end;
 def rounds($root):
   ($root.story.rounds // []) as $notes
   | [$root.prs[] as $p

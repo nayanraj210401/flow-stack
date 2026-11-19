@@ -14,5 +14,6 @@ if [ -n "$errs" ]; then echo "render.sh: not publishable yet:" >&2; sed 's/^/  -
 mkdir -p "$(dirname "$2")"
 TITLE="$(jq -r "$lib .story.title | e" "$1")"
 BODY="$(jq -r "$lib page" "$1")"
-TITLE="$TITLE" BODY="$BODY" perl -pe 's/\{\{TITLE\}\}/$ENV{TITLE}/; s/\{\{BODY\}\}/$ENV{BODY}/' "$tpl" >"$2"
+# one pass over the whole template, so a {{BODY}} inside the title is never expanded
+TITLE="$TITLE" BODY="$BODY" perl -0777 -pe 's/\{\{(TITLE|BODY)\}\}/$ENV{$1}/g' "$tpl" >"$2"
 echo "$2"

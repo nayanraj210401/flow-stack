@@ -54,13 +54,7 @@ pr_json() {
   view="$(gh pr view "$2" -R "$1" --json "$PR_FIELDS" 2>"$tmp/err")" || return 1
   files="$(gh api "repos/$1/pulls/$2/files" --paginate | jq -s 'add // []')" || die "could not read the files of $1#$2"
   comments="$(gh api "repos/$1/pulls/$2/comments" --paginate | jq -s 'add // []')" || die "could not read the review comments of $1#$2"
-  # the files each commit touched, so the rounds view can say what changed after each review (first 60)
-  local cf="{}" sha fl
-  for sha in $(jq -r '.commits[]?.oid' <<<"$view" | head -60); do
-    fl="$(gh api "repos/$1/commits/$sha" --jq '[.files[]?.filename]' 2>/dev/null)" || fl=null
-    cf="$(jq -c --arg s "$sha" --argjson f "${fl:-null}" '.[$s] = $f' <<<"$cf")"
-  done
-  jq -n --arg repo "$1" --argjson v "$view" --argjson f "$files" --argjson c "$comments" --argjson cf "$cf" '
+  jq -n --arg repo "$1" --argjson v "$view" --argjson f "$files" --argjson c "$comments" '
     def who: .login // .name // "unknown";
     def hunks: if . == null then [] else reduce (split("\n")[]) as $l ([];
       if ($l | startswith("@@")) or length == 0 then . + [$l] else .[-1] += "\n" + $l end) end;
@@ -68,7 +62,7 @@ pr_json() {
       base: .baseRefName, head: .headRefName, additions, deletions, body: (.body // ""),
       closes: [.closingIssuesReferences[]? | {repo: (.repository | if . then "\(.owner.login)/\(.name)" else $repo end), number}],
       commits: [.commits[]? | {sha: .oid, headline: .messageHeadline, body: (.messageBody // ""), date: .committedDate,
-        author: ((.authors // [])[0] | if . then who else "unknown" end), files: $cf[.oid]}],
+        author: ((.authors // [])[0] | if . then who else "unknown" end)}],
       reviews: [.reviews[]? | {id, author: (.author | who), state, body: (.body // ""), submittedAt}],
       comments: [.comments[]? | {id, author: (.author | who), body: (.body // ""), createdAt}],
       checks: [.statusCheckRollup[]? | {name: (.name // .context), conclusion: (.conclusion // .state)}],

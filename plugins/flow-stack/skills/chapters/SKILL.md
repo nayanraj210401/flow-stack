@@ -52,7 +52,9 @@ For `rounds`, add `.story.rounds`: one entry per review whose findings you summa
 - `status`: `fixed`, `partly`, `open`, or `unknown`.
 - `source`: required for any status but `unknown`. It is a later commit, review, or comment with the `quote` that says so, like a re-review's "findings 1 and 3 are fixed" or a commit message naming the fix.
 
-A status nobody wrote down is `unknown`; never infer one from reading the code. `open` and `unknown` findings collect under "Not settled on the current head". A review left out of `.story.rounds` still shows, with a link to read it. Set it with `../settings/scripts/settings.sh chapters format <scroll|slides|timeline>`, or pass `--format` to collect for one run.
+A status nobody wrote down is `unknown`; never infer one from reading the code. `open` and `unknown` findings collect under "Not settled on the current head". A review left out of `.story.rounds` still shows, with a link to read it.
+
+Set the format with `../settings/scripts/settings.sh chapters format <scroll|slides|rounds>`, or pass `--format` to collect for one run. Every quote, whether for a why, a finding, or a status, needs at least three words.
 
 ## 4. Publish
 

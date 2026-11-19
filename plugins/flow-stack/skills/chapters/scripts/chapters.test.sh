@@ -43,12 +43,6 @@ cat >"$F/pr7.json" <<'J'
 J
 echo '[{"filename":"db/lockout.sql","status":"added","additions":8,"deletions":0,"patch":"@@ -0,0 +1,1 @@\n+create table lockout (id int);"}]' >"$F/pr7.files.json"
 echo '[]' >"$F/pr7.comments.json"
-# the files each commit touched (gh api .../commits/<sha> --jq '[.files[].filename]')
-echo '["src/limit.ts"]' >"$F/commit-aaa1111.json"
-echo '["src/limit.ts","src/login.ts","dist/bundle.js"]' >"$F/commit-bbb2222.json"
-echo '["db/lockout.sql"]' >"$F/commit-ccc3333.json"
-echo '["src/limit.ts"]' >"$F/commit-ddd4444.json"
-echo '["src/limit.ts","README.md"]' >"$F/commit-eee5555.json"
 # PR 11 closes an issue in another repo, other/lib#5 (not acme/app#5)
 jq '.number=11 | .url="https://github.com/acme/app/pull/11" | .closingIssuesReferences=[{"number":5,"repository":{"name":"lib","owner":{"login":"other"}}}]' "$F/pr7.json" >"$F/pr11.json"
 cp "$F/pr7.files.json" "$F/pr11.files.json"; echo '[]' >"$F/pr11.comments.json"
@@ -68,7 +62,6 @@ case "$1 $2" in
   "issue view") f="$F/issue$3.json"; [ "$R" = acme/app ] || f="$F/issue-${R/\//-}-$3.json" ;;
   api\ repos/acme/app/pulls/*/files) [ -z "${GH_FAIL_FILES:-}" ] || { echo "HTTP 502: Bad Gateway" >&2; exit 1; }
     p="${2#repos/acme/app/pulls/}"; f="$F/pr${p%%/*}.${p#*/}.json" ;;
-  api\ repos/acme/app/commits/*) f="$F/commit-${2##*/}.json" ;;
   api\ repos/acme/app/pulls/*) p="${2#repos/acme/app/pulls/}"; f="$F/pr${p%%/*}.${p#*/}.json" ;;
   *) echo "stub gh: unexpected $*" >&2; exit 3 ;;
 esac
@@ -85,7 +78,6 @@ if on collect; then
   collect 9 >"$SB/one.json" 2>"$SB/err"; ck "collect 9 exits 0 ($(head -c 200 "$SB/err"))" '[ -s "$SB/one.json" ]'
   ck "single PR: kind, commits in order, files, hunks split" 'jq -e ".ref.kind==\"pr\" and (.prs|length)==1 and .prs[0].commits[0].sha==\"aaa1111\" and (.prs[0].files|length)==3 and (.prs[0].files[0].hunks|length)==2 and (.prs[0].files[1].hunks[0]|startswith(\"@@ -1,2\"))" "$SB/one.json" >/dev/null'
   ck "reviews, review comments, conversation, checks kept" 'jq -e ".prs[0].reviews[0].id==\"R1\" and .prs[0].review_comments[0].id==77 and .prs[0].review_comments[0].path==\"src/limit.ts\" and .prs[0].comments[0].id==\"C1\" and .prs[0].checks[0].conclusion==\"SUCCESS\"" "$SB/one.json" >/dev/null'
-  ck "each commit carries the files it touched" 'jq -e ".prs[0].commits[0].files==[\"src/limit.ts\"] and (.prs[0].commits[1].files|length)==3" "$SB/one.json" >/dev/null'
   ck "linked issue fetched" 'jq -e "(.issues|map(.number))==[5] and .issues[0].comments[0].id==\"IC1\"" "$SB/one.json" >/dev/null'
   ck "omitted patch: file kept, patch_omitted, no hunks" 'jq -e ".prs[0].files[2] | .path==\"dist/bundle.js\" and .patch_omitted==true and .hunks==[]" "$SB/one.json" >/dev/null'
   ck "task matched by TICKET: goal, intent, decisions" 'jq -e ".task.slug==\"limit\" and .task.goal==\"Login stops brute force\" and (.task.intent|test(\"token bucket\")) and .task.decisions[0].decision==\"bucket per account\"" "$SB/one.json" >/dev/null'
@@ -119,7 +111,7 @@ story() {
        question: "Is dist/bundle.js meant to be committed?", refs: [{pr: 9, file: "dist/bundle.js"}]}],
     rounds: [{review: "R1", findings: [
       {text: "Refill breaks if the clock goes backwards", quote: "What happens when the clock goes backwards?", status: "fixed",
-       source: {kind: "commit", ref: "ddd4444", quote: "monotonic clock"}},
+       source: {kind: "commit", ref: "ddd4444", quote: "use a monotonic clock"}},
       {text: "Bucket size is hard-coded", quote: "the bucket size is hard-coded", status: "unknown"}]}]}'
 }
 render() { "$H/render.sh" "$@"; }
@@ -144,11 +136,16 @@ if on refuse; then
   ck "blank question counts as none" 'bad x ".story.chapters[2].question=\"  \"" "gen"'
   ck "ref listing no hunks: refused" 'bad x ".story.chapters[0].refs[0].hunks=[]" "lists no hunks"'
   ck "a hunk in no chapter: refused, names it" 'bad x ".story.chapters[0].refs[0].hunks=[0]" "hunk 1 is in no chapter"'
+  ck "why text with no source, even with a question: refused" 'bad x ".story.chapters[1].why.sources=[]" "why text has no source"'
+  ck "a one-word quote proves nothing: refused" 'bad x ".story.chapters[0].why.sources[0].quote=\"script\"" "too short"'
+  ck "no title or summary: refused" 'bad x "del(.story.title)" "needs a title and a summary"'
+  ck "the same review in two rounds: refused" 'bad x ".story.rounds += [.story.rounds[0]]" "listed twice"'
+  ck "a short finding or status quote: refused" 'bad x ".story.rounds[0].findings[0].source.quote=\"monotonic\"" "three or more"'
   ck "round on a review that doesn't exist: refused" 'bad x ".story.rounds[0].review=\"R9\"" "no such review"'
   ck "finding not quoted from its review: refused" 'bad x ".story.rounds[0].findings[1].quote=\"the code is slow\"" "is not in that review"'
   ck "a status with no source: refused (use unknown)" 'bad x "del(.story.rounds[0].findings[0].source)" "by whose word"'
   ck "a status settled by a commit from before the review: refused" 'bad x ".story.rounds[0].findings[0].source={kind: \"commit\", ref: \"aaa1111\", quote: \"add token bucket\"}" "came before the review"'
-  ck "a status source quote not in it: refused" 'bad x ".story.rounds[0].findings[0].source.quote=\"all good\"" "all good"'
+  ck "a status source quote not in it: refused" 'bad x ".story.rounds[0].findings[0].source.quote=\"all good now\"" "all good now"'
   ck "unknown status word: refused" 'bad x ".story.rounds[0].findings[0].status=\"done\"" "is not fixed, partly, open or unknown"'
   ck "unknown source kind: refused" 'bad x ".story.chapters[0].why.sources[0].kind=\"vibes\"" "vibes"'
 fi
@@ -179,11 +176,12 @@ if on render; then
   ck "rounds: one round per review with its verdict (body's Verdict line, else state)" '[ "$(grep -o "<b>Round [0-9]</b>" "$t" | wc -l)" -eq 2 ] && grep -q "<b>Round 1</b><span class=\"vd\">fix</span><span>by bo</span>" "$t" && grep -q "<b>Round 2</b><span class=\"vd\">approved</span>" "$t"'
   ck "rounds: commits before the first review, then the ones each review got" 'grep -q "2 commits before the first review" "$t" && grep -q "Then 1 commit</p><ul class=\"commits\"><li><a href=\"https://github.com/acme/app/commit/ddd4444\">" "$t"'
   ck "rounds: merge commits hidden" '! grep -q "eee5555\|Merge remote-tracking" "$t"'
-  ck "rounds: a finding shows its quote, status, and the commit that settled it" 'grep -q "fs-fixed\">fixed</span><div><p>Refill breaks if the clock goes backwards</p><q>What happens when the clock goes backwards?</q><p class=\"by\"><a href=\"https://github.com/acme/app/commit/ddd4444\">commit ddd4444 ↗</a> <q>monotonic clock</q>" "$t"'
+  ck "rounds: a finding shows its quote, status, and the commit that settled it" 'grep -q "fs-fixed\">fixed</span><div><p>Refill breaks if the clock goes backwards</p><q>What happens when the clock goes backwards?</q><p class=\"by\"><a href=\"https://github.com/acme/app/commit/ddd4444\">commit ddd4444 ↗</a> <q>use a monotonic clock</q>" "$t"'
   ck "rounds: unsettled findings listed as not settled" 'grep -q "Not settled on the current head</h3><ul><li><span class=\"fs fs-unknown\">no later word</span>Bucket size is hard-coded" "$t"'
   ck "rounds: a review with no findings written says so, and chapters follow" 'grep -q "<b>Round 2</b>.*No comments.\|<b>Round 2</b>.*Findings not summarized" "$t" && [ "$(at "$t" rounds)" -lt "$(at "$t" ch-core)" ]'
   ck "scroll: no rounds section" '! grep -q "id=\"rounds\"" "$h"'
   ck "a story.jq in the working directory doesn't hijack render" '(cd "$SB" && echo ". = 1" >story.jq && "$H/render.sh" "$SB/ok.json" "$SB/cwd.html" >/dev/null 2>&1) && grep -q "id=\"ch-core\"" "$SB/cwd.html"'
+  ck "a title containing {{BODY}} stays text" 'jq ".story.title=\"x {{BODY}} y\"" "$SB/ok.json" >"$SB/tb.json" && render "$SB/tb.json" "$SB/tb.html" >/dev/null && grep -q "<title>x {{BODY}} y</title>" "$SB/tb.html"'
   ck "slides: nav present" 'grep -q "id=\"slide-nav\"" "$SB/slides.html"'
 fi
 
