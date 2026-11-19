@@ -120,6 +120,7 @@ Type a skill yourself when you want a specific thing: `/flow-stack:challenge`, `
 | "What changed?" / catching up | `/flow-stack:what` | the shape of a diff, PR, or the agent's session in about 8 lines |
 | Prove it works | `/flow-stack:verify` | evidence recorded from the real app, not "it compiles" |
 | Before you review a diff | `/flow-stack:tour` | what to read, skim, or skip, and why |
+| Onboard a reviewer to a PR or issue | `/flow-stack:pr-chapters <pr> \| <issue> \| <pr> <pr>…` | one private artifact page telling the change core-first, in chapters with their hunks; every why links to the PR, commit, review, issue, or flow task that says it, and anything unexplained becomes a question for the author. Scroll, slides, or timeline (`settings.sh chapters format`) |
 | Reply too long | `/flow-stack:brief` | the last reply in 3 plain lines |
 | Clean up a diff / prose | `/flow-stack:deslop` / `/flow-stack:unslop` | slop removed, graded against your taste |
 | Context filling up / stopping for the day | `/flow-stack:handoff` | HANDOFF.md; the next session starts with `/flow resume` |
@@ -249,6 +250,7 @@ What's been tested (#194): the install command works in a cloud shell, and `env`
 |---|---|---|
 | `brief` | always on · you | The reply contract: answer first, ≤ 5 lines. `/brief` restates the last reply plainly. |
 | `tour` | flow · you | A risk-ranked diff: READ / SKIM / SKIP with reasons, net lines, and estimated review minutes. |
+| `pr-chapters` | you | A PR, issue, or PR list as a story artifact for the reviewer: core-first chapters with tour's tiers, cited whys, and questions for the author. render.sh refuses an uncited why or an uncovered file. |
 | `gate` | auto | Classifies decisions: reversible ones proceed and are logged; irreversible or taste ones are asked, batched into one message, and you're notified. |
 | `claims` | auto | Tags every statement `✓ verified (evidence)` or `~ assumed`. The Stop hook enforces it for "done". |
 
@@ -278,7 +280,7 @@ What's been tested (#194): the install command works in a cloud shell, and `env`
 |---|---|
 | `setup` | Learns your toolchain and usage, adapts to it, creates your profile, offers tools, and runs a forge census. `/flow-stack:setup adapt` re-fits after changes. |
 | `profile` | Shows, edits, or lints `~/.flow-stack/profile.md`. |
-| `settings` | Shows and changes `~/.flow-stack/settings.json`: turns default hooks on or off, and sets how much of the test suite verification runs. |
+| `settings` | Shows and changes `~/.flow-stack/settings.json`: turns default hooks on or off, sets how much of the test suite verification runs, and sets the pr-chapters page format. |
 | `wrap` | End-of-day digest across your repos. |
 | `make-verifier` | Generates `.claude/skills/verify-<repo>/`, a driver that runs this app like a user (CLI, HTTP, browser) and proves itself on a real feature. |
 | `make-runner` | Generates `.claude/skills/run-<repo>/` with verified install, start, seed, reset, and stop commands. |
