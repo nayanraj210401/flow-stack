@@ -151,6 +151,7 @@ if on render; then
   ck "tiers shown" 'grep -q "tier-read" "$h" && grep -q "tier-skip" "$h"'
   ck "values escaped" '! grep -q "<b>x</b>" "$h" && ! grep -q "never says no </script>" "$h"'
   ck "timeline: PR events (opened, commits, review, merged)" 'grep -q "class=\"ev" "$SB/timeline.html" && grep -q "CHANGES_REQUESTED\|changes requested" "$SB/timeline.html" && grep -q "merged" "$SB/timeline.html"'
+  ck "footer links to the skill" 'grep -q "Built by <a href=\"https://github.com/nayanraj210401/flow-stack/tree/main/plugins/flow-stack/skills/pr-chapters\">flow-stack pr-chapters</a>" "$h"'
   ck "slides: nav present" 'grep -q "id=\"slide-nav\"" "$SB/slides.html"'
 fi
 
