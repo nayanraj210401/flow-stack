@@ -8,7 +8,7 @@
 #   settings.sh tests unmatched full|skip [--repo]
 #                                                 a changed file no suite claims: run the full suite, or skip it
 #   settings.sh chapters format [scroll|slides|rounds] [--repo]
-#                                                 the pr-chapters page: print the format, or set it (default scroll)
+#                                                 the chapters page: print the format, or set it (default scroll)
 #   settings.sh init                              create ~/.flow-stack/settings.json, carrying over config.json toggles
 #   settings.sh path                              the files read, highest precedence first
 #

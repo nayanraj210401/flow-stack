@@ -1,9 +1,9 @@
 ---
-name: pr-chapters
-description: "Tell the story of a PR, a GitHub issue, or several PRs as a private artifact page a reviewer reads before the diff: core-first chapters, each with its hunks, a read/skim/skip tier, and a why that links to where it is written, or a question for the author. /flow-stack:pr-chapters <pr> | <issue> | <pr> <pr> …. Use for \"tell the story of this PR\", \"onboard me to PR 12\", \"chapters for #40\", or an author self-reviewing AI-written code before asking for review."
+name: chapters
+description: "Tell the story of a PR, a GitHub issue, or several PRs as a private artifact page a reviewer reads before the diff: core-first chapters, each with its hunks, a read/skim/skip tier, and a why that links to where it is written, or a question for the author. /flow-stack:chapters <pr> | <issue> | <pr> <pr> …. Use for \"tell the story of this PR\", \"onboard me to PR 12\", \"chapters for #40\", or an author self-reviewing AI-written code before asking for review."
 ---
 
-# pr-chapters: the story a reviewer reads first
+# chapters: the story a reviewer reads first
 
 A diff is in file order. A reviewer needs the order the change was reasoned in: the core change first, then what it affects, then glue, tests, and generated files. Every claim about *why* links to where someone wrote it down. A why nobody wrote down becomes a question for the author, never a guess. Paths below are relative to this skill's base directory.
 

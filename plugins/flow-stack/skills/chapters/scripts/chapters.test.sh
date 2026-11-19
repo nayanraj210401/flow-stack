@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# chapters.test.sh: pr-chapters end to end against a stub gh.
+# chapters.test.sh: chapters end to end against a stub gh.
 #   chapters.test.sh [collect|refuse|render|format]   one group, or all of them
 # collect: PR, issue, and PR list → one story JSON. refuse: render.sh rejects uncited whys,
 # uncovered files, bad hunk refs, made-up sources. render: the page in all three formats.
@@ -170,7 +170,7 @@ if on render; then
   ck "questions for the author collected, both of them" '[ "$(grep -o "class=\"question\"" "$h" | wc -l)" -ge 2 ] && grep -q "Is dist/bundle.js meant to be committed?" "$h" && grep -q "Questions for the author" "$h"'
   ck "tiers shown" 'grep -q "tier-read" "$h" && grep -q "tier-skip" "$h"'
   ck "values escaped" '! grep -q "<b>x</b>" "$h" && ! grep -q "never says no </script>" "$h"'
-  ck "footer links to the skill" 'grep -q "Built by <a href=\"https://github.com/nayanraj210401/flow-stack/tree/main/plugins/flow-stack/skills/pr-chapters\">flow-stack pr-chapters</a>" "$h"'
+  ck "footer links to the skill" 'grep -q "Built by <a href=\"https://github.com/nayanraj210401/flow-stack/tree/main/plugins/flow-stack/skills/chapters\">flow-stack chapters</a>" "$h"'
   s="$SB/slides.html"; t="$SB/rounds.html"
   ck "slides: a claim slide per chapter" '[ "$(grep -o "class=\"chapter slide claim" "$s" | wc -l)" -eq 3 ]'
   ck "slides: one slide per shown hunk (2 + 1 + omitted 1)" '[ "$(grep -o "class=\"slide hs " "$s" | wc -l)" -eq 4 ] && grep -q "hunk 2 of 2" "$s"'

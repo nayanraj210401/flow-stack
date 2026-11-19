@@ -21,8 +21,8 @@ The single source of truth for file locations and formats. Skills and hooks both
 | `<repo>/.flow/features/.ignore` | globs that are not features (for `coverage`) | yes |
 | `<repo>/.flow/board/` | board staging: `board.json`, `board.html` (from `board`; the artifact is the product) | no |
 | `~/.flow-stack/board/url` | the board artifact's link, reused on every publish | no (personal) |
-| `<repo>/.flow/chapters/` | pr-chapters staging: `story.json`, `story.html` (the artifact is the product) | no |
-| `~/.flow-stack/chapters/urls.tsv` | pr-chapters: `<sorted refs><TAB><artifact url>`, one story's link reused on every publish | no (personal) |
+| `<repo>/.flow/chapters/` | chapters staging: `story.json`, `story.html` (the artifact is the product) | no |
+| `~/.flow-stack/chapters/urls.tsv` | chapters: `<sorted refs><TAB><artifact url>`, one story's link reused on every publish | no (personal) |
 | `~/.flow-stack/waits.jsonl` | notify.sh: one `{ts,sid,kind}` line per permission prompt or MCP elicitation shown; board/attention.sh reads it | no (personal) |
 | `~/.flow-stack/auto/<session_id>` | auto mode is on for that session: `--auto` in a prompt creates it, `--auto ship` or `--gha` (honoured only on a GitHub-hosted runner) writes ship or gha into it, `--no-auto` removes it (anchor hook); hooks turn every ask into deny-and-queue | no |
 | `~/.flow-stack/anchor/<session_id>.{auto,hash,count}` | anchor hook's per-session state: the auto banner mode already shown, the hash of the last injected anchor, prompts since; removed on compaction and by `--no-auto` (`.auto`), pruned after 7 days | no |

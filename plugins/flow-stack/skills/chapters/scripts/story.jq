@@ -246,6 +246,6 @@ def page:
     + when(($qs | length) > 0; "<section class=\"questions slide\" id=\"questions\"><div class=\"q-head\"><div><h2>Questions for the author</h2><p>The PR, its commits, reviews and ticket don’t answer these. Paste them into your review.</p></div><button type=\"button\" id=\"copy-qs\">Copy all</button></div><ol>"
         + ($qs | map("<li class=\"question\" data-q=\"\(.question | e)\">" + when($root.format == "slides"; "<input type=\"checkbox\" id=\"q-\(.id | e)\" aria-label=\"Asked\">") + "<a href=\"#ch-\(.id | e)\">Ch \(.num | pad2)</a><p>\(.question | e)</p></li>") | join("")) + "</ol></section>")
     + "</main>"
-    + "<footer class=\"foot\">Built by <a href=\"https://github.com/nayanraj210401/flow-stack/tree/main/plugins/flow-stack/skills/pr-chapters\">flow-stack pr-chapters</a> from GitHub\(when(.task != null; " and the flow task")) · \(ago(.generated) | e) UTC · every why links to where it is written</footer>"
+    + "<footer class=\"foot\">Built by <a href=\"https://github.com/nayanraj210401/flow-stack/tree/main/plugins/flow-stack/skills/chapters\">flow-stack chapters</a> from GitHub\(when(.task != null; " and the flow task")) · \(ago(.generated) | e) UTC · every why links to where it is written</footer>"
     + when(.format == "slides"; "<nav id=\"slide-nav\" aria-label=\"Chapters\"><button id=\"prev\" type=\"button\">← Prev</button><span id=\"slide-pos\"></span><button id=\"next\" type=\"button\">Next →</button></nav>")
     + "</div>";
