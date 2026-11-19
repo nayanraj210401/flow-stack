@@ -158,7 +158,43 @@ h1{font:700 clamp(30px,4.4vw,52px)/1.04 var(--display);letter-spacing:-.025em;ma
 .foot{max-width:1240px;width:100%;margin:0 auto;padding-block:32px 16px;font-size:12.5px;color:var(--muted);
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 
-/* timeline */
+/* timeline: metrics, a to-scale axis with one lane per PR, then each PR's events with chapters at their commit */
+.tl-top{display:flex;flex-direction:column;gap:20px;padding-top:36px}
+.tl-h{font:700 26px/1.15 var(--display);letter-spacing:-.015em}
+.metrics{margin:0}
+.tl-axis{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:18px 20px 14px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:12px;min-width:0}
+.tl-scale{display:flex;justify-content:space-between;gap:12px;font:12px var(--mono);color:var(--muted);padding-left:84px}
+.tl-scale span:nth-child(2){color:var(--ink-2);font-weight:500}
+.lanes{display:flex;flex-direction:column;gap:10px}
+.lane{display:grid;grid-template-columns:72px 1fr;gap:12px;align-items:center}
+.lane-label{font:500 12px var(--mono);color:var(--ink-2);text-align:right}
+.track{position:relative;height:26px;border-radius:6px;background:repeating-linear-gradient(90deg,transparent 0 calc(10% - 1px),var(--line) calc(10% - 1px) 10%)}
+.track .bar{position:absolute;top:9px;height:8px;border-radius:4px;background:var(--accent-soft);border:1px solid var(--accent)}
+.track .bar.open{border-style:dashed}
+.mk{position:absolute;top:50%;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:var(--paper);border:2px solid var(--muted);display:inline-block}
+.mk.commit{width:8px;height:8px;margin:-4px 0 0 -4px;border:0;background:var(--ink-2)}
+.mk.comment{width:8px;height:8px;margin:-4px 0 0 -4px;border-color:var(--line-2)}
+.mk.r-approved{background:var(--add-bar);border-color:var(--add-bar)}
+.mk.r-changes_requested{background:var(--read);border-color:var(--read)}
+.mk.r-commented{background:var(--paper);border-color:var(--skim)}
+.mk.merged{border-radius:2px;transform:rotate(45deg);background:var(--accent);border-color:var(--accent)}
+.mk.issue{border-radius:2px;background:var(--skim);border-color:var(--skim)}
+.lane.quiet .track{background:none;height:22px}
+.gap{position:absolute;top:0;height:100%;border-top:1px dashed var(--line-2);display:flex;justify-content:center;align-items:flex-start;min-width:2px}
+.gap b{font:500 11px var(--mono);color:var(--muted);background:var(--paper);padding:2px 6px;margin-top:-10px;white-space:nowrap}
+.tl-key{display:flex;flex-wrap:wrap;gap:4px 16px;margin:0;padding-left:84px;font-size:12px;color:var(--muted)}
+.tl-key span{display:inline-flex;align-items:center;gap:6px}
+.tl-key .mk{position:static;margin:0}
+.ev .tag{font:600 10px var(--sans);font-style:normal;text-transform:uppercase;letter-spacing:.07em;color:var(--read);background:var(--read-soft);padding:2px 6px;border-radius:3px;margin-left:8px}
+.ev-ch{list-style:none;margin-left:-22px;padding-left:22px}
+.fold{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:0 20px;box-shadow:var(--shadow);scroll-margin-top:12px}
+.fold>summary{list-style:none;cursor:pointer;padding:16px 0}
+.fold>summary::-webkit-details-marker{display:none}
+.fold>summary .ch-num{font-size:34px}
+.fold>summary .ch-title h2{font-size:20px}
+.fold[open]>summary{border-bottom:1px solid var(--line);margin-bottom:20px}
+.fold>.ch-grid{padding-bottom:20px}
+.loose-h{margin:0 0 8px;font:600 11px var(--sans);text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
 .pr-group{display:flex;flex-direction:column;padding-top:40px}
 .pr-group+.pr-group{border-top:2px solid var(--line-2);margin-top:20px}
 .pr-head{display:flex;flex-direction:column;gap:8px;padding-top:28px}
@@ -174,11 +210,40 @@ h1{font:700 clamp(30px,4.4vw,52px)/1.04 var(--display);letter-spacing:-.025em;ma
 .ev.r-changes_requested::before{background:var(--read);border-color:var(--read)}
 .ev.merged span{font-weight:600}
 
-/* slides */
+/* slides: a claim slide per chapter, then each hunk full screen; a tier-colored progress bar on top */
 [data-format="slides"] .slide:not(.on),[data-format="slides"] .pr-head{display:none}
-[data-format="slides"] .chapter{border-bottom:0;min-height:calc(100vh - 140px)}
-[data-format="slides"] .questions{margin-top:32px}
+[data-format="slides"] .hero{padding-block:max(12vh,48px)}
+[data-format="slides"] .chapters{padding-top:28px}
+[data-format="slides"] .questions{margin-top:24px}
 [data-format="slides"] .foot{padding-bottom:90px}
+.claim{border-bottom:0;min-height:calc(100vh - 150px);justify-content:center;max-width:900px;gap:32px}
+.claim .ch-num{font-size:clamp(64px,10vw,120px)}
+.claim .ch-title h2{font-size:clamp(28px,4vw,46px)}
+.claim .ch-text{position:static;gap:24px}
+.claim .what{font-size:clamp(19px,2vw,24px);line-height:1.5}
+.claim .why p{font-size:17px}
+.claim .ask p{font-size:18px}
+.next-up{margin:0;font:500 13px var(--mono);color:var(--muted)}
+.hs{display:flex;flex-direction:column;gap:20px;padding-block:28px;min-height:calc(100vh - 150px)}
+.hs-cap{display:grid;grid-template-columns:auto 1fr;gap:18px;align-items:start;max-width:900px}
+.hs-num{font:700 40px/.9 var(--display);letter-spacing:-.03em;color:var(--line-2)}
+.hs-num small{font-size:22px;color:var(--muted)}
+.hs.tier-read .hs-num{color:var(--read)} .hs.tier-skim .hs-num{color:var(--skim)}
+.hs .ch-meta span+span::before{content:"· ";}
+.cap{margin:6px 0 0;font-size:clamp(17px,1.7vw,21px);line-height:1.5;font-weight:500}
+.hs .hunk code{font-size:clamp(13px,1.15vw,15.5px);line-height:1.7}
+.hs .hunk pre{max-height:none}
+#progress{position:fixed;top:env(safe-area-inset-top,0px);left:0;right:0;display:flex;gap:2px;height:4px;z-index:6;
+  padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
+#progress i{flex:1;background:var(--line);transition:height .15s}
+#progress i.done{background:var(--muted)}
+#progress i.done.tier-read,#progress i.on.tier-read{background:var(--read)}
+#progress i.done.tier-skim,#progress i.on.tier-skim{background:var(--skim)}
+#progress i.done.tier-skip,#progress i.on.tier-skip{background:var(--skip)}
+#progress i.on{height:8px;background:var(--accent)}
+[data-format="slides"] .question{grid-template-columns:28px 4em 1fr;align-items:start}
+.question input{width:18px;height:18px;margin:2px 0 0;accent-color:var(--add-bar);cursor:pointer}
+.question.asked p{text-decoration:line-through;color:var(--muted)}
 #slide-nav{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));display:flex;align-items:center;gap:6px;
   padding:6px;background:var(--paper);border:1px solid var(--line);border-radius:999px;box-shadow:var(--shadow);z-index:5}
 #slide-nav button{font:500 13px var(--sans);color:var(--ink);background:transparent;border:0;border-radius:999px;padding:8px 14px;cursor:pointer}
@@ -200,6 +265,11 @@ h1{font:700 clamp(30px,4.4vw,52px)/1.04 var(--display);letter-spacing:-.025em;ma
   .questions{padding:20px 16px}
   .question{grid-template-columns:1fr;gap:4px}
   .ev{grid-template-columns:1fr;gap:0}
+  .lane{grid-template-columns:48px 1fr;gap:8px}
+  .tl-scale,.tl-key{padding-left:0}
+  .tl-axis{padding:14px 12px}
+  .fold{padding:0 14px}
+  .hs-cap{grid-template-columns:1fr;gap:6px}
   .ln{grid-template-columns:2.8em 2.8em 1.4em auto}
 }
 @media (prefers-reduced-motion:no-preference){.plan li a,#copy-qs,#slide-nav button{transition:background .15s}}
@@ -219,10 +289,17 @@ h1{font:700 clamp(30px,4.4vw,52px)/1.04 var(--display);letter-spacing:-.025em;ma
   if (!story || story.dataset.format !== 'slides') return;
   const slides = [...story.querySelectorAll('.slide')];
   const pos = document.getElementById('slide-pos'), prev = document.getElementById('prev'), next = document.getElementById('next');
+  const bar = document.createElement('div'); bar.id = 'progress'; bar.setAttribute('aria-hidden', 'true');
+  const segs = slides.map(s => { const t = document.createElement('i'); if (s.dataset.tier) t.className = 'tier-' + s.dataset.tier; bar.appendChild(t); return t; });
+  document.body.prepend(bar);
+  story.querySelectorAll('.question input').forEach(c => c.addEventListener('change', () => c.closest('.question').classList.toggle('asked', c.checked)));
+  const foot = story.querySelector('.foot');
   let i = 0;
   const show = (n, push) => {
     i = Math.max(0, Math.min(slides.length - 1, n));
     slides.forEach((s, k) => s.classList.toggle('on', k === i));
+    segs.forEach((t, k) => { t.classList.toggle('on', k === i); t.classList.toggle('done', k < i); });
+    if (foot) foot.hidden = i !== slides.length - 1;
     pos.textContent = (i + 1) + ' / ' + slides.length;
     prev.disabled = i === 0; next.disabled = i === slides.length - 1;
     if (push && slides[i].id) history.replaceState(null, '', '#' + slides[i].id);

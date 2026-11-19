@@ -41,6 +41,10 @@ cat >"$F/pr7.json" <<'J'
 J
 echo '[{"filename":"db/lockout.sql","status":"added","additions":8,"deletions":0,"patch":"@@ -0,0 +1,1 @@\n+create table lockout (id int);"}]' >"$F/pr7.files.json"
 echo '[]' >"$F/pr7.comments.json"
+# the files each commit touched (gh api .../commits/<sha> --jq '[.files[].filename]')
+echo '["src/limit.ts"]' >"$F/commit-aaa1111.json"
+echo '["src/limit.ts","src/login.ts","dist/bundle.js"]' >"$F/commit-bbb2222.json"
+echo '["db/lockout.sql"]' >"$F/commit-ccc3333.json"
 # PR 11 closes an issue in another repo, other/lib#5 (not acme/app#5)
 jq '.number=11 | .url="https://github.com/acme/app/pull/11" | .closingIssuesReferences=[{"number":5,"repository":{"name":"lib","owner":{"login":"other"}}}]' "$F/pr7.json" >"$F/pr11.json"
 cp "$F/pr7.files.json" "$F/pr11.files.json"; echo '[]' >"$F/pr11.comments.json"
@@ -60,6 +64,7 @@ case "$1 $2" in
   "issue view") f="$F/issue$3.json"; [ "$R" = acme/app ] || f="$F/issue-${R/\//-}-$3.json" ;;
   api\ repos/acme/app/pulls/*/files) [ -z "${GH_FAIL_FILES:-}" ] || { echo "HTTP 502: Bad Gateway" >&2; exit 1; }
     p="${2#repos/acme/app/pulls/}"; f="$F/pr${p%%/*}.${p#*/}.json" ;;
+  api\ repos/acme/app/commits/*) f="$F/commit-${2##*/}.json" ;;
   api\ repos/acme/app/pulls/*) p="${2#repos/acme/app/pulls/}"; f="$F/pr${p%%/*}.${p#*/}.json" ;;
   *) echo "stub gh: unexpected $*" >&2; exit 3 ;;
 esac
@@ -76,6 +81,7 @@ if on collect; then
   collect 9 >"$SB/one.json" 2>"$SB/err"; ck "collect 9 exits 0 ($(head -c 200 "$SB/err"))" '[ -s "$SB/one.json" ]'
   ck "single PR: kind, commits in order, files, hunks split" 'jq -e ".ref.kind==\"pr\" and (.prs|length)==1 and .prs[0].commits[0].sha==\"aaa1111\" and (.prs[0].files|length)==3 and (.prs[0].files[0].hunks|length)==2 and (.prs[0].files[1].hunks[0]|startswith(\"@@ -1,2\"))" "$SB/one.json" >/dev/null'
   ck "reviews, review comments, conversation, checks kept" 'jq -e ".prs[0].reviews[0].id==\"R1\" and .prs[0].review_comments[0].id==77 and .prs[0].review_comments[0].path==\"src/limit.ts\" and .prs[0].comments[0].id==\"C1\" and .prs[0].checks[0].conclusion==\"SUCCESS\"" "$SB/one.json" >/dev/null'
+  ck "each commit carries the files it touched" 'jq -e ".prs[0].commits[0].files==[\"src/limit.ts\"] and (.prs[0].commits[1].files|length)==3" "$SB/one.json" >/dev/null'
   ck "linked issue fetched" 'jq -e "(.issues|map(.number))==[5] and .issues[0].comments[0].id==\"IC1\"" "$SB/one.json" >/dev/null'
   ck "omitted patch: file kept, patch_omitted, no hunks" 'jq -e ".prs[0].files[2] | .path==\"dist/bundle.js\" and .patch_omitted==true and .hunks==[]" "$SB/one.json" >/dev/null'
   ck "task matched by TICKET: goal, intent, decisions" 'jq -e ".task.slug==\"limit\" and .task.goal==\"Login stops brute force\" and (.task.intent|test(\"token bucket\")) and .task.decisions[0].decision==\"bucket per account\"" "$SB/one.json" >/dev/null'
@@ -152,6 +158,15 @@ if on render; then
   ck "values escaped" '! grep -q "<b>x</b>" "$h" && ! grep -q "never says no </script>" "$h"'
   ck "timeline: PR events (opened, commits, review, merged)" 'grep -q "class=\"ev" "$SB/timeline.html" && grep -q "CHANGES_REQUESTED\|changes requested" "$SB/timeline.html" && grep -q "merged" "$SB/timeline.html"'
   ck "footer links to the skill" 'grep -q "Built by <a href=\"https://github.com/nayanraj210401/flow-stack/tree/main/plugins/flow-stack/skills/pr-chapters\">flow-stack pr-chapters</a>" "$h"'
+  s="$SB/slides.html"; t="$SB/timeline.html"
+  ck "slides: a claim slide per chapter" '[ "$(grep -o "class=\"chapter slide claim" "$s" | wc -l)" -eq 3 ]'
+  ck "slides: one slide per shown hunk (2 + 1 + omitted 1)" '[ "$(grep -o "class=\"slide hs " "$s" | wc -l)" -eq 4 ] && grep -q "hunk 2 of 2" "$s"'
+  ck "slides: hunk slides show the whole hunk, captioned" 'grep -q "<p class=\"cap\">A token bucket that refills one try per 12s.</p>" "$s"'
+  ck "slides: questions are a checklist" '[ "$(grep -o "type=\"checkbox\"" "$s" | wc -l)" -eq 2 ] && ! grep -q "type=\"checkbox\"" "$h"'
+  ck "timeline: metrics from real times" 'grep -q "<dt>First review</dt><dd>5h after opening</dd>" "$t" && grep -q "<dt>Open → merged</dt><dd>1d 2h</dd>" "$t" && grep -q "<dt>Reviews</dt><dd>2</dd>" "$t"'
+  ck "timeline: a lane per PR on a to-scale axis, quiet gaps labeled" 'grep -q "lane-label\">PR #9<" "$t" && grep -q "mk review r-changes_requested\" style=\"left:" "$t" && grep -q "19h quiet" "$t"'
+  ck "timeline: each chapter sits under the commit that first touched its files" 'a=$(at "$t" ch-core); w=$(at "$t" ch-wire); c1=$(grep -bo "aaa1111</code>" "$t" | head -1 | cut -d: -f1); c2=$(grep -bo "bbb2222</code>" "$t" | head -1 | cut -d: -f1); [ "$c1" -lt "$a" ] && [ "$a" -lt "$c2" ] && [ "$c2" -lt "$w" ]'
+  ck "timeline: read chapters open, others folded" 'grep -q "<details class=\"fold chapter tier-read\" id=\"ch-core\" open>" "$t" && grep -q "<details class=\"fold chapter tier-skip\" id=\"ch-gen\"><summary>" "$t"'
   ck "slides: nav present" 'grep -q "id=\"slide-nav\"" "$SB/slides.html"'
 fi
 

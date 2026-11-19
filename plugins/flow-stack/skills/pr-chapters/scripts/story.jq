@@ -85,18 +85,21 @@ def hunk($tier):
       elif ($l | startswith("-")) then .rows += [{k: "del", o: .o, n: null, s: "−", t: $l[1:]}] | .o += 1
       elif ($l | startswith("\\")) then .rows += [{k: "note", o: null, n: null, s: "", t: $l}]
       else .rows += [{k: "ctx", o: .o, n: .n, s: "", t: ($l[1:] // "")}] | .o += 1 | .n += 1 end) | .rows) as $rows
-  | ({read: 80, skim: 24, skip: 10}[$tier] // 40) as $cap
+  | ({read: 80, skim: 24, skip: 10, full: 400}[$tier] // 40) as $cap
   | "<div class=\"hunk\"><div class=\"hh\">\($ls[0] | e)</div><pre><code>"
     + ($rows[0:$cap] | map(row) | join(""))
     + "</code></pre>"
     + when(($rows | length) > $cap; "<details class=\"more\"><summary>Show \(plural(($rows | length) - $cap; "more line"))</summary><pre><code>" + ($rows[$cap:] | map(row) | join("")) + "</code></pre></details>")
     + "</div>";
+def figcap($f):
+  ($f.path | split("/")) as $parts
+  | "<figcaption><span class=\"path\"><span class=\"dir\">\(($parts[:-1] | join("/")) | if . == "" then "" else . + "/" end | e)</span><b>\($parts[-1] | e)</b></span>"
+    + "<span class=\"delta\"><span class=\"st st-\($f.status | e)\">\($f.status | e)</span><span class=\"plus\">+\($f.additions)</span><span class=\"minus\">−\($f.deletions)</span></span></figcaption>";
+def omitted($p): "<p class=\"omitted\">Large or binary file: patch not shown. <a href=\"\($p.url | e)/files\">Open it on GitHub ↗</a></p>";
 def fileref($p; $tier):
   .file as $path | (.hunks // null) as $want | ($p.files[] | select(.path == $path)) as $f
-  | ($path | split("/")) as $parts
-  | "<figure class=\"file\"><figcaption><span class=\"path\"><span class=\"dir\">\(($parts[:-1] | join("/")) | if . == "" then "" else . + "/" end | e)</span><b>\($parts[-1] | e)</b></span>"
-    + "<span class=\"delta\"><span class=\"st st-\($f.status | e)\">\($f.status | e)</span><span class=\"plus\">+\($f.additions)</span><span class=\"minus\">−\($f.deletions)</span></span></figcaption>"
-    + (if $f.patch_omitted then "<p class=\"omitted\">Large or binary file: patch not shown. <a href=\"\($p.url | e)/files\">Open it on GitHub ↗</a></p>"
+  | "<figure class=\"file\">" + figcap($f)
+    + (if $f.patch_omitted then omitted($p)
        else ([$f.hunks | to_entries[] | select($want == null or (.key as $k | $want | index($k))) | .value | hunk($tier)] | join("")) end)
     + "</figure>";
 def sources($ch; $root):
@@ -104,32 +107,102 @@ def sources($ch; $root):
     | "<li><span class=\"src-kind\">\($s.kind | gsub("-"; " ") | e)</span>"
       + (if $r.url then "<a href=\"\($r.url | e)\">\($r.label | e) ↗</a>" else "<span class=\"src-label\">\($r.label | e)</span>" end)
       + when(($s.quote // "") != ""; "<q>\($s.quote | e)</q>") + "</li>"] | join("")) + "</ol>";
-def chapter($root; $num):
-  . as $ch | (($root | prs_by_n)[.pr | tostring]) as $p
-  | "<article class=\"chapter slide tier-\(.tier | e)\" id=\"ch-\(.id | e)\">"
-    + "<header class=\"ch-head\"><span class=\"ch-num\">\($num | pad2)</span><div class=\"ch-title\">"
-    + "<p class=\"ch-meta\"><span class=\"pill tier-\(.tier | e)\">\(.tier | tierlabel | e)</span>"
-    + when(($root.prs | length) > 1; "<span>PR #\(.pr)</span>")
-    + "<span>\(plural((.refs // []) | length; "file"))</span></p><h2>\(.title | e)</h2></div></header>"
-    + "<div class=\"ch-grid\"><div class=\"ch-text\"><p class=\"what\">\(.what | e)</p>"
+def chhead($root; $num):
+  "<header class=\"ch-head\"><span class=\"ch-num\">\($num | pad2)</span><div class=\"ch-title\">"
+  + "<p class=\"ch-meta\"><span class=\"pill tier-\(.tier | e)\">\(.tier | tierlabel | e)</span>"
+  + when(($root.prs | length) > 1; "<span>PR #\(.pr)</span>")
+  + "<span>\(plural((.refs // []) | length; "file"))</span></p><h2>\(.title | e)</h2></div></header>";
+def chtext($root):
+  . as $ch
+  | "<div class=\"ch-text\"><p class=\"what\">\(.what | e)</p>"
     + (if ((.why.sources // []) | length) > 0 then
         "<section class=\"why\"><h3>Why</h3><p>\(.why.text // "" | e)</p>" + sources($ch; $root) + "</section>"
        else "<section class=\"why missing\"><h3>Why</h3><p>\(when((.why.text // "") != ""; (.why.text | e) + " "))Nobody wrote the reason down in the PR, its commits, its reviews, or its ticket.</p></section>" end)
     + when((.question // "") != ""; "<aside class=\"ask\"><h3>Ask the author</h3><p>\(.question | e)</p></aside>")
-    + "</div><div class=\"ch-code\">"
+    + "</div>";
+def chgrid($root):
+  . as $ch
+  | "<div class=\"ch-grid\">" + chtext($root) + "<div class=\"ch-code\">"
     + (if ((.refs // []) | length) > 0 then ([.refs[] | . as $f | fileref(($root | prs_by_n)[($f.pr // $ch.pr) | tostring]; $ch.tier)] | join("")) else "<p class=\"nocode\">No code in this chapter.</p>" end)
-    + "</div></div></article>";
-def events($p):
-  ([{t: $p.createdAt, k: "open", s: "Opened by \($p.author)"}]
-   + [$p.commits[] | {t: .date, k: "commit", s: .headline, sha: .sha[0:7]}]
-   + [$p.reviews[] | {t: .submittedAt, k: "review r-\(.state | ascii_downcase)", s: "\(.author) \(.state | ascii_downcase | gsub("_"; " "))"}]
-   + [$p.comments[] | {t: .createdAt, k: "comment", s: "\(.author) commented"}]
-   + (if $p.mergedAt then [{t: $p.mergedAt, k: "merged", s: "Merged into \($p.base)"}] else [] end))
-  | sort_by(.t)
-  | "<ol class=\"rail\">" + (map("<li class=\"ev \(.k)\"><time>\(ago(.t) | e)</time><span>\(when(.sha; "<code>\(.sha | e)</code> "))\(.s | e)</span></li>") | join("")) + "</ol>";
+    + "</div></div>";
+def chapter($root; $num):
+  "<article class=\"chapter slide tier-\(.tier | e)\" id=\"ch-\(.id | e)\">" + chhead($root; $num) + chgrid($root) + "</article>";
 def prhead($p):
   "<section class=\"pr-head\"><p class=\"kicker\"><a href=\"\($p.url | e)\">PR #\($p.number) ↗</a><span class=\"state st-\($p.state | ascii_downcase | e)\">\($p.state | ascii_downcase | e)</span></p><h2>\($p.title | e)</h2>"
   + "<p class=\"meta\"><code>\($p.head | e)</code> → <code>\($p.base | e)</code> · \($p.author | e) · <span class=\"plus\">+\($p.additions)</span> <span class=\"minus\">−\($p.deletions)</span></p></section>";
+
+# ---- slides: per chapter, a claim slide (what, why, ask) then one slide per hunk, the diff full screen
+def slides($root; $num):
+  . as $ch
+  | [($ch.refs // [])[] as $f | (($root | prs_by_n)[($f.pr // $ch.pr) | tostring]) as $p | ($p.files[] | select(.path == $f.file)) as $file
+      | if $file.patch_omitted then {f: $f, p: $p, file: $file, h: null, k: 0, n: 1}
+        else ($file.hunks | length) as $n
+          | ($file.hunks | to_entries[] | select(($f.hunks // null) == null or (.key as $k | $f.hunks | index($k))) | {f: $f, p: $p, file: $file, h: .value, k: .key, n: $n}) end] as $hs
+  | "<article class=\"chapter slide claim tier-\($ch.tier | e)\" id=\"ch-\($ch.id | e)\" data-tier=\"\($ch.tier | e)\">"
+    + chhead($root; $num) + chtext($root)
+    + when(($hs | length) > 0; "<p class=\"next-up\">Next: \(plural($hs | length; "hunk")) →</p>") + "</article>"
+    + ([$hs | to_entries[] | .key as $i | .value as $x
+        | "<section class=\"slide hs tier-\($ch.tier | e)\" data-tier=\"\($ch.tier | e)\"><div class=\"hs-cap\"><span class=\"hs-num\">\($num | pad2)<small>.\($i + 1)</small></span>"
+          + "<div><p class=\"ch-meta\"><span>\($ch.title | e)</span><span>hunk \($x.k + 1) of \($x.n)</span></p><p class=\"cap\">\(($x.f.note // $ch.what) | e)</p></div></div>"
+          + "<figure class=\"file\">" + figcap($x.file) + (if $x.h == null then omitted($x.p) else ($x.h | hunk("full")) end) + "</figure></section>"] | join(""));
+
+# ---- timeline: real time, to scale
+def secs: sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601;
+def dur: (. / 60 | floor) as $m
+  | if $m < 60 then "\($m)m" elif $m < 1440 then "\($m / 60 | floor)h" + when($m % 60 > 0 and $m < 600; " \($m % 60)m")
+    else "\($m / 1440 | floor)d" + when(($m % 1440) >= 60; " \(($m % 1440) / 60 | floor)h") end;
+def evs($p):
+  ([{t: $p.createdAt, k: "open", s: "Opened by \($p.author)"}]
+   + [$p.commits[] | {t: .date, k: "commit", s: .headline, sha: .sha}]
+   + [$p.reviews[] | {t: .submittedAt, k: "review", st: (.state | ascii_downcase), s: "\(.author) \(.state | ascii_downcase | gsub("_"; " "))"}]
+   + [$p.comments[] | {t: .createdAt, k: "comment", s: "\(.author) commented"}]
+   + (if $p.mergedAt then [{t: $p.mergedAt, k: "merged", s: "Merged into \($p.base)"}] else [] end))
+  | map(select(.t != null) | .x = (.t | secs)) | sort_by(.x);
+# the first commit that touched any file of the chapter: where its code was written
+def pin($p): [.refs[]?.file] as $fs
+  | [$p.commits[] | select((.files // []) as $cf | any($fs[]; . as $x | $cf | index($x) != null))] | sort_by(.date) | (.[0].sha // null);
+def gaps: sort_by(.x) | [range(1; length) as $i | {a: .[$i - 1].x, b: .[$i].x}];
+def axis($root):
+  ([$root.prs[] | evs(.)[]] + [$root.issues[] | select(.createdAt) | {x: (.createdAt | secs), k: "issue"}]) as $all
+  | ($all | map(.x) | min) as $t0
+  | ([$all[].x] + (if any($root.prs[]; .mergedAt == null) then [now] else [] end) | max) as $t1
+  | ([$t1 - $t0, 1] | max) as $span
+  | def pos($x): ((($x - $t0) / $span * 1000) | round) / 10;
+    def mk($cls; $x; $title): "<i class=\"mk \($cls)\" style=\"left:\(pos($x))%\" title=\"\($title | e)\"></i>";
+  ($all | gaps | map(select(.b - .a > ([43200, $span * 0.15] | max)))) as $quiet
+  | "<section class=\"tl-axis\" aria-label=\"Time to scale\"><div class=\"tl-scale\"><span>\(ago($t0 | todate) | e)</span><span>\(($t1 - $t0) | dur) end to end</span><span>\(ago($t1 | todate) | e)</span></div><div class=\"lanes\">"
+    + ([$root.issues[] | select(.createdAt) | "<div class=\"lane\"><span class=\"lane-label\">Issue #\(.number)</span><div class=\"track\">" + mk("issue"; .createdAt | secs; "Issue #\(.number) opened") + "</div></div>"] | join(""))
+    + ([$root.prs[] as $p | evs($p) as $ev | ($p.createdAt | secs) as $a | (if $p.mergedAt then $p.mergedAt | secs else $t1 end) as $b
+        | "<div class=\"lane\"><span class=\"lane-label\">PR #\($p.number)</span><div class=\"track\">"
+          + "<span class=\"bar\(when($p.mergedAt == null; " open"))\" style=\"left:\(pos($a))%;width:\([pos($b) - pos($a), 0.6] | max)%\"></span>"
+          + ([$ev[] | select(.k != "open") | mk(.k + when(.st; " r-" + .st); .x; "\(ago(.t)) · \(.s)")] | join(""))
+          + "</div></div>"] | join(""))
+    + when(($quiet | length) > 0; "<div class=\"lane quiet\"><span class=\"lane-label\"></span><div class=\"track\">"
+        + ($quiet | map("<span class=\"gap\" style=\"left:\(pos(.a))%;width:\(pos(.b) - pos(.a))%\"><b>\((.b - .a) | dur) quiet</b></span>") | join("")) + "</div></div>")
+    + "</div><p class=\"tl-key\"><span><i class=\"mk commit\"></i>commit</span><span><i class=\"mk review r-commented\"></i>review</span><span><i class=\"mk review r-changes_requested\"></i>changes requested</span><span><i class=\"mk review r-approved\"></i>approved</span><span><i class=\"mk merged\"></i>merged</span></p></section>";
+def metrics($root):
+  ([$root.prs[].createdAt | secs] | min) as $open
+  | ([$root.prs[].reviews[].submittedAt | select(.) | secs] | min) as $first
+  | ([$root.prs[] | evs(.)[]] | gaps | map(.b - .a) | max) as $quiet
+  | def m($label; $value): "<div><dt>\($label)</dt><dd>\($value | e)</dd></div>";
+  "<dl class=\"stats metrics\">"
+  + m("Open → merged"; if all($root.prs[]; .mergedAt) then (([$root.prs[].mergedAt | secs] | max) - $open | dur) else "still open" end)
+  + m("First review"; if $first then ($first - $open | dur) + " after opening" else "none yet" end)
+  + m("Reviews"; [$root.prs[].reviews[]] | length | tostring)
+  + m("Commits after first review"; if $first then [$root.prs[].commits[] | select((.date | secs) > $first)] | length | tostring else "–" end)
+  + when($quiet != null; m("Longest quiet"; $quiet | dur))
+  + "</dl>";
+def tlpr($root; $chs; $p):
+  [$chs[] | select(.pr == $p.number) | . + {pin: pin($p)}] as $mine
+  | evs($p) as $ev | [$ev[] | select(.k == "review" and .st == "changes_requested") | .x] as $crs
+  | def fold: "<details class=\"fold chapter tier-\(.tier | e)\" id=\"ch-\(.id | e)\"\(when(.tier == "read"; " open"))><summary>" + chhead($root; .num) + "</summary>" + chgrid($root) + "</details>";
+  "<section class=\"pr-group\">" + prhead($p) + "<ol class=\"rail\">"
+  + ([$ev[] | . as $v
+      | "<li class=\"ev \(.k)\(when(.st; " r-" + .st))\"><time>\(ago(.t) | e)</time><span>\(when(.sha; "<code>\(.sha[0:7] | e)</code> "))\(.s | e)"
+        + when(.k == "commit" and any($crs[]; . < $v.x); "<em class=\"tag\">after changes requested</em>") + "</span></li>"
+        + ([$mine[] | select(.pin != null and .pin == $v.sha) | "<li class=\"ev-ch\">" + fold + "</li>"] | join(""))] | join(""))
+  + ([$mine[] | select(.pin == null)] | when(length > 0; "<li class=\"ev-ch loose\"><p class=\"loose-h\">Not tied to one commit</p>" + (map(fold) | join("")) + "</li>"))
+  + "</ol></section>";
 
 def page:
   . as $root | .story as $s | ($s.chapters | to_entries | map(.value + {num: (.key + 1)})) as $chs
@@ -158,15 +231,17 @@ def page:
     + "</nav></div></header>"
     + "<main class=\"chapters\">"
     + (if .format == "timeline" then
-        ([.prs[] as $p | "<section class=\"pr-group\">" + prhead($p) + events($p)
-          + ([$chs[] | select(.pr == $p.number) | chapter($root; .num)] | join("")) + "</section>"] | join(""))
+        "<section class=\"tl-top\"><h2 class=\"tl-h\">How it unfolded</h2>" + metrics($root) + axis($root) + "</section>"
+        + ([.prs[] as $p | tlpr($root; $chs; $p)] | join(""))
+       elif .format == "slides" then
+        ([$chs[] | slides($root; .num)] | join(""))
        else
         ([$chs | to_entries[] | .value as $c | (if .key == 0 then null else $chs[.key - 1].pr end) as $prev
           | when(($root.prs | length) > 1 and $c.pr != $prev; prhead(($root | prs_by_n)[$c.pr | tostring]))
             + ($c | chapter($root; $c.num))] | join(""))
        end)
     + when(($qs | length) > 0; "<section class=\"questions slide\" id=\"questions\"><div class=\"q-head\"><div><h2>Questions for the author</h2><p>The PR, its commits, reviews and ticket don’t answer these. Paste them into your review.</p></div><button type=\"button\" id=\"copy-qs\">Copy all</button></div><ol>"
-        + ($qs | map("<li class=\"question\" data-q=\"\(.question | e)\"><a href=\"#ch-\(.id | e)\">Ch \(.num | pad2)</a><p>\(.question | e)</p></li>") | join("")) + "</ol></section>")
+        + ($qs | map("<li class=\"question\" data-q=\"\(.question | e)\">" + when($root.format == "slides"; "<input type=\"checkbox\" id=\"q-\(.id | e)\" aria-label=\"Asked\">") + "<a href=\"#ch-\(.id | e)\">Ch \(.num | pad2)</a><p>\(.question | e)</p></li>") | join("")) + "</ol></section>")
     + "</main>"
     + "<footer class=\"foot\">Built by <a href=\"https://github.com/nayanraj210401/flow-stack/tree/main/plugins/flow-stack/skills/pr-chapters\">flow-stack pr-chapters</a> from GitHub\(when(.task != null; " and the flow task")) · \(ago(.generated) | e) UTC · every why links to where it is written</footer>"
     + when(.format == "slides"; "<nav id=\"slide-nav\" aria-label=\"Chapters\"><button id=\"prev\" type=\"button\">← Prev</button><span id=\"slide-pos\"></span><button id=\"next\" type=\"button\">Next →</button></nav>")

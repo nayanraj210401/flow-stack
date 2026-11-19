@@ -41,7 +41,10 @@ Read the hunks and the sources, then set `.story` in story.json (with `jq` or a 
 scripts/render.sh .flow/chapters/story.json .flow/chapters/story.html
 ```
 
-It refuses while any chapter's why has no source and no question, any hunk is in no chapter, a long source has no quote, or any source, quote, or hunk points at something that wasn't collected or is empty. It lists each problem. Fix the story and re-run; never edit the checks or the HTML. The page format comes from the `chapters.format` setting: `scroll` (the default, one long read), `slides` (one chapter per screen, arrow keys), or `timeline` (each PR's real events, then its chapters). Set it with `../settings/scripts/settings.sh chapters format <scroll|slides|timeline>`, or pass `--format` to collect for one run.
+It refuses while any chapter's why has no source and no question, any hunk is in no chapter, a long source has no quote, or any source, quote, or hunk points at something that wasn't collected or is empty. It lists each problem. Fix the story and re-run; never edit the checks or the HTML. The page format comes from the `chapters.format` setting. Each format is for a different job:
+- `scroll` (the default): read it alone before reviewing.
+- `slides`: walk a team through it. Each chapter gets a claim slide (what, why, ask), then one full-screen slide per hunk. A tier-colored progress bar runs along the top, and the questions end as a checklist. A ref's optional `note` captions its hunk slides; without one, the chapter's `what` does.
+- `timeline`: how the change unfolded. It shows metrics (open to merged, first review, rounds, longest quiet), a to-scale axis with one lane per PR plus issue markers, then each PR's events with every chapter folded under the commit that first touched its files. Set it with `../settings/scripts/settings.sh chapters format <scroll|slides|timeline>`, or pass `--format` to collect for one run.
 
 ## 4. Publish
 

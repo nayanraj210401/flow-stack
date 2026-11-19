@@ -46,7 +46,7 @@ parse() {
 }
 
 PR_FIELDS=number,title,url,author,state,createdAt,mergedAt,baseRefName,headRefName,additions,deletions,body,closingIssuesReferences,commits,reviews,comments,statusCheckRollup
-ISSUE_FIELDS=number,title,url,author,state,body,comments,closedByPullRequestsReferences
+ISSUE_FIELDS=number,title,url,author,state,createdAt,body,comments,closedByPullRequestsReferences
 
 # pr_json <repo> <n>: one PR, normalized, with every file's patch split into hunks
 pr_json() {
@@ -54,7 +54,13 @@ pr_json() {
   view="$(gh pr view "$2" -R "$1" --json "$PR_FIELDS" 2>"$tmp/err")" || return 1
   files="$(gh api "repos/$1/pulls/$2/files" --paginate | jq -s 'add // []')" || die "could not read the files of $1#$2"
   comments="$(gh api "repos/$1/pulls/$2/comments" --paginate | jq -s 'add // []')" || die "could not read the review comments of $1#$2"
-  jq -n --arg repo "$1" --argjson v "$view" --argjson f "$files" --argjson c "$comments" '
+  # the files each commit touched, so the timeline can pin a chapter to the commit that wrote it (first 60)
+  local cf="{}" sha fl
+  for sha in $(jq -r '.commits[]?.oid' <<<"$view" | head -60); do
+    fl="$(gh api "repos/$1/commits/$sha" --jq '[.files[]?.filename]' 2>/dev/null)" || fl=null
+    cf="$(jq -c --arg s "$sha" --argjson f "${fl:-null}" '.[$s] = $f' <<<"$cf")"
+  done
+  jq -n --arg repo "$1" --argjson v "$view" --argjson f "$files" --argjson c "$comments" --argjson cf "$cf" '
     def who: .login // .name // "unknown";
     def hunks: if . == null then [] else reduce (split("\n")[]) as $l ([];
       if ($l | startswith("@@")) or length == 0 then . + [$l] else .[-1] += "\n" + $l end) end;
@@ -62,7 +68,7 @@ pr_json() {
       base: .baseRefName, head: .headRefName, additions, deletions, body: (.body // ""),
       closes: [.closingIssuesReferences[]? | {repo: (.repository | if . then "\(.owner.login)/\(.name)" else $repo end), number}],
       commits: [.commits[]? | {sha: .oid, headline: .messageHeadline, body: (.messageBody // ""), date: .committedDate,
-        author: ((.authors // [])[0] | if . then who else "unknown" end)}],
+        author: ((.authors // [])[0] | if . then who else "unknown" end), files: $cf[.oid]}],
       reviews: [.reviews[]? | {id, author: (.author | who), state, body: (.body // ""), submittedAt}],
       comments: [.comments[]? | {id, author: (.author | who), body: (.body // ""), createdAt}],
       checks: [.statusCheckRollup[]? | {name: (.name // .context), conclusion: (.conclusion // .state)}],
@@ -72,7 +78,7 @@ pr_json() {
 issue_json() {
   local v; v="$(gh issue view "$2" -R "$1" --json "$ISSUE_FIELDS" 2>"$tmp/err")" || return 1
   jq --arg repo "$1" 'def who: .login // .name // "unknown";
-    {repo: $repo, number, title, url, author: (.author | who), state, body: (.body // ""),
+    {repo: $repo, number, title, url, author: (.author | who), state, createdAt, body: (.body // ""),
      comments: [.comments[]? | {id, author: (.author | who), body: (.body // ""), createdAt}],
      prs: [.closedByPullRequestsReferences[]? | {repo: (.repository | if . then "\(.owner.login)/\(.name)" else $repo end), number}]}' <<<"$v"
 }
