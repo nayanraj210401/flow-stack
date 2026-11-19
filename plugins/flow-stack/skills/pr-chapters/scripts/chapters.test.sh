@@ -41,6 +41,10 @@ cat >"$F/pr7.json" <<'J'
 J
 echo '[{"filename":"db/lockout.sql","status":"added","additions":8,"deletions":0,"patch":"@@ -0,0 +1,1 @@\n+create table lockout (id int);"}]' >"$F/pr7.files.json"
 echo '[]' >"$F/pr7.comments.json"
+# PR 11 closes an issue in another repo, other/lib#5 (not acme/app#5)
+jq '.number=11 | .url="https://github.com/acme/app/pull/11" | .closingIssuesReferences=[{"number":5,"repository":{"name":"lib","owner":{"login":"other"}}}]' "$F/pr7.json" >"$F/pr11.json"
+cp "$F/pr7.files.json" "$F/pr11.files.json"; echo '[]' >"$F/pr11.comments.json"
+echo '{"number":5,"title":"Lib bug","url":"https://github.com/other/lib/issues/5","author":{"login":"dd"},"state":"OPEN","body":"lib side","comments":[],"closedByPullRequestsReferences":[]}' >"$F/issue-other-lib-5.json"
 cat >"$F/issue5.json" <<'J'
 {"number":5,"title":"Brute-force on login","url":"https://github.com/acme/app/issues/5","author":{"login":"cy"},"state":"CLOSED",
  "body":"Anyone can guess passwords without limit.","comments":[{"id":"IC1","author":{"login":"cy"},"body":"Seen in prod logs.","createdAt":"2026-02-28T09:00:00Z"}],
@@ -49,11 +53,13 @@ J
 echo '{"number":6,"title":"Orphan","url":"https://github.com/acme/app/issues/6","author":{"login":"cy"},"state":"OPEN","body":"","comments":[],"closedByPullRequestsReferences":[]}' >"$F/issue6.json"
 cat >"$SB/bin/gh" <<'SH'
 #!/usr/bin/env bash
-F="$GH_FIX"
+F="$GH_FIX"; R=""; a=("$@"); for i in "${!a[@]}"; do [ "${a[$i]}" = -R ] && R="${a[$((i+1))]}"; done
 case "$1 $2" in
-  "repo view") echo acme/app; exit 0 ;;
+  "repo view") [ -z "${GH_NO_REPO:-}" ] || { echo "no git remotes found" >&2; exit 1; }; echo acme/app; exit 0 ;;
   "pr view") f="$F/pr$3.json" ;;
-  "issue view") f="$F/issue$3.json" ;;
+  "issue view") f="$F/issue$3.json"; [ "$R" = acme/app ] || f="$F/issue-${R/\//-}-$3.json" ;;
+  api\ repos/acme/app/pulls/*/files) [ -z "${GH_FAIL_FILES:-}" ] || { echo "HTTP 502: Bad Gateway" >&2; exit 1; }
+    p="${2#repos/acme/app/pulls/}"; f="$F/pr${p%%/*}.${p#*/}.json" ;;
   api\ repos/acme/app/pulls/*) p="${2#repos/acme/app/pulls/}"; f="$F/pr${p%%/*}.${p#*/}.json" ;;
   *) echo "stub gh: unexpected $*" >&2; exit 3 ;;
 esac
@@ -81,6 +87,9 @@ if on collect; then
   ck "acme/app#7 form resolves" 'collect acme/app#7 2>/dev/null | jq -e ".prs[0].number==7" >/dev/null'
   ck "issue with no PRs: exit 1, says so" '! collect 6 >/dev/null 2>"$SB/err" && grep -qi "no pull requests" "$SB/err"'
   ck "unknown ref: exit non-zero, names it" '! collect 404 >/dev/null 2>"$SB/err" && grep -q "404" "$SB/err"'
+  ck "closed issue in another repo is fetched from that repo" 'collect 11 2>/dev/null | jq -e ".issues==[.issues[0]] and .issues[0].repo==\"other/lib\" and .issues[0].title==\"Lib bug\"" >/dev/null'
+  ck "gh failing mid-PR: exit 1 with its message" '! GH_FAIL_FILES=1 collect 9 >/dev/null 2>"$SB/err" && grep -q "could not read the files" "$SB/err"'
+  ck "bare number outside a GitHub repo: one clear error" '! GH_NO_REPO=1 collect 9 >/dev/null 2>"$SB/err" && grep -q "not in a GitHub repo" "$SB/err" && [ "$(wc -l <"$SB/err")" -eq 1 ]'
   ck "--task overrides the TICKET match" 'mkdir -p "$R/.flow/tasks/other" && printf "## Goal\nOther goal\n" >"$R/.flow/tasks/other/INTENT.md" && collect 9 --task other | jq -e ".task.slug==\"other\"" >/dev/null'
 fi
 
@@ -93,7 +102,7 @@ story() {
        why: {text: "Scripts could guess passwords forever.", sources: [{kind: "pr-body", pr: 9, quote: "a script could try passwords forever"}, {kind: "commit", pr: 9, ref: "aaa1111"}]},
        refs: [{pr: 9, file: "src/limit.ts", hunks: [0, 1]}]},
       {id: "wire", title: "Login asks the bucket", pr: 9, tier: "read", what: "login() throws tooMany when the bucket is empty.",
-       why: {text: "Reviewer asked about clock skew.", sources: [{kind: "review", pr: 9, ref: "R1"}, {kind: "review-comment", pr: 9, ref: 77}, {kind: "issue", ref: 5}, {kind: "task", ref: "DECISIONS.tsv:1"}]},
+       why: {text: "Reviewer asked about clock skew.", sources: [{kind: "review", pr: 9, ref: "R1"}, {kind: "review-comment", pr: 9, ref: 77}, {kind: "issue", ref: 5, quote: "guess passwords without limit"}, {kind: "task", ref: "DECISIONS.tsv:1"}]},
        question: "Why throw instead of returning 429 from the route?",
        refs: [{pr: 9, file: "src/login.ts"}]},
       {id: "gen", title: "Generated bundle", pr: 9, tier: "skip", what: "Rebuilt bundle.", why: null,
@@ -116,6 +125,11 @@ if on refuse; then
   ck "quote not in its source: refused" 'bad x ".story.chapters[0].why.sources[0].quote=\"bots rule\"" "bots rule"'
   ck "task source with no task: refused" 'bad x ".task=null" "task"'
   ck "unknown tier: refused" 'bad x ".story.chapters[0].tier=\"maybe\"" "tier"'
+  ck "source with empty text: refused (hollow citation)" 'bad x ".prs[0].body=\"\"" "is empty"'
+  ck "long source cited without a quote: refused" 'bad x "del(.story.chapters[0].why.sources[0].quote)" "add the quote"'
+  ck "blank question counts as none" 'bad x ".story.chapters[2].question=\"  \"" "gen"'
+  ck "ref listing no hunks: refused" 'bad x ".story.chapters[0].refs[0].hunks=[]" "lists no hunks"'
+  ck "a hunk in no chapter: refused, names it" 'bad x ".story.chapters[0].refs[0].hunks=[0]" "hunk 1 is in no chapter"'
   ck "unknown source kind: refused" 'bad x ".story.chapters[0].why.sources[0].kind=\"vibes\"" "vibes"'
 fi
 
@@ -129,10 +143,10 @@ if on render; then
   done
   h="$SB/scroll.html"
   ck "title, summary, page title" 'grep -q "<title>Rate-limit login</title>" "$h" && grep -q "per-account token bucket" "$h"'
-  ck "hunks drawn with added/removed lines" 'grep -q "class=\"ln add\">+export class Bucket" "$h" && grep -q "class=\"ln del\">-  old()" "$h"'
+  ck "hunks drawn with numbered added/removed lines" 'grep -q "<span class=\"ln add\"><span class=\"no\"></span><span class=\"no\">1</span><span class=\"sg\">+</span><span class=\"tx\">export class Bucket" "$h" && grep -q "<span class=\"ln del\"><span class=\"no\">10</span><span class=\"no\"></span><span class=\"sg\">−</span><span class=\"tx\">  old()" "$h"'
   ck "only the referenced hunks of a file" 'grep -q "@@ -10,2 +13,3 @@ refill" "$h"'
   ck "omitted patch says so" 'grep -q "patch not shown" "$h"'
-  ck "sources cited with links: commit, review, issue, quote" 'grep -q "https://github.com/acme/app/commit/aaa1111" "$h" && grep -q "pull/9#pullrequestreview-R1\|pull/9#discussion_r77" "$h" && grep -q "https://github.com/acme/app/issues/5" "$h" && grep -q "a script could try passwords forever" "$h"'
+  ck "sources cited with links: commit, review, issue, quote" 'grep -q "https://github.com/acme/app/commit/aaa1111" "$h" && grep -q "href=\"https://github.com/acme/app/pull/9#discussion_r77\"" "$h" && grep -q "review by bo · changes requested" "$h" && grep -q "https://github.com/acme/app/issues/5" "$h" && grep -q "a script could try passwords forever" "$h"'
   ck "questions for the author collected, both of them" '[ "$(grep -o "class=\"question\"" "$h" | wc -l)" -ge 2 ] && grep -q "Is dist/bundle.js meant to be committed?" "$h" && grep -q "Questions for the author" "$h"'
   ck "tiers shown" 'grep -q "tier-read" "$h" && grep -q "tier-skip" "$h"'
   ck "values escaped" '! grep -q "<b>x</b>" "$h" && ! grep -q "never says no </script>" "$h"'

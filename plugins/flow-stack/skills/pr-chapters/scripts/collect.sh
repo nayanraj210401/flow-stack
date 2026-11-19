@@ -27,7 +27,11 @@ done
 case "${format:-scroll}" in scroll|slides|timeline) format="${format:-scroll}" ;; *) die "format '$format': want scroll, slides or timeline" ;; esac
 
 here_repo=""
-repo_of() { [ -n "$here_repo" ] || here_repo="$(gh repo view --json nameWithOwner -q .nameWithOwner)" || die "not in a GitHub repo; pass owner/repo#N or a URL"; echo "$here_repo"; }
+for r in "${refs[@]}"; do
+  [[ "$r" =~ ^#?[0-9]+$ ]] || continue
+  here_repo="$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null)" && [ -n "$here_repo" ] || die "not in a GitHub repo; pass owner/repo#N or a URL"
+  break
+done
 
 # parse <ref> → "repo<TAB>number<TAB>hint" (hint: pr, issue, or empty)
 parse() {
@@ -37,7 +41,7 @@ parse() {
   elif [[ "$r" =~ ^([^/#[:space:]]+/[^/#[:space:]]+)#([0-9]+)$ ]]; then
     printf '%s\t%s\t\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
   elif [[ "$r" =~ ^#?([0-9]+)$ ]]; then
-    printf '%s\t%s\t\n' "$(repo_of)" "${BASH_REMATCH[1]}"
+    printf '%s\t%s\t\n' "$here_repo" "${BASH_REMATCH[1]}"
   else die "'$r' is not a PR or issue (12, #12, owner/repo#12, or a github.com URL)"; fi
 }
 
@@ -47,7 +51,7 @@ ISSUE_FIELDS=number,title,url,author,state,body,comments,closedByPullRequestsRef
 # pr_json <repo> <n>: one PR, normalized, with every file's patch split into hunks
 pr_json() {
   local view files comments
-  view="$(gh pr view "$2" -R "$1" --json "$PR_FIELDS")" || return 1
+  view="$(gh pr view "$2" -R "$1" --json "$PR_FIELDS" 2>"$tmp/err")" || return 1
   files="$(gh api "repos/$1/pulls/$2/files" --paginate | jq -s 'add // []')" || die "could not read the files of $1#$2"
   comments="$(gh api "repos/$1/pulls/$2/comments" --paginate | jq -s 'add // []')" || die "could not read the review comments of $1#$2"
   jq -n --arg repo "$1" --argjson v "$view" --argjson f "$files" --argjson c "$comments" '
@@ -56,7 +60,7 @@ pr_json() {
       if ($l | startswith("@@")) or length == 0 then . + [$l] else .[-1] += "\n" + $l end) end;
     $v | {repo: $repo, number, title, url, author: (.author | who), state, createdAt, mergedAt,
       base: .baseRefName, head: .headRefName, additions, deletions, body: (.body // ""),
-      closes: [.closingIssuesReferences[]?.number],
+      closes: [.closingIssuesReferences[]? | {repo: (.repository | if . then "\(.owner.login)/\(.name)" else $repo end), number}],
       commits: [.commits[]? | {sha: .oid, headline: .messageHeadline, body: (.messageBody // ""), date: .committedDate,
         author: ((.authors // [])[0] | if . then who else "unknown" end)}],
       reviews: [.reviews[]? | {id, author: (.author | who), state, body: (.body // ""), submittedAt}],
@@ -66,11 +70,11 @@ pr_json() {
       files: [$f[] | {path: .filename, status, additions, deletions, patch_omitted: (.patch == null), hunks: (.patch | hunks)}]}'
 }
 issue_json() {
-  local v; v="$(gh issue view "$2" -R "$1" --json "$ISSUE_FIELDS")" || return 1
+  local v; v="$(gh issue view "$2" -R "$1" --json "$ISSUE_FIELDS" 2>"$tmp/err")" || return 1
   jq --arg repo "$1" 'def who: .login // .name // "unknown";
     {repo: $repo, number, title, url, author: (.author | who), state, body: (.body // ""),
      comments: [.comments[]? | {id, author: (.author | who), body: (.body // ""), createdAt}],
-     prs: [.closedByPullRequestsReferences[]?.number]}' <<<"$v"
+     prs: [.closedByPullRequestsReferences[]? | {repo: (.repository | if . then "\(.owner.login)/\(.name)" else $repo end), number}]}' <<<"$v"
 }
 
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
@@ -78,19 +82,19 @@ tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 add_pr() { grep -qx "$1#$2" "$tmp/seen" 2>/dev/null && return 0; echo "$1#$2" >>"$tmp/seen"; pr_json "$1" "$2" >>"$tmp/prs"; }
 for r in "${refs[@]}"; do
   IFS=$'\t' read -r repo n hint < <(parse "$r") || exit 1
-  if [ "$hint" != issue ] && add_pr "$repo" "$n" 2>"$tmp/err"; then kind="${kind:+prs}"; kind="${kind:-pr}"; continue; fi
+  if [ "$hint" != issue ] && add_pr "$repo" "$n"; then kind="${kind:+prs}"; kind="${kind:-pr}"; continue; fi
   [ "$hint" = pr ] && die "$r: $(head -1 "$tmp/err")"
-  ij="$(issue_json "$repo" "$n" 2>"$tmp/err")" || die "$r is not a PR or an issue in $repo: $(head -1 "$tmp/err")"
+  ij="$(issue_json "$repo" "$n")" || die "$r is not a PR or an issue in $repo: $(head -1 "$tmp/err")"
   echo "$ij" >>"$tmp/issues"
-  ps="$(jq -r '.prs[]' <<<"$ij")"
+  ps="$(jq -r '.prs[] | "\(.repo)\t\(.number)"' <<<"$ij")"
   [ -n "$ps" ] || die "issue $repo#$n has no pull requests that close it; pass the PRs instead"
-  for p in $ps; do add_pr "$repo" "$p" || die "$repo#$p (from issue #$n): could not read it"; done
+  while IFS=$'\t' read -r prepo p; do add_pr "$prepo" "$p" || die "$prepo#$p (from issue #$n): $(head -1 "$tmp/err")"; done <<<"$ps"
   kind="${kind:+prs}"; kind="${kind:-issue}"
 done
 [ "${#refs[@]}" -gt 1 ] && kind=prs
 
 # the issues the PRs close, once each
-jq -r '.repo as $r | .closes[] | "\($r)\t\(.)"' "$tmp/prs" | sort -u | while IFS=$'\t' read -r repo n; do
+jq -r '.closes[] | "\(.repo)\t\(.number)"' "$tmp/prs" | sort -u | while IFS=$'\t' read -r repo n; do
   jq -e --arg r "$repo" --argjson n "$n" 'select(.repo == $r and .number == $n)' "$tmp/issues" >/dev/null 2>&1 \
     || issue_json "$repo" "$n" >>"$tmp/issues" 2>/dev/null || true
 done

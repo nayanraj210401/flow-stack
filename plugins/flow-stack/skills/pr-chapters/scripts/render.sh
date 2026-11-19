@@ -10,7 +10,7 @@ jq -e '.prs | type == "array"' "$1" >/dev/null 2>&1 || { echo "render.sh: $1 is 
 errs="$(jq -r -L "$here" 'include "story"; errors[]' "$1")"
 if [ -n "$errs" ]; then echo "render.sh: not publishable yet:" >&2; sed 's/^/  - /' <<<"$errs" >&2; exit 1; fi
 mkdir -p "$(dirname "$2")"
-TITLE="$(jq -r -L "$here" 'include "story"; .story.title | e' "$1")" \
-BODY="$(jq -r -L "$here" 'include "story"; page' "$1")" \
-  perl -pe 's/\{\{TITLE\}\}/$ENV{TITLE}/; s/\{\{BODY\}\}/$ENV{BODY}/' "$tpl" >"$2"
+TITLE="$(jq -r -L "$here" 'include "story"; .story.title | e' "$1")"
+BODY="$(jq -r -L "$here" 'include "story"; page' "$1")"
+TITLE="$TITLE" BODY="$BODY" perl -pe 's/\{\{TITLE\}\}/$ENV{TITLE}/; s/\{\{BODY\}\}/$ENV{BODY}/' "$tpl" >"$2"
 echo "$2"
