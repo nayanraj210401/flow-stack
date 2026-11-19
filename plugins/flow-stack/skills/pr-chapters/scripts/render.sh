@@ -7,10 +7,12 @@ set -euo pipefail
 [ $# -eq 2 ] || { sed -n '2,5p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 here="$(cd "$(dirname "$0")" && pwd)"; tpl="$here/../templates/story.html"
 jq -e '.prs | type == "array"' "$1" >/dev/null 2>&1 || { echo "render.sh: $1 is not collect.sh output" >&2; exit 2; }
-errs="$(jq -r -L "$here" 'include "story"; errors[]' "$1")"
+# story.jq is prepended, not included: jq's include would find a story.jq in the working directory first
+lib="$(cat "$here/story.jq")"
+errs="$(jq -r "$lib errors[]" "$1")"
 if [ -n "$errs" ]; then echo "render.sh: not publishable yet:" >&2; sed 's/^/  - /' <<<"$errs" >&2; exit 1; fi
 mkdir -p "$(dirname "$2")"
-TITLE="$(jq -r -L "$here" 'include "story"; .story.title | e' "$1")"
-BODY="$(jq -r -L "$here" 'include "story"; page' "$1")"
+TITLE="$(jq -r "$lib .story.title | e" "$1")"
+BODY="$(jq -r "$lib page" "$1")"
 TITLE="$TITLE" BODY="$BODY" perl -pe 's/\{\{TITLE\}\}/$ENV{TITLE}/; s/\{\{BODY\}\}/$ENV{BODY}/' "$tpl" >"$2"
 echo "$2"

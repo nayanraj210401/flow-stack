@@ -167,6 +167,7 @@ if on render; then
   ck "timeline: a lane per PR on a to-scale axis, quiet gaps labeled" 'grep -q "lane-label\">PR #9<" "$t" && grep -q "mk review r-changes_requested\" style=\"left:" "$t" && grep -q "19h quiet" "$t"'
   ck "timeline: each chapter sits under the commit that first touched its files" 'a=$(at "$t" ch-core); w=$(at "$t" ch-wire); c1=$(grep -bo "aaa1111</code>" "$t" | head -1 | cut -d: -f1); c2=$(grep -bo "bbb2222</code>" "$t" | head -1 | cut -d: -f1); [ "$c1" -lt "$a" ] && [ "$a" -lt "$c2" ] && [ "$c2" -lt "$w" ]'
   ck "timeline: read chapters open, others folded" 'grep -q "<details class=\"fold chapter tier-read\" id=\"ch-core\" open>" "$t" && grep -q "<details class=\"fold chapter tier-skip\" id=\"ch-gen\"><summary>" "$t"'
+  ck "a story.jq in the working directory doesn't hijack render" '(cd "$SB" && echo ". = 1" >story.jq && "$H/render.sh" "$SB/ok.json" "$SB/cwd.html" >/dev/null 2>&1) && grep -q "id=\"ch-core\"" "$SB/cwd.html"'
   ck "slides: nav present" 'grep -q "id=\"slide-nav\"" "$SB/slides.html"'
 fi
 
