@@ -7,6 +7,8 @@
 #                                                 impacted: run only the suites a change touches (suites.sh)
 #   settings.sh tests unmatched full|skip [--repo]
 #                                                 a changed file no suite claims: run the full suite, or skip it
+#   settings.sh chapters format [scroll|slides|rounds] [--repo]
+#                                                 the chapters page: print the format, or set it (default scroll)
 #   settings.sh init                              create ~/.flow-stack/settings.json, carrying over config.json toggles
 #   settings.sh path                              the files read, highest precedence first
 #
@@ -72,13 +74,14 @@ effective() {
   done < <(layers)
   printf 'on\tdefault\n'
 }
-test_setting() { # test_setting <key> <default>: "value<TAB>where"
+test_setting() { setting tests "$@"; }
+setting() { # setting <section> <key> <default>: "value<TAB>where"
   local f v
   while IFS= read -r f; do
-    v="$(value "$f" ".tests.$1")"
+    v="$(value "$f" ".$1.$2")"
     [ -n "$v" ] && { printf '%s\t%s\n' "$v" "$(short "$f")"; return; }
   done < <(tlayers)
-  printf '%s\tdefault\n' "$2"
+  printf '%s\tdefault\n' "$3"
 }
 
 # write <file> <jq-filter> [args...]: edit a JSON file in place (created as {} when missing)
@@ -108,6 +111,8 @@ show() {
   echo "tests"
   IFS=$'\t' read -r st where < <(test_setting scope impacted); printf '  %-13s %-8s %s\n' scope "$st" "$where"
   IFS=$'\t' read -r st where < <(test_setting unmatched full); printf '  %-13s %-8s %s\n' unmatched "$st" "$where"
+  echo "chapters"
+  IFS=$'\t' read -r st where < <(setting chapters format scroll); printf '  %-13s %-8s %s\n' format "$st" "$where"
   if [ -n "$repo" ]; then
     printf '  %-13s %s\n' suites "$(jq -r '.tests.suites // [] | length' "$trepo" 2>/dev/null || echo 0) in repo .flow/config.json (suites.sh list)"
   fi
@@ -140,6 +145,16 @@ case "${1:-show}" in
     write "$(target "${4:-}" "$trepo")" --arg k "$key" --arg v "$val" '.tests[$k] = $v'
     IFS=$'\t' read -r st where < <(test_setting "$key" x); echo "tests.$key: $st ($where)"
     exit 0 ;;
+  chapters)
+    [ "${2:-}" = format ] || die "usage: settings.sh chapters format [scroll|slides|rounds] [--repo]"
+    case "${3:-}" in
+      ''|--repo) setting chapters format scroll | cut -f1; exit 0 ;;
+      scroll|slides|rounds) ;;
+      *) die "chapters format: want scroll, slides or rounds (got '$3')" ;;
+    esac
+    write "$(target "${4:-}" "$trepo")" --arg v "$3" '.chapters.format = $v'
+    IFS=$'\t' read -r st where < <(setting chapters format scroll); echo "chapters.format: $st ($where)"
+    exit 0 ;;
   init)
     if [ -f "$global" ]; then echo "$global exists"; exit 0; fi
     mkdir -p "$home"
@@ -148,5 +163,5 @@ case "${1:-show}" in
     echo "wrote $global$( [ "$hooks" != '{}' ] && printf ' (hooks carried over from config.json)' )"
     exit 0 ;;
   -h|--help|help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//' ;;
-  *) die "unknown command '$1' (show | hook | tests | init | path)" ;;
+  *) die "unknown command '$1' (show | hook | tests | chapters | init | path)" ;;
 esac

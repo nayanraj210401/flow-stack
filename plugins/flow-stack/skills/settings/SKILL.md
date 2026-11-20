@@ -14,6 +14,7 @@ scripts/settings.sh hook claims off          # in settings.json; add --repo for 
 scripts/settings.sh hook claims default      # drop the key, so the next layer (or on) decides
 scripts/settings.sh tests scope full         # impacted (default): only the suites a change touches
 scripts/settings.sh tests unmatched skip     # a change no suite claims: full (default) or skip
+scripts/settings.sh chapters format slides   # the chapters page: scroll (default), slides, or rounds
 scripts/settings.sh init                     # create settings.json, carrying over ~/.flow-stack/config.json toggles
 ```
 
