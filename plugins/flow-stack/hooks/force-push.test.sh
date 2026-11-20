@@ -125,6 +125,8 @@ expect deny 'git --namespace foo push --force origin main'
 expect deny 'git --super-prefix x push -f origin main'
 expect deny 'git --exec-path /x push -f origin main'
 expect deny 'git --git-dir .git push -f origin main'
+expect deny 'git --config-env k=V push -f origin main'
+expect deny 'git --attr-source HEAD push -f origin main'
 # -- force-push elsewhere: ask
 expect ask 'git push -f origin feat/x'
 expect ask 'git -C . push -f origin feat/x'
