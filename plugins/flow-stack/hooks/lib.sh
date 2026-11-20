@@ -60,10 +60,11 @@ flow_init() {
   fi
 }
 
-# flow_enabled <hook-name>: repo .flow/config.json wins, then ~/.flow-stack/config.json, default on.
+# flow_enabled <hook-name>: repo .flow/config.json wins, then ~/.flow-stack/settings.json (the global
+# settings), then ~/.flow-stack/config.json (older global toggles), default on. settings.sh edits them.
 flow_enabled() {
   local v cfg
-  for cfg in "$FLOW_DIR/config.json" "$FLOW_HOME/config.json"; do
+  for cfg in "$FLOW_DIR/config.json" "$FLOW_HOME/settings.json" "$FLOW_HOME/config.json"; do
     [ -f "$cfg" ] || continue
     v="$(jq -r --arg h "$1" 'if (.hooks // {} | has($h)) then .hooks[$h] | tostring else empty end' "$cfg" 2>/dev/null)"
     [ -n "$v" ] && { [ "$v" != false ]; return; }
@@ -204,6 +205,7 @@ FLOW_AUTO_QUEUE="Add it to .flow/tasks/<slug>/GATES.md (question, options, recom
 
 pre_decide() {
   # pre_decide <allow|deny|ask> <reason>. In auto mode nobody can answer an ask, so it is queued instead.
+  [ -z "${FLOW_HOOK_OFF:-}" ] || set -- "$1" "$2 Also: $FLOW_HOOK_OFF"
   if [ "$1" = ask ] && flow_auto; then
     set -- deny "flow auto: the human is away, so this waits. $2 $FLOW_AUTO_QUEUE"
   fi
@@ -211,6 +213,14 @@ pre_decide() {
     '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:$d,permissionDecisionReason:$r}}'
   exit 0
 }
+
+# pre_warn <message>: tell the human (systemMessage) and the agent (additionalContext); decide nothing, so the
+# normal permission flow runs, and --auto proceeds. For settings the user may change but should know about.
+pre_warn() {
+  jq -n --arg m "$1" '{systemMessage:$m,hookSpecificOutput:{hookEventName:"PreToolUse",additionalContext:$m}}'
+  exit 0
+}
+FLOW_HOOK_OFF_WARN="flow guard: a write to flow-stack's settings turns off any hook it sets to false, for every session that reads them. Allowed (your call); say which check goes off and why."
 
 redact() {
   perl -pe '

@@ -12,7 +12,7 @@ verified: 2026-10-29 90da7be
 While the agent works, dangerous shell commands are blocked or put to the human, repo-specific gates apply, and .env files never reach the transcript. Any hook error fails open.
 
 ## Sub-features
-- guard.shell.hardstop · `rm -rf /` or `~`, force-push to main/master, and `cat .env` are denied
+- guard.shell.hardstop · `rm -rf /` or `~`, force-pushing or deleting main/master, and `cat .env` are denied
 - guard.shell.escalate · force-push to a branch, `git reset --hard`, `git clean -f`, DROP/TRUNCATE TABLE, and `curl | sh` ask the human
 - guard.shell.gates · `- deny:` / `- ask:` lines in .flow/gates.md apply to matching commands, with their reason
 - guard.shell.env · Read of .env / .env.* is denied; .env.example/.sample/.template are allowed

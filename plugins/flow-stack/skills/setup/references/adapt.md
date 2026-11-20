@@ -71,6 +71,6 @@ From `inventory.sh .hosts`. Every host runs the real `claude`, so flow-stack wor
 ## Output of adaptation
 
 1. The profile's `# Toolchain` section: capability lines, plus `- router: …` when it isn't flow.
-2. `~/.flow-stack/config.json`: global hook toggles (`{"hooks": {"handoff": false}}`). Repo `.flow/config.json` overrides them.
+2. `~/.flow-stack/settings.json`: global hook toggles (`{"hooks": {"handoff": false}}`), written with `../../settings/scripts/settings.sh hook <name> off`. Repo `.flow/config.json` overrides them; an older `~/.flow-stack/config.json` is still read after settings.json.
 3. `~/.flow-stack/toolchain.fp`: the fingerprint (`inventory.sh --fingerprint`). When it changes, SessionStart suggests re-running adaptation.
 4. A ≤ 8-line summary for the human: what was detected, what flow-stack will use from their setup, what it turned off, what it kept.

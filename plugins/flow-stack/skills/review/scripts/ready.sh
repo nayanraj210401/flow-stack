@@ -9,7 +9,8 @@
 #   ready.sh mode                            on | yolo  (repo .flow/config.json > profile > on)
 #   ready.sh rounds                          reviewed commits on this branch since the last ship; a review record prints it,
 #                                            and round 3 without ship says to challenge the approach
-# Live checks: clean tree, lint + typecheck (config commands), impacted feature scenarios,
+# Live checks: clean tree, lint + typecheck (config commands), impacted test suites (when .flow/config.json
+# declares tests.suites: verify/scripts/suites.sh), impacted feature scenarios,
 # and with an active flow task: acceptance checks, seals, blind checks.
 # Repo quality gates: .flow/config.json "ready": [{"id","run":"<cmd>"} | {"id","do":"<step>"}].
 # A run entry is a live check; a do entry (an MCP scan, a manual script) needs `record <id> done`.
@@ -90,6 +91,13 @@ for c in lint typecheck; do
   [ -n "$cmd" ] || continue
   if run "ready:$c" "$cmd"; then pass "$c"; else miss "$c fails: $cmd"; fi
 done
+
+tcfg="$FLOW_DIR/config.json"; [ -f "$FLOW_ROOT/.flow/config.json" ] && tcfg="$FLOW_ROOT/.flow/config.json"  # as suites.sh reads it
+if [ "$(jq -r '.tests.suites // [] | length' "$tcfg" 2>/dev/null)" -gt 0 ] 2>/dev/null; then
+  scope=(--all); [ -z "$base" ] || scope=(--base "$base")  # no base to diff against: the full suite
+  if ( cd "$FLOW_ROOT" && "$sk/verify/scripts/suites.sh" run "${scope[@]}" >/dev/null 2>&1 </dev/null ); then pass "impacted test suites"
+  else miss "impacted test suites fail (verify/scripts/suites.sh run ${scope[0]}${base:+ $(echo "$base" | cut -c1-7)})"; fi
+fi
 
 while IFS=$'\t' read -r id kind body; do
   body="$(custom_body "$body")"
