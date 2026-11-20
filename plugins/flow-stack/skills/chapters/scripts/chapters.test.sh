@@ -173,7 +173,7 @@ if on render; then
   ck "a page body over 128 KB renders" 'render "$SB/big.json" "$SB/big.html" >/dev/null 2>"$SB/err" && [ "$(wc -c <"$SB/big.html")" -gt 400000 ] || { cat "$SB/err"; false; }'
   jq '.issues = [{repo: "other/lib", number: 5, title: "Lib bug", url: "https://github.com/other/lib/issues/5", author: "dd", state: "OPEN", createdAt: null, body: "the lib side of it", comments: [], prs: []}] + .issues
       | .story.chapters[1].why.sources += [{kind: "issue", ref: "other/lib#5", quote: "the lib side"}]' "$SB/ok.json" >"$SB/iss.json"
-  ck "issue refs: a bare number is the PR repo's issue, owner/repo#n another repo's" 'render "$SB/iss.json" "$SB/iss.html" >/dev/null 2>"$SB/err" && grep -q "https://github.com/acme/app/issues/5" "$SB/iss.html" && grep -q "https://github.com/other/lib/issues/5" "$SB/iss.html" || { cat "$SB/err"; false; }'
+  ck "issue refs: a bare number is the PR repo's issue, owner/repo#n another repo's" 'render "$SB/iss.json" "$SB/iss.html" >/dev/null 2>"$SB/err" && grep -q "https://github.com/acme/app/issues/5" "$SB/iss.html" && grep -q "https://github.com/other/lib/issues/5" "$SB/iss.html" && grep -q "issue other/lib#5" "$SB/iss.html" && grep -q "issue #5" "$SB/iss.html" || { cat "$SB/err"; false; }'
   ck "footer links to the skill" 'grep -q "Built by <a href=\"https://github.com/nayanraj210401/flow-stack/tree/main/plugins/flow-stack/skills/chapters\">flow-stack chapters</a>" "$h"'
   s="$SB/slides.html"; t="$SB/rounds.html"
   ck "slides: a claim slide per chapter" '[ "$(grep -o "class=\"chapter slide claim" "$s" | wc -l)" -eq 3 ]'

@@ -21,7 +21,7 @@ def resolve($s; $ch; $root): [
       (($s.ref | tostring | capture("^(?:(?<r>[^#\\s]+)#)?(?<n>[0-9]+)$")?) // {n: "-1"}) as $ir
       | ($ir.r // $p.repo) as $irepo
       | ($root.issues[] | select(.number == ($ir.n | tonumber) and ($irepo == null or .repo == $irepo)))
-      | {text: ([.body] + [.comments[].body] | join("\n")), url, label: "issue #\(.number)"}
+      | {text: ([.body] + [.comments[].body] | join("\n")), url, label: "issue \(if .repo == $p.repo then "" else .repo end)#\(.number)"}
     elif $s.kind == "task" then
       if $root.task == null then null
       elif ($s.ref // "INTENT.md") == "INTENT.md" then {text: $root.task.intent, url: null, label: "flow task \($root.task.slug) · INTENT"}
