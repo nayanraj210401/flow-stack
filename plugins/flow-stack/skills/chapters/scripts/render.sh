@@ -12,8 +12,8 @@ lib="$(cat "$here/story.jq")"
 errs="$(jq -r "$lib errors[]" "$1")"
 if [ -n "$errs" ]; then echo "render.sh: not publishable yet:" >&2; sed 's/^/  - /' <<<"$errs" >&2; exit 1; fi
 mkdir -p "$(dirname "$2")"
-TITLE="$(jq -r "$lib .story.title | e" "$1")"
-BODY="$(jq -r "$lib page" "$1")"
-# one pass over the whole template, so a {{BODY}} inside the title is never expanded
-TITLE="$TITLE" BODY="$BODY" perl -0777 -pe 's/\{\{(TITLE|BODY)\}\}/$ENV{$1}/g' "$tpl" >"$2"
+# one pass over the whole template, so a {{BODY}} inside the title is never expanded; in jq, so no
+# page size hits the per-variable limit an env var or argument has
+jq -j --rawfile tpl "$tpl" "$lib (.story.title | e) as \$t | page as \$b
+  | \$tpl | gsub(\"\\\\{\\\\{(?<k>TITLE|BODY)\\\\}\\\\}\"; if .k == \"TITLE\" then \$t else \$b end)" "$1" >"$2"
 echo "$2"

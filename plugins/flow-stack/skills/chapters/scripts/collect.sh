@@ -79,7 +79,7 @@ issue_json() {
 
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 : >"$tmp/prs"; : >"$tmp/issues"; kind=""
-add_pr() { grep -qx "$1#$2" "$tmp/seen" 2>/dev/null && return 0; echo "$1#$2" >>"$tmp/seen"; pr_json "$1" "$2" >>"$tmp/prs"; }
+add_pr() { grep -qxF -- "$1#$2" "$tmp/seen" 2>/dev/null && return 0; echo "$1#$2" >>"$tmp/seen"; pr_json "$1" "$2" >>"$tmp/prs"; }
 for r in "${refs[@]}"; do
   IFS=$'\t' read -r repo n hint < <(parse "$r") || exit 1
   if [ "$hint" != issue ] && add_pr "$repo" "$n"; then kind="${kind:+prs}"; kind="${kind:-pr}"; continue; fi

@@ -166,7 +166,14 @@ if on render; then
   ck "sources cited with links: commit, review, issue, quote" 'grep -q "https://github.com/acme/app/commit/aaa1111" "$h" && grep -q "href=\"https://github.com/acme/app/pull/9#discussion_r77\"" "$h" && grep -q "review by bo · fix" "$h" && grep -q "https://github.com/acme/app/issues/5" "$h" && grep -q "a script could try passwords forever" "$h"'
   ck "questions for the author collected, both of them" '[ "$(grep -o "class=\"question\"" "$h" | wc -l)" -ge 2 ] && grep -q "Is dist/bundle.js meant to be committed?" "$h" && grep -q "Questions for the author" "$h"'
   ck "tiers shown" 'grep -q "tier-read" "$h" && grep -q "tier-skip" "$h"'
-  ck "values escaped" '! grep -q "<b>x</b>" "$h" && ! grep -q "never says no </script>" "$h"'
+  jq '.story.summary = "Adds <b>x</b> now." | .story.chapters[0].what = "take() </script><i>y</i>"' "$SB/ok.json" >"$SB/esc.json"
+  render "$SB/esc.json" "$SB/esc.html" >/dev/null 2>&1 || true
+  ck "values escaped where they are drawn" 'grep -q "Adds &lt;b&gt;x&lt;/b&gt; now." "$SB/esc.html" && grep -q "take() &lt;/script&gt;&lt;i&gt;y&lt;/i&gt;" "$SB/esc.html" && ! grep -q "<b>x</b>\|<i>y</i>" "$SB/esc.html"'
+  jq '.story.summary = ("a long summary line " * 20000)' "$SB/ok.json" >"$SB/big.json"
+  ck "a page body over 128 KB renders" 'render "$SB/big.json" "$SB/big.html" >/dev/null 2>"$SB/err" && [ "$(wc -c <"$SB/big.html")" -gt 400000 ] || { cat "$SB/err"; false; }'
+  jq '.issues = [{repo: "other/lib", number: 5, title: "Lib bug", url: "https://github.com/other/lib/issues/5", author: "dd", state: "OPEN", createdAt: null, body: "the lib side of it", comments: [], prs: []}] + .issues
+      | .story.chapters[1].why.sources += [{kind: "issue", ref: "other/lib#5", quote: "the lib side"}]' "$SB/ok.json" >"$SB/iss.json"
+  ck "issue refs: a bare number is the PR repo's issue, owner/repo#n another repo's" 'render "$SB/iss.json" "$SB/iss.html" >/dev/null 2>"$SB/err" && grep -q "https://github.com/acme/app/issues/5" "$SB/iss.html" && grep -q "https://github.com/other/lib/issues/5" "$SB/iss.html" || { cat "$SB/err"; false; }'
   ck "footer links to the skill" 'grep -q "Built by <a href=\"https://github.com/nayanraj210401/flow-stack/tree/main/plugins/flow-stack/skills/chapters\">flow-stack chapters</a>" "$h"'
   s="$SB/slides.html"; t="$SB/rounds.html"
   ck "slides: a claim slide per chapter" '[ "$(grep -o "class=\"chapter slide claim" "$s" | wc -l)" -eq 3 ]'

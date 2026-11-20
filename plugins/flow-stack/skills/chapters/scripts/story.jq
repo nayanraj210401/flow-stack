@@ -17,7 +17,10 @@ def kinds: ["pr-body", "commit", "review", "review-comment", "comment", "issue",
 def resolve($s; $ch; $root): [
   ($root | prs_by_n) as $by | ($s.pr // $ch.pr) as $n | $by[$n | tostring] as $p
   | if $s.kind == "issue" then
-      ($root.issues[] | select(.number == ($s.ref | tonumber? // -1)))
+      # ref is `5` (the chapter PR's repo) or `owner/repo#5`
+      (($s.ref | tostring | capture("^(?:(?<r>[^#\\s]+)#)?(?<n>[0-9]+)$")?) // {n: "-1"}) as $ir
+      | ($ir.r // $p.repo) as $irepo
+      | ($root.issues[] | select(.number == ($ir.n | tonumber) and ($irepo == null or .repo == $irepo)))
       | {text: ([.body] + [.comments[].body] | join("\n")), url, label: "issue #\(.number)"}
     elif $s.kind == "task" then
       if $root.task == null then null
@@ -184,7 +187,7 @@ def vclass: if test("ship|approved") then "ok" elif test("block|changes") then "
 def stlabel: {fixed: "fixed", partly: "partly fixed", open: "still open", unknown: "no later word"}[.] // .;
 def realcommits($p): [$p.commits[] | select(.headline | startswith("Merge ") | not)];
 def commitlist($p):
-  if length == 0 then "" else "<ul class=\"commits\">" + (map("<li><a href=\"https://github.com/\($p.repo)/commit/\(.sha)\"><code>\(.sha[0:7])</code></a><span class=\"hl\">\(.headline | e)</span>"
+  if length == 0 then "" else "<ul class=\"commits\">" + (map("<li><a href=\"https://github.com/\($p.repo | e)/commit/\(.sha | e)\"><code>\(.sha[0:7] | e)</code></a><span class=\"hl\">\(.headline | e)</span>"
     + "</li>") | join("")) + "</ul>" end;
 def rounds($root):
   ($root.story.rounds // []) as $notes
