@@ -19,7 +19,7 @@ One slice at a time. Paths are relative to this skill's base directory. `T` belo
 
 **a. Build.** Make the smallest change that could make the check pass. Stay inside the fence. Delete before you add (principle-subtract-before-add). Follow the profile and repo Taste. When something falls outside the fence, the hook tells you how to widen it on purpose.
 
-**b. Verify.** Run `../verify/scripts/evidence.sh <id>`, plus the repo's lint and typecheck from `.flow/config.json` `commands` when set. Use the repo verify driver (`.claude/skills/verify-*/`) for UI, API, or CLI behavior. A unit test alone doesn't prove a user-visible behavior.
+**b. Verify.** Run `../verify/scripts/evidence.sh <id>`, plus the repo's lint and typecheck from `.flow/config.json` `commands` when set. For the regression run, use `../verify/scripts/suites.sh run`: only the test sub-suites the change touches, not the whole suite. Use the repo verify driver (`.claude/skills/verify-*/`) for UI, API, or CLI behavior. A unit test alone doesn't prove a user-visible behavior.
 
 **c. Pass?**
 - **Yes:** run `../probe/scripts/probe.sh <id> "<check>"`. TEETH means record the slice done. If the slice adds new code, also run it with `--hollow` (the code under test returns an empty value); reverting a new file only proves the check imports it. TOOTHLESS means the check passes without your change, so it proves nothing. Strengthen the check, re-seal (the human approves), and go back to b.

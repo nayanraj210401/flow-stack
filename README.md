@@ -278,6 +278,7 @@ What's been tested (#194): the install command works in a cloud shell, and `env`
 |---|---|
 | `setup` | Learns your toolchain and usage, adapts to it, creates your profile, offers tools, and runs a forge census. `/flow-stack:setup adapt` re-fits after changes. |
 | `profile` | Shows, edits, or lints `~/.flow-stack/profile.md`. |
+| `settings` | Shows and changes `~/.flow-stack/settings.json`: turns default hooks on or off, and sets how much of the test suite verification runs. |
 | `wrap` | End-of-day digest across your repos. |
 | `make-verifier` | Generates `.claude/skills/verify-<repo>/`, a driver that runs this app like a user (CLI, HTTP, browser) and proves itself on a real feature. |
 | `make-runner` | Generates `.claude/skills/run-<repo>/` with verified install, start, seed, reset, and stop commands. |
@@ -331,7 +332,7 @@ A rework loop or a wrong approach usually costs more than the overhead. Judge it
 ### How cost is kept down
 
 1. **Bookkeeping is bash, not the model.** Evidence, seals, probes, blind-check runs, the audit trail, the auto handoff, diffstat, and the slice-done proofs are shell scripts and hooks. They cost zero model tokens, which is why no rigor level turns them off.
-2. **Small always-on footprint.** The 18 principles are one skill with on-demand files. The eleven skills you invoke yourself (setup, forge, wrap…) are hidden from the model's list. Descriptions are kept to their trigger phrases. Together these cut the always-on listing from about 4.8k to about 1.6k tokens.
+2. **Small always-on footprint.** The 18 principles are one skill with on-demand files. The twelve skills you invoke yourself (setup, forge, wrap…) are hidden from the model's list. Descriptions are kept to their trigger phrases. Together these cut the always-on listing from about 4.8k to about 1.6k tokens.
 3. **Ceremony scales with the task.** Questions and one-line edits skip the task folder entirely. For real tasks, `rigor` in your profile decides what runs:
 
    | Step | lean | standard (default) | strict |
@@ -354,7 +355,7 @@ Check your own spend with `/flow-stack:budget` (uses ccusage) and the estimate-v
 
 | Hook | Blocks or does |
 |---|---|
-| **guard** (Bash) | Denies `rm -rf /`, force-push to main, reading `.env`, and packages that don't exist on npm or PyPI (hallucinated dependencies). Asks you before `reset --hard`, destructive SQL, `curl \| sh`, and anything in your repo's `.flow/gates.md`. |
+| **guard** (Bash) | Denies `rm -rf /`, force-pushing or deleting main, reading `.env`, and packages that don't exist on npm or PyPI (hallucinated dependencies). Asks you before `reset --hard`, destructive SQL, `curl \| sh`, and anything in your repo's `.flow/gates.md`. |
 | **seal** (Edit, Write, Bash) | Editing a sealed check, INTENT.md, or SEALS needs your confirmation. |
 | **fence** (Edit, Write) | Edits outside the current slice's file fence are denied until the fence is widened on purpose and logged. |
 | **holds** (Edit, Write) | Two Claude sessions on different tasks, in any worktrees of one repo, editing the same file: the first to edit it holds it. The second is warned once (`soft`, the default) or denied (`{"holds": "hard"}`), told who holds it, and pointed at `SendMessage` to sort it out. Its band shows `⚡ <file> · <holder>`. A hold lapses when the holder's slice is done, its session ends, or after 30 minutes without an edit (`holds_ttl`, seconds). |
@@ -368,7 +369,32 @@ Check your own spend with `/flow-stack:budget` (uses ccusage) and the estimate-v
 | **delegate nudge** (PostToolUse Read, Grep, Glob) | A long session (turn >= `budget: delegate_after_turns`, default 7, or context >= `delegate_after_tokens`, default 120000) that starts a run of 4 reads gets one line: hand the bulk reading to a subagent. Quiet for subagents and short sessions; `hooks.delegate: false` turns it off. |
 | **session-start / pre-compact / notify** | Profile and toolchain context; a handoff snapshot before compaction; a notification when the agent is blocked on you. |
 
-Hooks fail open: if `jq` is missing or a script errors, the action is allowed and a warning goes to `~/.flow-stack/hooks.log`. Turn any hook off in `.flow/config.json` (repo) or `~/.flow-stack/config.json` (global): `{"hooks": {"fence": false}}`.
+Hooks fail open: if `jq` is missing or a script errors, the action is allowed and a warning goes to `~/.flow-stack/hooks.log`. Turn any hook off in `~/.flow-stack/settings.json` (yours, every repo) or `.flow/config.json` (the repo's, which wins): `{"hooks": {"claims": false}}`. `/flow-stack:settings` shows every hook, whether it's on, and which file says so; `settings.sh hook <name> off` writes it. The older `~/.flow-stack/config.json` toggles still work.
+
+### Settings
+
+`~/.flow-stack/settings.json` holds your settings for every repo:
+
+```json
+{
+  "hooks": { "claims": false, "delegate": false },
+  "tests": { "scope": "impacted", "unmatched": "full" }
+}
+```
+
+`tests` decides how much of the suite verification runs. The sub-suites themselves belong to the repo, in `.flow/config.json`:
+
+```json
+"tests": {
+  "suites": [
+    { "id": "auth", "paths": ["src/auth/**", "test/auth/**"], "run": "npm test -- test/auth" },
+    { "id": "billing", "paths": ["src/billing/**"], "run": "npm test -- test/billing" }
+  ],
+  "ignore": ["docs/**"]
+}
+```
+
+`skills/verify/scripts/suites.sh run` runs only the suites whose `paths` the change touches, each through `evidence.sh`. A changed file no suite claims runs the full suite (`commands.test`), unless `unmatched` is `skip`. `ignore` lists unclaimed files that need no test (`*.md`, `LICENSE` and `.flow/` are built in); a suite's `paths` win over it. `scope: full` always runs the full suite. `ready.sh` runs the impacted suites whenever a repo declares any.
 
 ## Mods (UI inside Claude Code)
 
@@ -602,8 +628,8 @@ Every generated skill has a `## Self-test` and a `source-commit`. `tend` re-runs
 ## Files
 
 ```
-~/.flow-stack/profile.md, config.json, toolchain.fp      you
-<repo>/.flow/config.json                                  commands + hook toggles   (commit)
+~/.flow-stack/profile.md, settings.json, toolchain.fp    you
+<repo>/.flow/config.json                                  commands, hook toggles, test suites   (commit)
 <repo>/.flow/{taste,gates,lessons,map,debt}.md, playbooks/                          (commit)
 <repo>/.flow/features/<id>.md, README.md, .ignore         feature map               (commit)
 <repo>/.flow/tasks/<slug>/   INTENT · SLICES · SEALS · blind/ · EVIDENCE · DECISIONS.tsv

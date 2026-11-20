@@ -29,7 +29,7 @@ The human already has a way of working. Learn it before you change anything. The
    - Real overlaps the human uses (for example, their router `pstack:poteto-mode` vs `flow`, or their `/review` vs flow-stack's): ask, in one batched `AskUserQuestion`. Recommend based on the usage counts.
 5. **Record.**
    - Write the `# Toolchain` lines in the profile (`- <key>: <provider> · <why>`). Show the diff first.
-   - Write any global hook toggles to `~/.flow-stack/config.json`.
+   - Write any global hook toggles to `~/.flow-stack/settings.json` with `../settings/scripts/settings.sh hook <name> off` (it creates the file).
    - Save the fingerprint: `scripts/inventory.sh --fingerprint > ~/.flow-stack/toolchain.fp`.
 6. **Tell the human** in ≤ 8 lines: what you found, what flow-stack will use from their setup, what it turned off, what it kept, and anything that might still overlap (for example two Stop hooks).
 
@@ -55,7 +55,7 @@ Read [references/tools.md](references/tools.md). Offer only what the inventory s
 
 ## 5. This repo (when inside a git repo)
 
-1. `.flow/config.json`: create it from `../../templates/config.json` if missing, and fill `commands` from package scripts, the Makefile, and CI config. Run each command once to confirm it works (tests may be slow; ask first if more than a minute is likely).
+1. `.flow/config.json`: create it from `../../templates/config.json` if missing, and fill `commands` from package scripts, the Makefile, and CI config. Run each command once to confirm it works (tests may be slow; ask first if more than a minute is likely). If the full suite takes more than about a minute and splits by directory (packages, apps, test folders), offer `tests.suites` so verification runs only the part a change touches (`../verify/scripts/suites.sh`; confirm with `suites.sh check`).
 2. **Quality gates before a PR.** Ask once: "Anything you run before opening a PR? (a script, an MCP scan, a manual check)". Offer what CI, pre-push hooks, and the usage counts suggest. Write each one to `ready` in `.flow/config.json`: `{"id": "e2e", "run": "npm run e2e"}` for a command ready.sh runs itself, or `{"id": "sec-scan", "do": "Run the semgrep MCP on the diff; done only with 0 new findings"}` for a step the agent performs and then records with `ready.sh record <id> done`. Run each `run` once to confirm it works.
 3. `.gitignore`: add `.flow/ACTIVE`, `.flow/tasks/`, and `.flow/trail.jsonl` if missing.
 4. **Forge census.** From `detect.sh`: which slots are filled (verify driver, run driver, gates, playbooks, map, repo taste). Offer the missing ones in one message, most valuable first:

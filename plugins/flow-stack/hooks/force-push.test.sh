@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# force-push.test.sh: guard.sh denies a force-push to main/master however the flags are spelled,
-# asks for any other force-push, and leaves ordinary pushes alone. Runs the working tree's hook.
+# force-push.test.sh: guard.sh denies a force-push or delete of main/master however the flags are
+# spelled, asks for any other force-push or a work-discarding reset/clean, and leaves ordinary pushes alone. Runs the working tree's hook.
 set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)"
 FAILS=0
@@ -36,6 +36,89 @@ expect deny 'git push -uf origin master'
 expect deny 'git push origin +main'
 expect deny 'git push origin HEAD:+main'
 expect deny 'git push origin HEAD:refs/heads/main -f'
+expect deny "git push origin '+main'"
+expect deny 'git push origin "+HEAD:main"'
+expect deny 'git --work-tree . push -f origin main'
+expect deny 'git --namespace foo push --force origin main'
+expect deny 'git --git-dir .git --exec-path /x push -f origin main'
+expect deny 'git --attr-source HEAD push -f origin main'
+# -- deleting main/master: deny
+expect deny 'git push origin :main'
+expect deny 'git push origin :refs/heads/master'
+expect deny 'git push --delete origin main'
+expect deny 'git push -d origin master'
+expect deny 'git -C . push origin --delete main'
+expect deny "git push origin :'main'"
+expect deny "git push origin '':main"
+expect deny 'git push origin "":main'
+expect deny 'bash -c "git push origin :main"'
+expect deny 'git push origin :\main'
+expect deny 'git push origin \:ma\in'
+expect deny 'git push origin :heads/main'
+expect deny 'git push -f origin HEAD:heads/main'
+expect deny 'git push origin +heads/main'
+expect deny 'git push --del origin main'
+expect deny 'git push --dele origin main'
+expect deny "git push origin :\$'main'"
+expect deny 'git push origin :{main,x}'
+expect deny "git push -f origin \$'main'"
+expect deny 'git push --for origin main'
+# 20 brace groups would be 2^20 words: expansion is capped, so the deny comes back fast
+t0=$SECONDS
+expect deny "git push --force origin main $(printf 'x{a,b}%.0s' {1..20})"
+[ $((SECONDS - t0)) -lt 15 ] && ok || bad "brace expansion took $((SECONDS - t0))s"
+expect deny "git push origin $(printf 'x{a,b}%.0s' {1..8}) :{y,main}"
+expect deny "git push origin $(printf 'r%s ' {1..70}):{main,y}"
+expect deny "git push origin $(printf 'x{a,b}%.0s' {1..8}) :ma{in,x}"
+expect deny 'git push origin :ma{in,x}'
+expect deny "git push origin :\$'\\x6dain'"
+expect ask 'git push origin :ma{i..i}n'
+expect ask 'git push origin v{1..3}'
+expect ask 'git push origin :$(echo main)'
+expect ask 'git push origin --delete $(echo main)'
+expect ask 'git push origin :${X:-main}'
+expect ask 'B=main; git push origin :$B'
+expect allow 'git push origin "$BRANCH"'
+expect deny "g''it push -f origin main"
+expect deny 'gi"t" push -f origin main'
+expect deny "git 'push' origin :main"
+# -- a skipped-looking word that runs its arguments is still judged
+expect deny 'echo git push -f origin main | sh'
+expect deny 'printf "git push -f origin main" | bash'
+expect deny "git rebase -x 'git push -f origin main' HEAD~3"
+expect deny "git submodule foreach 'git push -f origin main'"
+expect deny 'git bisect run git push -f origin main'
+expect deny "sed -n '1e git push -f origin main' f"
+expect deny "cat <<<'git push -f origin main' | sh"
+expect deny 'head -1 <<<"git push -f origin main" | bash'
+expect deny "\$(cat <<<'git push -f origin main')"
+expect deny "git log -1 --format='git push -f origin main #' | sh"
+expect deny "git grep -O'git push -f origin main #' x"
+expect deny "\$'git' push -f origin main"
+expect deny "git \$'push' -f origin main"
+expect deny "cat <<<'git push -f origin main' > >(sh)"
+expect deny "cat <<<'git push -f origin main' > x.sh && sh x.sh"
+expect deny "git log -1 --format='git push -f origin main' > x; . x"
+expect deny "cat <<<'git push -f origin main' | cat | sh"
+expect deny "GIT_EDITOR=sh git commit --allow-empty -e -F - <<<'git push -f origin main'"
+expect deny 'git -C log push -f origin main'
+expect deny "git log -1 --format='git push -f origin main' --output=x.sh; sh x.sh"
+expect deny "sort -o x.sh <<<'git push -f origin main'; sh x.sh"
+# -- no command is trusted to only read: a push quoted in a grep is judged like any other
+expect deny 'grep -rn "git push origin :main" plugins'
+expect deny 'git log --oneline; rg "git push -f origin main" .'
+# -- an unread target asks without making a plain main argument a force-push to main
+expect ask 'git push origin main :$OLD'
+expect ask 'git push origin main v{1..3}'
+expect deny "git push -f origin \$'\\155ain'"
+expect deny '"git" push --delete origin main'
+expect deny 'sudo git push origin :main'
+expect deny 'cd x && git push origin :main'
+# one group of 2000 alternatives on a 2000-char word: the size bound stops it, and the leftover braces deny
+t0=$SECONDS
+expect deny "git push origin x{$(printf 'a,%.0s' {1..2000})b}$(printf 'y%.0s' {1..2000}) {a,b}{a,b}"
+[ $((SECONDS - t0)) -lt 15 ] && ok || bad "wide brace group took $((SECONDS - t0))s"
+expect allow "git push origin $(printf 'r%s ' {1..70})feat/x"
 expect deny 'git push origin refs/heads/main --force'
 # -- force-push elsewhere: ask
 expect ask 'git push -f origin feat/x'
@@ -45,10 +128,49 @@ expect ask 'git push origin +feat/x'
 expect ask 'git push -f origin feature/main'
 expect ask 'git push --force origin HEAD:refs/heads/feature/main'
 expect ask 'git push --force-with-lease origin feat/x'
+expect ask "git push origin '+feat/x'"
+expect ask 'git push --mirror'
+expect ask 'git push --mirro'
+expect ask 'git push --m origin'
+expect ask 'git push --force-with-lease=main:abc origin feat/x'
+expect ask 'git push --pru origin feat/x'
+expect ask 'git push -f origin feature/heads/main'
+expect ask "git push --prune origin 'refs/heads/*:refs/heads/*'"
+expect ask 'git --super-prefix x push -f origin feat/x'
 # -- ordinary pushes: allow
 expect allow 'git push origin main'
 expect allow 'git push -u origin main'
 expect allow 'git push -u origin feat/maintenance'
+expect allow 'git push origin :feat/x'
+expect allow 'git push --delete origin feat/main'
+expect allow 'git --work-tree . push origin main'
+# -- discarding uncommitted work: ask, with global options or split/long flags
+expect ask 'git reset --hard'
+expect ask 'git -C . reset --hard'
+expect ask 'git reset -q --hard HEAD~1'
+expect ask 'git clean -fd'
+expect ask 'git -c x=y clean -fd'
+expect ask 'git clean -d -f'
+expect ask 'git clean --force -d'
+expect ask 'bash -c "git clean -fd"'
+expect ask '(git clean -fdx)'
+expect ask 'git clean -fd;ls'
+expect ask 'git clean -fd&& ls'
+expect ask 'git clean -fd>/dev/null'
+expect ask 'echo `git clean -fd`'
+expect ask 'git clean --fo -d'
+expect ask "git clean '-fd'"
+expect ask 'git clean "-f" -d'
+expect ask "git reset '--hard'"
+expect ask 'git reset --har'
+expect ask 'git reset --h'
+expect allow 'git reset HEAD -- --hash.txt'
+expect allow 'git push origin feat -o msg=fix-mirror-docs'
+expect allow 'git push origin feat -o --mirror-docs'
+expect allow 'git push --dry-run origin main'
+expect allow 'git push origin {feat,fix}/x'
+expect allow 'git reset --soft HEAD~1'
+expect allow 'git clean -n -d'
 
 [ "$FAILS" -eq 0 ] && { echo "force-push: PASS ($PASSES passed)"; exit 0; }
 echo "force-push: FAIL ($FAILS)"; exit 1
