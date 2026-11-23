@@ -120,11 +120,19 @@ expect deny "git push origin x{$(printf 'a,%.0s' {1..2000})b}$(printf 'y%.0s' {1
 [ $((SECONDS - t0)) -lt 15 ] && ok || bad "wide brace group took $((SECONDS - t0))s"
 expect allow "git push origin $(printf 'r%s ' {1..70})feat/x"
 expect deny 'git push origin refs/heads/main --force'
+expect deny 'git --work-tree . push -f origin main'
+expect deny 'git --namespace foo push --force origin main'
+expect deny 'git --super-prefix x push -f origin main'
+expect deny 'git --exec-path /x push -f origin main'
+expect deny 'git --git-dir .git push -f origin main'
+expect deny 'git --config-env k=V push -f origin main'
+expect deny 'git --attr-source HEAD push -f origin main'
 # -- force-push elsewhere: ask
 expect ask 'git push -f origin feat/x'
 expect ask 'git -C . push -f origin feat/x'
 expect ask 'git -c k=v push -fu origin feat/x'
 expect ask 'git push origin +feat/x'
+expect ask 'git --work-tree . push -f origin feat/x'
 expect ask 'git push -f origin feature/main'
 expect ask 'git push --force origin HEAD:refs/heads/feature/main'
 expect ask 'git push --force-with-lease origin feat/x'
