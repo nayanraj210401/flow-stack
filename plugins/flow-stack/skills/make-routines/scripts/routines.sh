@@ -10,7 +10,12 @@
 #   routines.sh check [-v]                       every routine's workflow matches a fresh render; no orphans
 #   routines.sh safety [-z] [--ref <ref>] [path ...]  the paths (args, else stdin lines, or NUL-separated with -z) on
 #                                                     .github/routines/safety-paths.txt (at <ref> with --ref; the
-#                                                     repo's own list without one, the plugin default only if it has none): exit 1 on any, 2 on an error
+#                                                     repo's own list without one, the plugin default only if it has none): exit 1 on any,
+#                                                     3 when every hit is on an @tested glob, 2 on an error
+#   routines.sh additive --ref <base> [<head>]        the change base...head (default HEAD) adds a new *.test.sh and
+#                                                     touches no existing test file: exit 0 if so, 1 if not, 2 on an error
+#   routines.sh redbase --ref <base>                  each *.test.sh added in base...HEAD fails on the base's code
+#                                                     (it runs them: CI or self-heal only): exit 0 if so, 1 if not
 # Frontmatter: trigger (schedule | pull_request | mention: an @claude comment from a user with write access), cron and timezone (schedule only; an IANA zone, default UTC), timeout (minutes), labels (must exist;
 # create_labels: true makes missing ones; .github/routines/labels.tsv renames catalog labels to yours on add), auth
 # (oauth | api-key), grants (token scopes it may write: issues pull-requests contents; the rest are read),
@@ -289,8 +294,8 @@ check() {
   return "$bad"
 }
 
-safety() { # prints "<path><TAB><glob>" for each path on the list
-  local z="" ref="" list p g pats=() hit=0 n=0
+safety() { # prints "<path><TAB><glob>[<TAB>@tested]" for each path on the list
+  local z="" ref="" list p g t pats=() tested=() hit=0 n=0
   while [ $# -gt 0 ]; do
     case "$1" in -z) z=1; shift ;; --ref) [ -n "${2:-}" ] || die "--ref needs a ref"; ref="$2"; shift 2 ;; --) shift; break ;; *) break ;; esac
   done
@@ -304,29 +309,107 @@ safety() { # prints "<path><TAB><glob>" for each path on the list
     local own; own="$(git rev-parse --show-toplevel 2>/dev/null || echo .)/$dir/safety-paths.txt"
     if [ -f "$own" ]; then list="$(cat "$own")"; else list="$(cat "$tpl/safety-paths.txt")"; fi
   fi
-  while read -r g _; do case "$g" in ''|'#'*) ;; *) pats+=("$g") ;; esac; done < <(tr -d '\r' <<<"$list")
+  # an @tested glob guards code its tests cover: a change there is unattended-safe only when `additive` passes
+  while read -r g t _; do case "$g" in ''|'#'*) ;; *) pats+=("$g"); [ "$t" = @tested ] && tested+=(1) || tested+=(0) ;; esac; done < <(tr -d '\r' <<<"$list")
   [ ${#pats[@]} -gt 0 ] || die "the safety list has no globs"
-  on_list() {
+  on_list() { # returns 0 on a plain hit, 3 on an @tested one, 1 off the list; the last matching glob decides
+    local i last=""
     # git quotes a path with unusual bytes unless -z; a quoted path can't be matched, so it counts as a hit
     [[ "$1" != \"* ]] || { printf '%s\tquoted path: list it with git -z and pass -z\n' "$1"; return 0; }
-    for g in "${pats[@]}"; do [[ "/${1#./}" == $g ]] && { printf '%s\t%s\n' "$1" "$g"; return 0; }; done
-    return 1
+    for i in "${!pats[@]}"; do [[ "/${1#./}" == ${pats[$i]} ]] && last="$i"; done
+    [ -n "$last" ] || return 1
+    [ "${tested[$last]}" = 1 ] && { printf '%s\t%s\t@tested\n' "$1" "${pats[$last]}"; return 3; }
+    printf '%s\t%s\n' "$1" "${pats[$last]}"; return 0
   }
-  if [ $# -gt 0 ]; then for p; do n=$((n + 1)); on_list "$p" && hit=1; done
+  score() { local r=0; on_list "$1" || r=$?; case "$r" in 0) hit=1 ;; 3) [ "$hit" = 1 ] || hit=3 ;; esac; }
+  if [ $# -gt 0 ]; then for p; do n=$((n + 1)); score "$p"; done
   # `|| [ -n "$p" ]` keeps a last path that has no trailing separator; an empty -z entry means a broken feed
-  elif [ -n "$z" ]; then while IFS= read -r -d '' p || [ -n "$p" ]; do [ -n "$p" ] || die "an empty path in -z input"; n=$((n + 1)); on_list "$p" && hit=1; done
-  else while IFS= read -r p || [ -n "$p" ]; do [ -z "$p" ] && continue; n=$((n + 1)); on_list "$p" && hit=1; done; fi
+  elif [ -n "$z" ]; then while IFS= read -r -d '' p || [ -n "$p" ]; do [ -n "$p" ] || die "an empty path in -z input"; n=$((n + 1)); score "$p"; done
+  else while IFS= read -r p || [ -n "$p" ]; do [ -z "$p" ] && continue; n=$((n + 1)); score "$p"; done; fi
   # a change always has a path, so none means the command feeding this failed: that must not read as clean
   [ "$n" -gt 0 ] || die "no paths to check"
   return "$hit"
 }
 
+tested_dirs() { # tested_dirs <ref> < numstat -z: "\n<dir>\n" for each directory holding a non-test @tested change
+  local a d p r out=$'\n'
+  while IFS=$'\t' read -r -d '' a d p; do
+    case "${p##*/}" in *.test.*) continue ;; esac
+    r=0; safety --ref "$1" "$p" >/dev/null || r=$?
+    [ "$r" = 3 ] && out+="$(dirname -- "$p")"$'\n'
+  done
+  printf '%s' "$out"
+}
+
+additive() { # passes when base...head adds a new *.test.sh beside the @tested code it changes and leaves every old test as it was
+  local ref="" head=HEAD a d p mb diff added=0 bad=0 dirs=$'\n'
+  while [ $# -gt 0 ]; do
+    case "$1" in --ref) [ -n "${2:-}" ] || die "--ref needs a ref"; ref="$2"; shift 2 ;; *) head="$1"; shift ;; esac
+  done
+  [ -n "$ref" ] || die "additive needs --ref <base>"
+  git rev-parse -q --verify "$ref^{commit}" >/dev/null || die "--ref $ref is not a commit"
+  git rev-parse -q --verify "$head^{commit}" >/dev/null || die "$head is not a commit"
+  mb="$(git merge-base "$ref" "$head")" || die "$ref and $head share no history"
+  # --no-renames: moving a test file away reads as deleting it; -z keeps unusual names whole
+  diff="$(mktemp)"; trap "rm -f -- '$diff'" EXIT
+  git diff -z --numstat --no-renames "$ref...$head" >"$diff" || die "git diff failed"
+  # only directories of the change's own @tested hits: a decoy file beside a stray test elsewhere earns nothing
+  dirs="$(tested_dirs "$ref" <"$diff")"$'\n'
+  # A new test runs in its own process, so it can't switch off an old one; any edit to an existing test file could
+  # (an early exit, a no-op helper). A new *.test.sh counts only beside the @tested code it covers, where the
+  # list's owner put code its CI tests, not in a directory CI may never run.
+  while IFS=$'\t' read -r -d '' a d p; do
+    case "${p##*/}" in *.test.*) ;; *) continue ;; esac
+    if git cat-file -e "$mb:$p" 2>/dev/null; then echo "$p: changes an existing test file"; bad=1
+    elif [[ "$p" == *.test.sh ]] && [ "$a" != - ] && [[ "$dirs" == *$'\n'"$(dirname -- "$p")"$'\n'* ]]; then added=$((added + a))
+    elif [[ "$p" == *.test.sh ]]; then echo "$p: not beside any @tested code this change touches"; fi
+  done <"$diff"
+  rm -f "$diff"
+  [ "$bad" = 0 ] || return 1
+  [ "$added" -gt 0 ] || { echo "no new *.test.sh beside the changed @tested code"; return 1; }
+  echo "additive: a new test (+$added lines), no existing test touched"
+}
+
+redbase() { # every *.test.sh added beside @tested code fails once that code goes back to the base: a test that
+  # still passes pins nothing the change adds, so it can't stand in for one (a bare `exit 0` file, say). Runs the
+  # tests, so call it only where PR code may run (the read-only test workflow, or self-heal on its own branch).
+  local ref="" mb tmp wt p r n=0 bad=0 dirs code=()
+  while [ $# -gt 0 ]; do case "$1" in --ref) [ -n "${2:-}" ] || die "--ref needs a ref"; ref="$2"; shift 2 ;; *) die "redbase: unknown $1" ;; esac; done
+  [ -n "$ref" ] || die "redbase needs --ref <base>"
+  git rev-parse -q --verify "$ref^{commit}" >/dev/null || die "--ref $ref is not a commit"
+  mb="$(git merge-base "$ref" HEAD)" || die "$ref and HEAD share no history"
+  dirs="$(git diff -z --numstat --no-renames "$ref...HEAD" | tested_dirs "$ref")"$'\n'
+  # the change's own @tested code (not its tests, helpers or fixtures) is what goes back to the base
+  while IFS= read -r -d '' p; do
+    case "${p##*/}" in *.test.*) continue ;; esac
+    r=0; safety --ref "$ref" "$p" >/dev/null || r=$?; [ "$r" = 3 ] && code+=("$p")
+  done < <(git diff -z --name-only --no-renames "$ref...HEAD")
+  # a full clone, not a worktree: inside it `.git` is a directory, as in the CI checkout
+  tmp="$(mktemp -d)"; wt="$tmp/$RANDOM$RANDOM"
+  git clone -q --no-checkout "$(git rev-parse --show-toplevel)" "$wt" && git -C "$wt" checkout -q --detach "$(git rev-parse HEAD)" \
+    || { rm -rf "$tmp"; die "could not clone HEAD"; }
+  for p in ${code[@]+"${code[@]}"}; do
+    if git cat-file -e "$mb:$p" 2>/dev/null; then git -C "$wt" checkout -q "$mb" -- "$p"; else rm -f -- "$wt/$p"; fi
+  done
+  while IFS= read -r -d '' p; do
+    [[ "$p" == *.test.sh ]] && [[ "$dirs" == *$'\n'"$(dirname -- "$p")"$'\n'* ]] || continue
+    n=$((n + 1)); r=0; (cd "$wt" && bash "$p" </dev/null >/dev/null 2>&1) || r=$?
+    if [ "$r" = 0 ]; then echo "$p: passes with the change's code reverted, so it proves nothing new"; bad=1
+    else echo "$p: fails on the base's code (exit $r)"; fi
+  done < <(git diff -z --name-only --diff-filter=A --no-renames "$ref...HEAD")
+  rm -rf "$tmp"
+  [ "$bad" = 0 ] || return 1
+  echo "redbase: $n new test(s), each red on the base's code"
+}
+
 case "${1:-}" in
   list) list ;;
   safety) shift; safety "$@" ;;
+  additive) shift; additive "$@" ;;
+  redbase) shift; redbase "$@" ;;
   add) shift; add "$@" ;;
   schedule) shift; schedule "$@" ;;
   render) render ;;
   check) check ;;
-  *) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *) sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

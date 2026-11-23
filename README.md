@@ -163,9 +163,9 @@ flowchart LR
 | `self-create` | nightly | files issues only for bugs it reproduced by running the code |
 | `self-heal` | nightly | turns maintainer-labelled issues into proven draft PRs, at most 3 a run |
 | `mention` | `@claude` comment from someone with write access | runs the request through flow; draft PRs or a comment saying why it stopped |
-| `triage` | every 4 hours | labels new issues by type, readiness, size and risk; a change to the safety machinery is risk:high and is never built unattended |
+| `triage` | every 4 hours | labels new issues by type, readiness, size and risk; a change to the safety machinery is risk:high and is never built unattended, except `@tested` scripts, which are scored like any other code |
 | `ideate` | weekly | files at most one `proposal`, with 2 independent cited sources; self-heal builds it only after you label it both `accept` and `heal-ok` |
-| `auto-merge` | schedule | merges PRs a maintainer labelled, and with `auto_merge: low-risk` self-heal PRs of a human-approved `risk:low` `size:S` issue, after tests and a security review; never touches the safety machinery (repo-local today, see [factory.md](plugins/flow-stack/skills/flow/references/factory.md)) |
+| `auto-merge` | schedule | merges PRs a maintainer labelled, and with `auto_merge: low-risk` self-heal PRs of a human-approved `risk:low` `size:S` issue, after tests and a security review; never touches the safety machinery, except `@tested` scripts whose PR adds a new test that is red on the base and changes no old one (repo-local today, see [factory.md](plugins/flow-stack/skills/flow/references/factory.md)) |
 
 **How much runs without you** is set per routine, not guessed. A routine without `contents` in `grants` runs as `--auto` and the hooks deny every push and PR. With `contents` it runs as `--auto ship`, which can push its own branch and open a PR only after `ready.sh` stamps HEAD. In a session, pair mode is unchanged.
 
