@@ -569,8 +569,10 @@ if has '(drop[[:space:]]+(table|database|schema)|truncate[[:space:]]+table)'; th
   pre_decide ask "flow guard: destructive SQL."
 fi
 # The shell after the pipe may sit behind sudo/doas/env (with flags or VAR=val) or a path.
-if has '(curl|wget)[^|]*\|[[:space:]]*(([^|;&[:space:]]*/)?(sudo|doas|env)([[:space:]]+[^|;&[:space:]]+)*[[:space:]]+)?([^|;&[:space:]]*/)?(ba|z|da|k|mk|c|tc|fi|ya)?sh([[:space:];&|)]|$)'; then
-  pre_decide ask "flow guard: piping a download into a shell."
+if has '(curl|wget)[^|]*\|[[:space:]]*(([^|;&[:space:]]*/)?(sudo|doas|env)([[:space:]]+[^|;&[:space:]]+)*[[:space:]]+)?([^|;&[:space:]]*/)?(ba|z|da|k|mk|c|tc|fi|ya)?sh([[:space:];&|)]|$)' ||
+   # eval/source/a shell (`.` only at command position) taking a download by $(..), <(..) or backticks.
+   has '(^|[^[:alnum:]_.-])(eval|source|(ba|z|da|k|mk|c|tc|fi|ya)?sh)[^[:alnum:]_.|&;-][^|&;]*(\$\(|<\(|`)[[:space:]]*((command|env|sudo|time|[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*|-[^[:space:]]+)[[:space:]]+|\\)*([^[:space:]]*/)?(curl|wget)([[:space:])`]|$)|(^|[;&|(`]|[[:space:]](then|do))[[:space:]]*\.[[:space:]][^|&;]*(\$\(|<\(|`)[[:space:]]*((command|env|sudo|time|[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*|-[^[:space:]]+)[[:space:]]+|\\)*([^[:space:]]*/)?(curl|wget)([[:space:])`]|$)'; then
+  pre_decide ask "flow guard: running a download in a shell."
 fi
 
 # 6. Package existence: catch hallucinated or typo'd dependencies.
